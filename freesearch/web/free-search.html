@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Free Trademark Search — The Trademark Helpline</title>
+<style>
+  /* ---- TMH brand tokens (from brand_tokens.py) ---- */
+  :root{
+    --pink:#E51652; --pink-dark:#c01044; --navy:#2D455A; --navy-soft:#3d5a74;
+    --ink:#1f2a33; --muted:#6b7a86; --line:#e3e8ec; --bg:#f5f7f9; --white:#fff;
+    --r-high:#F4B084; --r-med:#FFE699; --r-low:#C5E0B4; --r-neg:#D9D9D9;
+    --radius:14px; --shadow:0 6px 24px rgba(45,69,90,.10);
+    --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);
+    line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:920px;margin:0 auto;padding:24px 18px 64px}
+
+  .brand{display:flex;align-items:center;gap:14px;padding:8px 2px 20px}
+  .brand .logo{width:46px;height:46px;border-radius:12px;background:var(--pink);
+    display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;box-shadow:var(--shadow)}
+  .brand h1{font-size:19px;margin:0;color:var(--navy);font-weight:800;letter-spacing:.2px}
+  .brand small{display:block;color:var(--pink);font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+
+  .steps{display:flex;gap:6px;margin:0 0 20px;flex-wrap:wrap}
+  .steps .s{flex:1;min-width:88px;font-size:11px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.06em;padding:8px 4px;border-top:3px solid var(--line);text-align:center}
+  .steps .s.active{color:var(--navy);border-top-color:var(--pink)}
+  .steps .s.done{color:var(--navy);border-top-color:var(--navy)}
+
+  .card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:28px;margin-bottom:18px}
+  h2{color:var(--navy);font-size:22px;margin:0 0 6px}
+  h3{color:var(--navy)}
+  .lead{color:var(--muted);margin:0 0 20px}
+
+  label.fld{display:block;font-weight:700;color:var(--navy);margin:14px 0 6px;font-size:14px}
+  label.fld .opt{color:var(--muted);font-weight:500;font-size:12px}
+  input[type=text],input[type=email],input[type=tel],textarea,select{
+    width:100%;padding:13px 14px;border:1.5px solid var(--line);border-radius:10px;
+    font-size:15px;font-family:inherit;color:var(--ink);background:#fff}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 3px rgba(229,22,82,.12)}
+  textarea{min-height:74px;resize:vertical}
+  .search-row{display:flex;gap:10px}
+  .search-row input{flex:1;font-size:17px;padding:16px}
+
+  .btn{appearance:none;border:0;border-radius:10px;padding:14px 26px;font-size:15px;font-weight:700;
+    cursor:pointer;font-family:inherit;transition:.15s}
+  .btn.primary{background:var(--pink);color:#fff}
+  .btn.primary:hover{background:var(--pink-dark)}
+  .btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--line)}
+  .btn.ghost:hover{border-color:var(--navy)}
+  .btn.block{width:100%}
+  .actions{display:flex;justify-content:space-between;gap:12px;margin-top:24px}
+  .link{color:var(--pink);font-weight:700;cursor:pointer;background:none;border:0;font-size:14px;padding:0}
+  .link:hover{text-decoration:underline}
+
+  .tick{display:flex;gap:13px;align-items:flex-start;padding:15px;border:1.5px solid var(--line);
+    border-radius:12px;margin-bottom:12px;cursor:pointer;transition:.15s}
+  .tick:hover{border-color:var(--navy-soft)}
+  .tick.on{border-color:var(--pink);background:#fef4f7}
+  .tick .box{width:22px;height:22px;border-radius:6px;border:2px solid var(--line);display:grid;
+    place-items:center;flex:none;margin-top:1px;font-size:14px;color:#fff}
+  .tick.on .box{background:var(--pink);border-color:var(--pink)}
+  .tick .box.locked{background:var(--navy);border-color:var(--navy)}
+  .tick .t{font-weight:700;color:var(--navy)}
+  .tick .eg{color:var(--muted);font-size:13px}
+  .tick .sub{margin-top:12px;display:none}
+  .tick.on .sub{display:block}
+
+  .cls-search{margin-bottom:12px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:640px){.cols{grid-template-columns:1fr}.search-row{flex-direction:column}}
+  .listbox{border:1.5px solid var(--line);border-radius:12px;max-height:280px;overflow:auto}
+  .listbox .row{padding:11px 13px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;gap:10px;align-items:baseline}
+  .listbox .row:hover{background:#fef4f7}
+  .listbox .row:last-child{border-bottom:0}
+  .listbox .n{font-weight:800;color:var(--pink);font-size:13px;min-width:22px}
+  .basket{border:1.5px solid var(--line);border-radius:12px;padding:12px;min-height:120px}
+  .chip{display:inline-flex;align-items:center;gap:8px;background:#fef4f7;color:var(--navy);
+    border:1px solid #f6c9d6;border-radius:999px;padding:6px 12px;margin:4px 4px 0 0;font-size:13px;font-weight:600}
+  .chip b{color:var(--pink)}
+  .chip .x{cursor:pointer;color:var(--pink);font-weight:800}
+  .muted-note{color:var(--muted);font-size:13px;margin-top:8px}
+
+  .juris-block{padding-top:6px}
+  .reveal{border-top:1px dashed var(--line);margin-top:22px;padding-top:20px}
+  .seg{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .seg .opt{padding:11px 16px;border:1.5px solid var(--line);border-radius:10px;cursor:pointer;
+    font-weight:700;color:var(--navy);background:#fff}
+  .seg .opt.on{border-color:var(--pink);background:var(--pink);color:#fff}
+  .pop{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
+  .pop .c{padding:9px 14px;border:1.5px solid var(--line);border-radius:999px;cursor:pointer;
+    font-weight:600;font-size:14px;color:var(--navy);background:#fff}
+  .pop .c.on{border-color:var(--pink);background:#fef4f7;color:var(--pink)}
+  .pop .c small{color:var(--muted);font-weight:500}
+  .group-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:16px 0 4px}
+
+  .summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:8px}
+  @media(max-width:640px){.summary{grid-template-columns:repeat(2,1fr)}}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center}
+  .stat .v{font-size:26px;font-weight:800;color:var(--navy);line-height:1}
+  .stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:6px}
+  .stat.high .v{color:#c0392b}.stat.med .v{color:#b7791f}.stat.low .v{color:#3d7a34}
+  .riskbar{height:10px;border-radius:6px;display:flex;overflow:hidden;margin:14px 0 4px}
+  .riskbar i{display:block}
+  table.res{width:100%;border-collapse:collapse;margin-top:8px}
+  table.res th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+    padding:8px 10px;border-bottom:2px solid var(--line)}
+  table.res td{padding:11px 10px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:top}
+  .band{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800;color:#4a2f00}
+  .band.High{background:var(--r-high)}.band.Medium{background:var(--r-med)}
+  .band.Low{background:var(--r-low)}.band.Negligible{background:var(--r-neg);color:#555}
+  .co{font-size:12px;color:var(--muted);margin-top:3px}
+  .co .dead{color:#c0392b;font-weight:700}
+  .disc{background:#fbfcfd;border:1px solid var(--line);border-left:4px solid var(--navy);
+    border-radius:8px;padding:12px 14px;margin:10px 0;font-size:13px;color:var(--navy)}
+
+  .report{border:1.5px solid var(--pink);border-radius:14px;padding:22px;margin-top:22px;background:#fef4f7}
+  .report h3{margin:0 0 4px}
+  .report .sub{color:var(--muted);font-size:14px;margin:0 0 14px}
+  .cta.audit{border:1.5px solid var(--line);border-radius:12px;padding:18px;text-align:center;margin-top:14px}
+  .cta.audit h4{margin:0 0 6px;color:var(--navy)}
+  .cta.audit p{margin:0 0 12px;font-size:13px;color:var(--muted)}
+
+  .benefits{list-style:none;padding:0;margin:16px 0}
+  .benefits li{padding:8px 0 8px 30px;position:relative;color:var(--navy);font-weight:600}
+  .benefits li:before{content:'✓';position:absolute;left:0;color:var(--pink);font-weight:800}
+  .portal-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}
+  .portal-actions .btn{flex:1;min-width:200px}
+  .done-mark{width:64px;height:64px;border-radius:50%;background:var(--r-low);color:#2f6b23;display:grid;
+    place-items:center;font-size:34px;margin:0 auto 14px}
+
+  /* class-help panel */
+  .help-opt{border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;transition:.15s}
+  .help-opt:hover{border-color:var(--navy-soft)}
+  .help-opt.open{border-color:var(--pink);background:#fef4f7}
+  .ho-h{font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .ho-s{color:var(--muted);font-size:13px;margin-top:4px}
+  .ho-body{margin-top:12px;display:none}
+  .help-opt.open .ho-body{display:block}
+  .tag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:3px 8px;border-radius:999px;background:#eef2f4;color:var(--muted)}
+  .tag.best{background:var(--pink);color:#fff}
+  .tag.free{background:var(--r-low);color:#2f6b23}
+  .tag.ai{background:#e7ddff;color:#5b3fb0}
+  .hbar{display:flex;gap:8px}
+  .hbar input{flex:1;padding:11px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:14px;font-family:inherit}
+  .hres{margin-top:10px;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .hres .r{padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px;display:flex;gap:8px;align-items:baseline}
+  .hres .r:last-child{border-bottom:0}
+  .hres .r:hover{background:#fff}
+  .hres .rn{font-weight:700;color:var(--pink);min-width:120px}
+  .gate-note{background:#f6f2ff;border:1px solid #ddd0ff;color:#5b3fb0;border-radius:9px;padding:10px 12px;font-size:13px}
+  .hidden{display:none!important}
+  .mode-flag{position:fixed;bottom:10px;right:12px;font-size:11px;color:var(--muted);background:#fff;
+    border:1px solid var(--line);border-radius:8px;padding:4px 8px}
+  .err{color:#c0392b;font-size:13px;margin-top:8px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="logo">TH</div>
+    <div><h1>The Trademark Helpline</h1><small>Search · Register · Protect</small></div>
+  </div>
+
+  <div class="steps" id="stepper"></div>
+
+  <!-- STEP 1 -->
+  <section class="card" data-screen="search">
+    <h2>Free Trademark Search</h2>
+    <p class="lead">Check the UK trademark register for your name in seconds. Free, instant, no obligation.</p>
+    <div class="search-row">
+      <input id="name" type="text" placeholder="Type your trademark or brand name (e.g. McDonald's or Big Mac) here" autocomplete="off">
+      <button class="btn primary" onclick="go('marks')">Search</button>
+    </div>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="card hidden" data-screen="marks">
+    <h2>What shall we search?</h2>
+    <p class="lead">Your name is included. Add a logo or tagline to note them for your Brand Audit.</p>
+
+    <div class="tick on" id="tick-name">
+      <div class="box locked">✓</div>
+      <div style="flex:1">
+        <div class="t">Name <span class="eg">— e.g. “McDonald’s”</span></div>
+        <div class="eg">Your name: <b id="name-echo"></b></div>
+      </div>
+    </div>
+
+    <div class="tick" id="tick-logo" onclick="toggleTick('logo')">
+      <div class="box">✓</div>
+      <div style="flex:1">
+        <div class="t">Logo <span class="eg">— e.g. the Golden Arches</span></div>
+        <div class="sub">
+          <input type="file" id="logo-file" accept="image/*" onclick="event.stopPropagation()">
+          <label class="fld" style="font-weight:600;margin-top:10px" onclick="event.stopPropagation()">
+            <input type="checkbox" id="logo-later" style="width:auto;margin-right:8px">Add this later
+          </label>
+          <div class="muted-note">Logos are analysed in a Brand Audit, not the free word search.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tick" id="tick-tag" onclick="toggleTick('tag')">
+      <div class="box">✓</div>
+      <div style="flex:1">
+        <div class="t">Tagline <span class="eg">— e.g. “I’m Lovin’ It”</span></div>
+        <div class="sub"><textarea id="tagline" placeholder="Add tagline here" onclick="event.stopPropagation()"></textarea></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="link" onclick="history.back()">← Back</button>
+      <button class="btn primary" onclick="go('jurisdiction')">Continue</button>
+    </div>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="card hidden" data-screen="classes">
+    <h2>Classes &amp; Terms <span style="font-size:14px;font-weight:500;color:var(--muted)">(optional)</span></h2>
+    <p class="lead">Narrowing to your classes sharpens the results — but it’s optional. Leave it open and we’ll search every class.</p>
+    <div class="cols">
+      <div>
+        <input class="cls-search" type="text" id="cls-search" placeholder="Search classes…" oninput="renderClassList()">
+        <div class="listbox" id="cls-list"></div>
+      </div>
+      <div>
+        <div class="group-title">Your classes</div>
+        <div class="basket" id="cls-basket"><span class="muted-note">None selected — we’ll search all classes.</span></div>
+      </div>
+    </div>
+
+    <!-- help picking classes -->
+    <div id="help-toggle" style="margin-top:18px;text-align:center">
+      <button class="btn ghost" onclick="toggleHelp(true)">🧭 I want some help picking classes</button>
+    </div>
+
+    <div id="help-panel" class="reveal hidden">
+      <h3 style="font-size:16px;margin:0 0 4px">How would you like help?</h3>
+      <p class="muted-note" style="margin:0 0 12px">Pick the route that fits what you have. The more precise the input, the better the classes.</p>
+
+      <div class="help-opt" data-opt="5" onclick="openHelp('5')">
+        <div class="ho-h"><b>Use an existing trademark</b> <span class="tag best">Most accurate</span></div>
+        <div class="ho-s">A direct competitor’s mark, or one of your own covering the same goods &amp; services. We borrow its classes &amp; terms.</div>
+        <div class="ho-body" id="ho-5"></div>
+      </div>
+
+      <div class="help-opt" data-opt="3" onclick="openHelp('3')">
+        <div class="ho-h"><b>Your company</b> <span class="tag free">Free</span> <span class="tag">Companies House</span></div>
+        <div class="ho-s">Find your company — we read its SIC codes and map them to classes. Nothing to type but your name.</div>
+        <div class="ho-body" id="ho-3"></div>
+      </div>
+
+      <div class="help-opt gated" data-opt="1" onclick="openHelp('1')">
+        <div class="ho-h"><b>Describe your business</b> <span class="tag ai">AI · email needed</span></div>
+        <div class="ho-s">Tell us what your business does — the more detail, the more accurate.</div>
+        <div class="ho-body" id="ho-1"></div>
+      </div>
+
+      <div class="help-opt gated" data-opt="2" onclick="openHelp('2')">
+        <div class="ho-h"><b>Your website URL</b> <span class="tag ai">AI · email needed</span></div>
+        <div class="ho-s">We read your site and suggest classes — only as accurate as your website.</div>
+        <div class="ho-body" id="ho-2"></div>
+      </div>
+
+      <div class="help-opt gated" data-opt="4" onclick="openHelp('4')">
+        <div class="ho-h"><b>A competitor’s website</b> <span class="tag ai">AI · email needed</span></div>
+        <div class="ho-s">Best when a direct competitor’s site covers exactly your products &amp; services.</div>
+        <div class="ho-body" id="ho-4"></div>
+      </div>
+
+      <div style="text-align:center;margin-top:8px"><button class="link" onclick="toggleHelp(false)">Hide</button></div>
+    </div>
+
+    <div class="actions">
+      <button class="link" onclick="history.back()">← Back</button>
+      <button class="btn primary" onclick="beginSearch()">Begin Free Search</button>
+    </div>
+  </section>
+
+  <!-- STEP 4 — combined jurisdictions -->
+  <section class="card hidden" data-screen="jurisdiction">
+    <h2>Where do you trade?</h2>
+    <p class="lead">Our free search covers the UK IPO. Telling us where you trade lets us flag what falls outside it — honestly.</p>
+
+    <div class="juris-block">
+      <h3 style="font-size:16px;margin:0 0 10px">Where do you trade <u>today</u>?</h3>
+      <div class="seg">
+        <div class="opt on" id="now-uk" onclick="setMode('now','uk')">UK only</div>
+        <div class="opt" id="now-select" onclick="setMode('now','select')">Select countries</div>
+      </div>
+      <div id="pick-now"></div>
+      <div id="now-continue" style="margin-top:14px">
+        <button class="btn ghost" onclick="revealPlan()">Continue →</button>
+      </div>
+    </div>
+
+    <div class="reveal hidden juris-block" id="plan-block">
+      <h3 style="font-size:16px;margin:0 0 10px">Where do you <u>plan</u> to trade?</h3>
+      <div class="seg" id="plan-seg">
+        <div class="opt on" data-plan="none" onclick="setPlanMode('none')">No other countries</div>
+        <div class="opt" data-plan="uk" onclick="setPlanMode('uk')">UK only</div>
+        <div class="opt" data-plan="select" onclick="setPlanMode('select')">Select countries</div>
+      </div>
+      <div id="pick-plan" class="hidden"></div>
+      <div class="actions">
+        <button class="link" onclick="history.back()">← Back</button>
+        <button class="btn primary" onclick="go('classes')">Continue →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section class="card hidden" data-screen="results">
+    <h2 id="res-head">Search Results</h2>
+    <p class="lead" id="res-sub"></p>
+    <div class="disc hidden" id="res-stale">Your classes or jurisdictions have changed since this search ran &mdash;
+      go back and press &ldquo;Begin Free Search&rdquo; again to refresh these results.</div>
+    <div class="summary" id="res-summary"></div>
+    <div class="riskbar" id="res-bar"></div>
+    <h3 style="margin:22px 0 4px" id="res-toptitle">Top 5 registered / active</h3>
+    <table class="res"><thead><tr>
+      <th>Risk</th><th>Type</th><th>Mark</th><th>Status</th>
+    </tr></thead><tbody id="res-rows"></tbody></table>
+    <div id="res-disclaimers"></div>
+
+    <!-- soft lead capture -->
+    <div class="report" id="report-form">
+      <h3>Get your full report by email</h3>
+      <p class="sub">See ownership, company status and goods &amp; services for every result — sent straight to your inbox.</p>
+      <div class="cols">
+        <div><label class="fld">First name</label><input id="r-first" type="text"></div>
+        <div><label class="fld">Last name</label><input id="r-last" type="text"></div>
+      </div>
+      <div class="cols">
+        <div><label class="fld">Email</label><input id="r-email" type="email" placeholder="you@business.com"></div>
+        <div><label class="fld">Phone</label><input id="r-phone" type="tel"></div>
+      </div>
+      <label class="fld">Business name <span class="opt">(optional)</span></label>
+      <input id="r-biz" type="text">
+      <div class="err hidden" id="r-err"></div>
+      <button class="btn primary block" style="margin-top:16px" onclick="sendReport()">Send my report</button>
+    </div>
+
+    <div class="cta audit">
+      <h4>Prefer a full Brand Audit?</h4>
+      <p>Logos, taglines, social media, marketplaces, domains, company registers, international &amp; prior-use risk.</p>
+      <button class="btn ghost" id="brand-audit-cta" onclick="goToBrandAudit()">Request a Brand Audit</button>
+    </div>
+
+    <div class="actions">
+      <button class="link" onclick="history.back()">← Back</button>
+      <button class="link" onclick="resetAll()">↺ Start a new search</button>
+    </div>
+  </section>
+
+  <!-- PORTAL OFFER (after Send my report) -->
+  <section class="card hidden" data-screen="portal">
+    <h2>Your report is on its way 📧</h2>
+    <p class="lead">Before you go — create your free Temmy Portal login and get much more, at no cost.</p>
+    <ul class="benefits">
+      <li>Unlimited free searches</li>
+      <li>View and download all your reports in one convenient place</li>
+      <li>Your trademark portfolio in one view</li>
+      <li>Set up notifications so you never miss a deadline</li>
+      <li>Access to our free guides — and much more</li>
+    </ul>
+    <div class="portal-actions">
+      <button class="btn primary" onclick="createPortal()">Yes please — create my free login</button>
+      <button class="btn ghost" onclick="finish(false)">Just send my report</button>
+    </div>
+    <div class="actions"><button class="link" onclick="history.back()">← Back</button><span></span></div>
+  </section>
+
+  <!-- DONE -->
+  <section class="card hidden" data-screen="done">
+    <div class="done-mark">✓</div>
+    <h2 style="text-align:center" id="done-head">Report sent</h2>
+    <p class="lead" style="text-align:center" id="done-msg"></p>
+    <div style="text-align:center"><button class="btn primary" onclick="resetAll()">Start another search</button></div>
+    <div class="actions"><button class="link" onclick="history.back()">← Back</button><span></span></div>
+  </section>
+</div>
+
+<div class="mode-flag" id="modeflag"></div>
+
+<script>
+/* =======================================================================
+   CONFIG — the only line to change to go live.
+   API_BASE='' -> built-in MOCK (works instantly, offline).
+   API_BASE='https://<ref>.supabase.co/functions/v1/free-search' -> live.
+   ======================================================================= */
+const CONFIG = (function(){
+  // Embedded via /embed.js the tenant rides on the URL; standalone defaults tmh.
+  var q=new URLSearchParams(location.search);
+  return { API_BASE:'', TENANT_ID:(q.get('tenant')||'tmh'), EMBED:q.get('embed')==='1',
+    // Where the new standalone Brand Audit page lives — point this at wherever
+    // it's actually deployed (same open question as this page's own hosting).
+    BRAND_AUDIT_URL:'/brand-audit/' };
+})();
+// The `journey` Edge Function is a sibling of `free-search` (same Supabase
+// project) — swap the last path segment rather than needing a second config
+// line to keep in sync. Empty in the same-origin MOCK/dev mode as API_BASE.
+function journeyBase(){
+  var b=(CONFIG.API_BASE||'').replace(/\/$/,'');
+  return b.replace(/\/free-search$/,'/journey');
+}
+
+/* Nice class short labels (full headings live in nice_classes.py) */
+const NICE={1:'Chemicals',2:'Paints & Coatings',3:'Cosmetics & Cleaning',4:'Oils, Lubricants & Fuels',
+ 5:'Pharmaceuticals',6:'Metal Products',7:'Machinery',8:'Hand Tools',9:'Electrical, Scientific & Computers',
+ 10:'Medical Apparatus',11:'Lighting, Heating & Sanitary',12:'Vehicles',13:'Firearms & Fireworks',
+ 14:'Jewellery & Watches',15:'Musical Instruments',16:'Paper & Stationery',17:'Rubber & Plastics',
+ 18:'Leather & Luggage',19:'Building Materials (non-metal)',20:'Furniture',21:'Household & Kitchen Utensils',
+ 22:'Ropes, Nets & Tents',23:'Yarns & Threads',24:'Textiles & Linen',25:'Clothing, Footwear & Headwear',
+ 26:'Lace, Ribbons & Haberdashery',27:'Carpets & Floor Coverings',28:'Games, Toys & Sporting Goods',
+ 29:'Meat, Fish & Dairy',30:'Coffee, Bakery & Staple Foods',31:'Agriculture & Live Animals',
+ 32:'Beers & Soft Drinks',33:'Alcoholic Beverages',34:'Tobacco & Smokers’ Articles',35:'Advertising & Business',
+ 36:'Financial & Insurance',37:'Construction & Repair',38:'Telecommunications',39:'Transport & Storage',
+ 40:'Treatment of Materials',41:'Education & Entertainment',42:'Science & Technology (IT)',
+ 43:'Food & Drink Services',44:'Medical & Beauty Services',45:'Legal & Security Services'};
+
+/* Jurisdiction picker (mirrors jurisdictions_data.picker_payload) */
+const PICKER={
+  popular:[{code:'GB',label:'United Kingdom'},{code:'EU',label:'European Union',covers:'27 countries'},
+    {code:'US',label:'United States',covers:'all 50 states'},{code:'AU',label:'Australia'},
+    {code:'NZ',label:'New Zealand'},{code:'AE',label:'Dubai / UAE'},{code:'SG',label:'Singapore'},
+    {code:'SA',label:'Saudi Arabia'}],
+  regions:[{code:'WO',label:'WIPO / Madrid (international)'},{code:'BX',label:'Benelux'},
+    {code:'ARIPO',label:'ARIPO (Africa)'},{code:'OAPI',label:'OAPI (Africa)'}],
+  all_countries:[{code:'AF',label:'Afghanistan'},{code:'AR',label:'Argentina'},{code:'BR',label:'Brazil'},
+    {code:'CA',label:'Canada'},{code:'CN',label:'China'},{code:'FR',label:'France'},{code:'DE',label:'Germany'},
+    {code:'IN',label:'India'},{code:'IE',label:'Ireland'},{code:'IT',label:'Italy'},{code:'JP',label:'Japan'},
+    {code:'MX',label:'Mexico'},{code:'NL',label:'Netherlands'},{code:'ZA',label:'South Africa'},
+    {code:'KR',label:'South Korea'},{code:'ES',label:'Spain'},{code:'SE',label:'Sweden'},
+    {code:'CH',label:'Switzerland'},{code:'TR',label:'Turkey'},{code:'US',label:'United States'}]};
+
+const STEP_ORDER=['search','marks','jurisdiction','classes','results'];
+const STEP_LABELS={search:'Name',marks:'Searches',jurisdiction:'Jurisdictions',classes:'Classes',results:'Results'};
+let state={name:'',logo:false,logoLater:false,tagline:'',classes:[],
+  now:{mode:'uk',codes:[]},plan:{mode:'none',codes:[]},lastResult:null,lead:null,
+  emailForAI:null,classSource:null,resultsComputedFrom:null,portalRequested:false,
+  sessionId:null};  // minted on the first real decision — see ensureSession()
+
+/* ── Navigation ──────────────────────────────────────────────────────────
+   Two layers, deliberately kept separate:
+   - screen(id)        pure DOM show/hide — no history, no side effects.
+   - pushScreen(id)     the only thing that should ever move the visitor
+                        forward: records a real history entry (so the
+                        browser's own Back/Forward buttons and mobile
+                        swipe-back work), then shows the screen.
+   Back links call history.back() instead of pushScreen() to a hardcoded
+   target — that keeps the browser's history stack and this app's idea of
+   "where you are" as the SAME stack, so native Back and our own "← Back"
+   links can never disagree or leave the visitor stranded.
+   Every screen in this file already keeps its own DOM in sync reactively
+   (addClass/removeClass/setMode/tog all re-render their own bit of UI the
+   moment state changes) — nothing here needs to force a full screen
+   rebuild on re-entry EXCEPT "results", which is only ever populated by
+   beginSearch() and needs a staleness check if the visitor went back,
+   changed classes/jurisdiction, then came forward again without pressing
+   "Begin Free Search" (by design we never silently re-run the search on a
+   bare forward-navigation — see syncResultsStaleness()).
+   When the Brand Audit flow gets built as further screens in this same
+   state machine, it should use these same three primitives rather than
+   inventing its own — that's what makes "back and forth" free for it too.
+*/
+function screen(id){document.querySelectorAll('[data-screen]').forEach(s=>s.classList.add('hidden'));
+  const el=document.querySelector(`[data-screen="${id}"]`);if(el)el.classList.remove('hidden');
+  renderStepper(id);window.scrollTo({top:0,behavior:'smooth'});}
+function pushScreen(id){history.pushState({screen:id},'','#'+id);renderScreen(id);}
+function renderScreen(id){
+  if(id==='results'){
+    if(!state.lastResult){ id='search'; history.replaceState({screen:'search'},'','#search'); }
+    else { syncResultsStaleness(); }
+  }
+  screen(id);
+}
+function snapshotInputs(){return JSON.stringify({classes:state.classes,now:state.now,plan:state.plan});}
+function syncResultsStaleness(){
+  const stale=state.resultsComputedFrom && state.resultsComputedFrom!==snapshotInputs();
+  const el=document.getElementById('res-stale'); if(el)el.classList.toggle('hidden',!stale);
+}
+
+/* ── Journey logging ─────────────────────────────────────────────────────
+   "Free trademark search must record data input" (Jonathan, 01 Aug 2026):
+   every real step/decision is logged server-side as it happens, not just
+   at a final submit — so an abandoned session still leaves a record, and
+   Brand Audit has something to pre-fill from if the visitor continues.
+   Fire-and-forget, same pattern as report.js's lead() — never blocks or
+   breaks the UI if the journey function is unreachable (matches the MOCK/
+   dev-mode fallback already used for search/lookup calls on this page). */
+function currentSnapshot(){
+  return {name:state.name,
+    tagline:document.getElementById('tagline')?document.getElementById('tagline').value.trim():state.tagline,
+    has_logo:state.logo&&!state.logoLater, classes:state.classes,
+    trading_now:nowCodes(), planning_to_trade:planCodes(), class_source:state.classSource};
+}
+function ensureSession(){
+  // Idempotent — call it any time; only the first call actually mints one.
+  // A blank visit that never gets this far never creates a row (migration
+  // 0002: "created on first real decision, not on page load").
+  if(state.sessionId) return Promise.resolve(state.sessionId);
+  if(state._sessionStarting) return state._sessionStarting;
+  state._sessionStarting=fetch(journeyBase()+'/session/start',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tenant_id:CONFIG.TENANT_ID,source:'free_search',name:state.name})})
+    .then(r=>r.json()).then(d=>{
+      if(d&&d.ok&&d.session_id){ state.sessionId=d.session_id; }
+      return state.sessionId;
+    }).catch(()=>null);
+  return state._sessionStarting;
+}
+// "Request a Brand Audit" is available straight from Results — no email
+// gate. Carries whatever's known (name, classes, jurisdictions, and contact
+// details if "Send my report" was already used) via session_id; Brand Audit
+// fetches the snapshot itself and pre-fills, fully editable, from there.
+function goToBrandAudit(){
+  const url=CONFIG.BRAND_AUDIT_URL+(state.sessionId?('?s='+encodeURIComponent(state.sessionId)):'');
+  // The page is about to navigate away, so use sendBeacon (survives unload)
+  // rather than a normal fetch for this specific, last call.
+  if(state.sessionId && navigator.sendBeacon){
+    try{
+      const body=JSON.stringify({session_id:state.sessionId,event_type:'brand_audit_handoff',
+        screen:'results',payload:{}});
+      navigator.sendBeacon(journeyBase()+'/session/event', new Blob([body],{type:'application/json'}));
+    }catch(e){}
+  }
+  location.href=url;
+}
+function logEvent(type,screen,payload,includeSnapshot){
+  ensureSession().then(function(id){
+    if(!id) return; // dev/mock mode or the function is unreachable — never block the UI over it
+    try{
+      fetch(journeyBase()+'/session/event',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({session_id:id, event_type:type, screen:screen||null,
+          payload:payload||{}, snapshot: includeSnapshot?currentSnapshot():null}),
+        keepalive:true}).catch(()=>{});
+    }catch(e){}
+  });
+}
+function renderStepper(cur){
+  const map={results:'results',portal:'results',done:'results'};
+  const base=map[cur]||cur;const idx=STEP_ORDER.indexOf(base);
+  document.getElementById('stepper').innerHTML=STEP_ORDER.map((s,i)=>{
+    const cls=i<idx?'done':(i===idx?'active':'');return `<div class="s ${cls}">${i+1}. ${STEP_LABELS[s]}</div>`;}).join('');
+}
+/* ---- class-help panel (routes 2a–2e) ---- */
+function toggleHelp(show){
+  document.getElementById('help-panel').classList.toggle('hidden',!show);
+  document.getElementById('help-toggle').classList.toggle('hidden',show);
+  if(show) document.getElementById('help-panel').scrollIntoView({behavior:'smooth'});
+}
+function openHelp(opt){
+  document.querySelectorAll('.help-opt').forEach(o=>o.classList.toggle('open',o.dataset.opt===opt));
+  const body=document.getElementById('ho-'+opt);
+  if(body.dataset.built){return;} body.dataset.built='1';
+  if(opt==='5') body.innerHTML=`
+    <div class="seg" style="margin-bottom:10px">
+      <div class="opt on" id="ho5-mode-tm" onclick="ho5Mode('tm')" style="padding:8px 14px;font-size:13px">By trademark</div>
+      <div class="opt" id="ho5-mode-owner" onclick="ho5Mode('owner')" style="padding:8px 14px;font-size:13px">By company / owner</div>
+    </div>
+    <div class="hbar"><input id="ho5-q" placeholder="Trademark name or number" oninput="ho5Search()"></div>
+    <div class="hres hidden" id="ho5-res"></div>`;
+  else if(opt==='3') body.innerHTML=`
+    <div class="hbar"><input id="ho3-q" placeholder="Company name or number" oninput="ho3coSearch()"></div>
+    <div class="hres hidden" id="ho3-res"></div>
+    <div class="muted-note" id="ho3-out"></div>`;
+  else body.innerHTML=aiGateHtml(opt);
+}
+function aiGateHtml(opt){
+  const ph={1:'Describe what your business does — the more detail the better',
+            2:'https://your-website.com',4:'https://a-direct-competitor.com'}[opt];
+  if(!state.emailForAI){
+    return `<div class="gate-note"><b>Step 1 of 2 — unlock this option.</b><br>
+      This option uses AI to read what you give it, so we ask for your email
+      first (one line, no obligation — it's also where your results go). Your
+      ${opt==='1'?'business description':'website address'} comes in step 2.</div>
+      <div class="hbar" style="margin-top:8px">
+        <input id="ho${opt}-email" type="email" autocomplete="email" placeholder="you@business.com">
+        <button class="btn primary" onclick="aiGate('${opt}')">Unlock step 2 →</button></div>`;
+  }
+  return aiInputHtml(opt,ph);
+}
+function aiInputHtml(opt,ph){
+  const multi = opt==='1';
+  const label = {1:'Step 2 — describe your business in your own words:',
+                 2:'Step 2 — your website address:',
+                 4:'Step 2 — a direct competitor\u2019s website address:'}[opt];
+  return `<div class="gate-note"><b>${label}</b><br>We\u2019ll process this with AI and include the suggested classes in your report to ${state.emailForAI}.</div>
+    ${multi?`<textarea id="ho${opt}-in" style="width:100%;margin-top:8px;min-height:70px" placeholder="${ph}"></textarea>`
+           :`<div class="hbar" style="margin-top:8px"><input id="ho${opt}-in" type="url" inputmode="url" autocomplete="url" placeholder="${ph}"></div>`}
+    <button class="btn ghost" style="margin-top:8px" onclick="aiSubmit('${opt}')">Add to my report</button>
+    <div class="muted-note" id="ho${opt}-out"></div>`;
+}
+function aiGate(opt){
+  const e=(document.getElementById('ho'+opt+'-email').value||'').trim();
+  if(!/.+@.+\..+/.test(e)){alert('Please enter a valid email.');return;}
+  state.emailForAI=e;
+  const body=document.getElementById('ho-'+opt);
+  const ph={1:'Describe what your business does — the more detail the better',2:'https://your-website.com',4:'https://a-direct-competitor.com'}[opt];
+  body.innerHTML=aiInputHtml(opt,ph);
+}
+function aiSubmit(opt){
+  // Does NOT run live (AI cost / abuse guard). Captures the input + email; the
+  // report build runs the AI class suggestion server-side once queued.
+  const val=(document.getElementById('ho'+opt+'-in').value||'').trim();
+  if(!val){alert('Please add your '+(opt==='1'?'description':'website address')+'.');return;}
+  if(opt==='1' && val.length<15){alert('A little more detail helps the AI — a sentence or two on what you sell or do.');return;}
+  if(opt!=='1' && !/^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([\/#?].*)?$/i.test(val)){
+    alert('That doesn\u2019t look like a website address \u2014 e.g. yourbusiness.co.uk');return;}
+  state.classSource={route:opt,value:val,email:state.emailForAI};
+  document.getElementById('ho'+opt+'-out').textContent='✓ Captured — suggested classes will be in your emailed report.';
+}
+let ho5mode='tm';
+function ho5Mode(m){ho5mode=m;
+  document.getElementById('ho5-mode-tm').classList.toggle('on',m==='tm');
+  document.getElementById('ho5-mode-owner').classList.toggle('on',m==='owner');
+  document.getElementById('ho5-q').placeholder = m==='tm'
+    ? 'Trademark name or number' : 'Company / owner name or IPO ID';
+  document.getElementById('ho5-q').value=''; document.getElementById('ho5-res').classList.add('hidden');}
+async function ho5Search(){
+  const q=(document.getElementById('ho5-q').value||'').trim();
+  const res=document.getElementById('ho5-res');
+  if(q.length<2){res.classList.add('hidden');return;}
+  if(ho5mode==='owner'){ return ho5SearchOwners(q,res); }
+  const data=await lookupApi('marks',{q});
+  const rows=(data&&data.results)||[];
+  res.innerHTML=rows.slice(0,6).map((r,i)=>`<div class="r" data-i="${i}"><span class="rn">${r.number}</span><span><b>${r.name||'—'}</b> · ${r.status} · ${r.applicant||''}</span></div>`).join('')||'<div class="r">No matches</div>';
+  res.querySelectorAll('.r[data-i]').forEach(row=>row.onclick=()=>ho5Pick(rows[+row.dataset.i]));
+  res.classList.remove('hidden');
+}
+async function ho5SearchOwners(q,res){
+  const data=await lookupApi('owners',{q});
+  const rows=(data&&data.results)||[];
+  res.innerHTML=rows.slice(0,6).map((r,i)=>`<div class="r" data-i="${i}"><span class="rn">${r.name||'—'}</span><span>${r.postcode||''} · ${r.trademark_count} marks</span></div>`).join('')||'<div class="r">No matches</div>';
+  res.querySelectorAll('.r[data-i]').forEach(row=>row.onclick=()=>ho5PickOwner(rows[+row.dataset.i]));
+  res.classList.remove('hidden');
+}
+async function ho5PickOwner(o){
+  const res=document.getElementById('ho5-res');
+  const data=await lookupApi('owner',{id:o.ipo_identifier});
+  const tms=(data&&data.trademarks)||[];
+  res.innerHTML=`<div class="r" onclick="ho5Search()"><span class="rn">← back</span><span>${o.name}’s trademarks</span></div>`+
+    tms.slice(0,20).map((t,i)=>`<div class="r" data-i="${i}"><span class="rn">${t.number}</span><span><b>${t.name||'—'}</b> · ${t.status} · cls ${(t.classes||[]).join(', ')}</span></div>`).join('');
+  res.querySelectorAll('.r[data-i]').forEach(row=>row.onclick=()=>ho5Pick(tms[+row.dataset.i]));
+}
+async function ho5Pick(m){
+  const data=await lookupApi('basket',{number:m.number});
+  const b=data&&data.basket;
+  if(b&&b.classes){ state.classes=[...new Set([...state.classes,...b.classes])].sort((a,b)=>a-b);
+    // The engine already worked out specific terms per class here (b.entries)
+    // — not shown to the client (the free search stays a quick classes-only
+    // pick), but captured for the record: it's real Nice-specification detail
+    // for exactly this brand, and shouldn't be thrown away just because the
+    // free UI doesn't surface it. Lands in class_source -> journey_sessions
+    // .class_source -> (once wired) G_S_Scope_Classes_Terms.Specific_Terms.
+    state.classSource={route:'5',value:m.number,label:m.name,term_basket:b};
+    renderBasket();
+    logEvent('class_source_applied','classes',{route:'5',trademark:m.number,classes:b.classes},true); }
+  document.getElementById('ho-5').querySelector('.hres').innerHTML=
+    `<div class="r"><span>✓ Added classes ${(b&&b.classes||[]).join(', ')} from ${m.name}</span></div>`;
+}
+let ho3t;
+async function ho3coSearch(){
+  clearTimeout(ho3t); ho3t=setTimeout(async()=>{
+    const q=(document.getElementById('ho3-q').value||'').trim();
+    const res=document.getElementById('ho3-res');
+    if(q.length<2){res.classList.add('hidden');return;}
+    const data=await lookupApi('company',{q});
+    const rows=(data&&data.results)||[];
+    res.innerHTML=rows.slice(0,6).map((r,i)=>`<div class="r" data-i="${i}"><span class="rn">${r.number}</span><span><b>${r.name||'—'}</b> · ${r.status} · ${r.address||''}</span></div>`).join('')||'<div class="r">No matches</div>';
+    res.querySelectorAll('.r[data-i]').forEach(row=>row.onclick=()=>ho3coPick(rows[+row.dataset.i]));
+    res.classList.remove('hidden');
+  },300);
+}
+async function ho3coPick(c){
+  const data=await lookupApi('company-classes',{number:c.number});
+  const classes=(data&&data.classes)||[];
+  const toAdd=classes.filter(x=>x.tier==='a'||x.tier==='b').map(x=>x.nice_class);
+  state.classes=[...new Set([...state.classes,...toAdd])].sort((a,b)=>a-b);
+  // Same story as ho5Pick — company_classes() already returns a term_basket
+  // (company.py), not just class numbers. Captured, not shown.
+  state.classSource={route:'3',value:c.number,label:c.name,sic:data.sic_codes,
+    method:data.method,term_basket:data.basket};
+  renderBasket();
+  logEvent('class_source_applied','classes',{route:'3',company:c.number,classes:toAdd},true);
+  const src=data.method==='empirical'?' (from real filings)':data.method==='mixed'?' (part real filings)':'';
+  document.getElementById('ho3-out').innerHTML=`✓ ${c.name} · SIC ${(data.sic_codes||[]).join(', ')} → classes${src}: `+
+    classes.map(x=>`<span class="term" style="cursor:default">${x.nice_class} <small>(${x.band})</small></span>`).join(' ');
+}
+async function ho3Apply(){
+  const raw=(document.getElementById('ho3-q').value||'').trim();
+  const out=document.getElementById('ho3-out');
+  if(!raw){ out.textContent='Enter one or more SIC codes.'; return; }
+  const data=await lookupApi('sic',{q:raw});
+  const classes=(data&&data.classes)||[];
+  if(!classes.length){ out.innerHTML='No classes matched those SIC codes. Try the full 5-digit code(s).'; return; }
+  const all=classes.map(c=>c.nice_class);
+  // Add the top-tier classes to the basket (a/b; the client can trim).
+  const toAdd=classes.filter(c=>c.tier==='a'||c.tier==='b').map(c=>c.nice_class);
+  state.classes=[...new Set([...state.classes,...toAdd])].sort((a,b)=>a-b);
+  // sic_engine.to_basket() (controller.py) already returns terms per class —
+  // captured, not shown, same as the other two routes.
+  state.classSource={route:'3',value:raw,mapped:all,method:data.method,term_basket:data.basket};
+  renderBasket();
+  logEvent('class_source_applied','classes',{route:'3-sic',sic:raw,classes:toAdd},true);
+  const src = data.method==='empirical' ? ' (from real filings)' : data.method==='mixed' ? ' (part real filings)' : '';
+  out.innerHTML='✓ Mapped to'+src+': '+classes.map(c=>`<span class="term" style="cursor:default">${c.nice_class} <small>(${c.band})</small></span>`).join(' ')+
+    (data.unmatched&&data.unmatched.length?`<div class="muted-note">Unrecognised: ${data.unmatched.join(', ')}</div>`:'');
+}
+async function lookupApi(action,params){
+  // '' = same-origin: the page is served BY the engine (single-host design),
+  // so relative /lookup/<action> is always the live API. No mock exists —
+  // a stub that answers convincingly is how every bad demo bug happened.
+  const base=(CONFIG.API_BASE||'').replace(/\/$/,'');
+  const qs=new URLSearchParams(params).toString();
+  try{ return await (await fetch(base+'/lookup/'+action+'?'+qs)).json(); }
+  catch(e){ return {results:[], error:'The search service could not be reached.'}; }
+}
+/* (mock deleted — the engine is same-origin; nothing here invents data) */
+
+function go(id){
+  if(id==='marks'){state.name=document.getElementById('name').value.trim();
+    if(!state.name){shake('name');return;} document.getElementById('name-echo').textContent=state.name;
+    // The first real decision — this is what mints the session (see
+    // ensureSession()). Everything before this point was a blank visit.
+    logEvent('name_submitted','marks',{name:state.name},true);
+  } else {
+    logEvent('screen_enter',id,{},false);
+  }
+  pushScreen(id);
+}
+function shake(elId){const el=document.getElementById(elId);el.style.borderColor='#c0392b';el.focus();
+  setTimeout(()=>el.style.borderColor='',900);}
+
+/* step 2 */
+function toggleTick(k){const el=document.getElementById(k==='logo'?'tick-logo':'tick-tag');el.classList.toggle('on');
+  if(k==='logo')state.logo=el.classList.contains('on');
+  if(k==='tag'&&!el.classList.contains('on'))document.getElementById('tagline').value='';
+  logEvent('field_commit','marks',{field:k,on:el.classList.contains('on')},true);}
+
+/* step 3 */
+function renderClassList(){const q=(document.getElementById('cls-search').value||'').toLowerCase();
+  const rows=Object.entries(NICE).filter(([n,l])=>!q||l.toLowerCase().includes(q)||('class '+n).includes(q))
+    .map(([n,l])=>`<div class="row" onclick="addClass(${n})"><span class="n">${n}</span><span>${l}</span></div>`).join('');
+  document.getElementById('cls-list').innerHTML=rows||'<div class="row"><span>No match</span></div>';}
+function addClass(n){n=+n;if(!state.classes.includes(n))state.classes.push(n);state.classes.sort((a,b)=>a-b);renderBasket();
+  logEvent('class_added','classes',{nice_class:n},true);}
+function removeClass(n){n=+n;state.classes=state.classes.filter(x=>x!==n);renderBasket();
+  logEvent('class_removed','classes',{nice_class:n},true);}
+function renderBasket(){const b=document.getElementById('cls-basket');
+  b.innerHTML=state.classes.length?state.classes.map(n=>
+    `<span class="chip"><b>${n}</b> ${NICE[n]} <span class="x" onclick="removeClass(${n})">×</span></span>`).join('')
+    :'<span class="muted-note">None selected — we’ll search all classes.</span>';}
+
+/* step 4 combined */
+function buildPicker(which){
+  const host=document.getElementById(which==='now'?'pick-now':'pick-plan');
+  host.innerHTML=state[which].mode==='select'?pickerBody(which):'';
+}
+function pickerBody(which){const sel=state[which].codes;
+  const chip=(c)=>`<div class="c ${sel.includes(c.code)?'on':''}" onclick="tog('${which}','${c.code}')">${c.label}${c.covers?` <small>(${c.covers})</small>`:''}</div>`;
+  return `<div class="group-title">Popular</div><div class="pop">${PICKER.popular.map(chip).join('')}</div>
+   <div class="group-title">Other regions</div><div class="pop">${PICKER.regions.map(chip).join('')}</div>
+   <div class="group-title">All countries</div>
+   <input type="text" placeholder="Search countries…" oninput="filterAZ('${which}',this.value)" style="margin:6px 0">
+   <div class="pop" id="az-${which}">${PICKER.all_countries.map(chip).join('')}</div>`;}
+function filterAZ(which,q){q=(q||'').toLowerCase();const sel=state[which].codes;
+  document.getElementById('az-'+which).innerHTML=PICKER.all_countries.filter(c=>c.label.toLowerCase().includes(q))
+    .map(c=>`<div class="c ${sel.includes(c.code)?'on':''}" onclick="tog('${which}','${c.code}')">${c.label}</div>`).join('');}
+function tog(which,code){const arr=state[which].codes;const i=arr.indexOf(code);
+  if(i>=0)arr.splice(i,1);else arr.push(code);buildPicker(which);
+  logEvent('jurisdiction_set','jurisdiction',{which:which,codes:arr.slice()},true);}
+function setMode(which,mode){state[which].mode=mode;if(mode!=='select')state[which].codes=[];
+  document.getElementById('now-uk').classList.toggle('on',mode==='uk');
+  document.getElementById('now-select').classList.toggle('on',mode==='select');buildPicker(which);
+  logEvent('jurisdiction_set','jurisdiction',{which:which,mode:mode},true);}
+function revealPlan(){document.getElementById('plan-block').classList.remove('hidden');
+  document.getElementById('now-continue').classList.add('hidden');
+  document.getElementById('plan-block').scrollIntoView({behavior:'smooth'});}
+function setPlanMode(mode){state.plan.mode=mode;state.plan.codes=[];
+  document.querySelectorAll('#plan-seg .opt').forEach(o=>o.classList.toggle('on',o.dataset.plan===mode));
+  logEvent('jurisdiction_set','jurisdiction',{which:'plan',mode:mode},true);
+  const p=document.getElementById('pick-plan');
+  if(mode==='select'){p.classList.remove('hidden');buildPicker('plan');}else p.classList.add('hidden');}
+
+function nowCodes(){return state.now.mode==='uk'?['GB']:state.now.codes;}
+function planCodes(){if(state.plan.mode==='none')return[];if(state.plan.mode==='uk')return['GB'];return state.plan.codes;}
+
+function buildPayload(){return {name:state.name,
+  tagline:document.getElementById('tagline').value.trim()||null,
+  logo:state.logo&&!state.logoLater?'data:image/png;base64,PLACEHOLDER':null,
+  classes:state.classes,class_source:state.classSource,
+  trading_now:nowCodes(),planning_to_trade:planCodes(),tenant_id:CONFIG.TENANT_ID};}
+
+/* run search — soft funnel: always show limited results, no hard gate here */
+async function beginSearch(){
+  const payload=buildPayload();
+  const out=await callSearch(payload);
+  if(!out.ok){alert('Search error: '+(out.error||'unknown'));return;}
+  state.lastResult=out.result;renderResults(out.result);
+  state.resultsComputedFrom=snapshotInputs(); // for the staleness check on later back/forward
+  logEvent('search_run','results',{name:payload.name,classes:payload.classes,
+    trading_now:payload.trading_now,planning_to_trade:payload.planning_to_trade,
+    overall_risk:out.result&&out.result.summary&&out.result.summary.overall_risk},true);
+  // last_result isn't in the allow-listed snapshot fields above (kept small/
+  // frequent); send it in its own call so the full result is still on record
+  // without bloating every other event's payload.
+  ensureSession().then(function(id){ if(!id)return;
+    fetch(journeyBase()+'/session/event',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:id,event_type:'search_result',screen:'results',
+        payload:{},snapshot:{last_result:out.result,status:'search_completed'}}),
+      keepalive:true}).catch(()=>{});
+  });
+  pushScreen('results');
+}
+async function callSearch(payload){
+  const base=(CONFIG.API_BASE||'').replace(/\/$/,'');
+  const headers={'Content-Type':'application/json'};
+  if(state.jwt)headers['Authorization']='Bearer '+state.jwt;
+  try{
+    const r=await fetch(base+'/free-search',{method:'POST',headers,body:JSON.stringify(payload)});
+    return await r.json();
+  }catch(e){
+    return {ok:false,error:'The search service could not be reached. If you are testing locally, make sure the Launch Free Search window is still open.'};
+  }
+}
+
+
+
+function discJur(p){const nonUk=[...(p.trading_now||[]),...(p.planning_to_trade||[])].filter(x=>x!=='GB'&&x!=='UK');
+  const base='This free search covers the UK Intellectual Property Office register only. It does not check social media, online marketplaces, search engines, domain names, or company registers — and prior unregistered use can defeat an application even where the register is clear.';
+  if(!nonUk.length)return base;let bits=[];
+  if((p.trading_now||[]).length)bits.push('you currently trade in '+p.trading_now.join(', '));
+  if((p.planning_to_trade||[]).length)bits.push('you plan to trade in '+p.planning_to_trade.join(', '));
+  return 'You told us '+bits.join(' and ')+'. '+base+' A Brand Audit covers the full brand landscape across the territories that matter to you.';}
+
+function renderResults(r){const s=r.summary;
+  document.getElementById('res-sub').textContent=`We searched the ${r.searched_office} register for “${r.query.word_marks[0]}”.`;
+  document.getElementById('res-summary').innerHTML=[['Total flagged',s.total_flagged,''],['Displayed',s.displayed,''],
+    ['High risk',s.high,'high'],['Medium risk',s.medium,'med'],['Low risk',s.low,'low']]
+    .map(([k,v,cx])=>`<div class="stat ${cx}"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+  const tot=Math.max(1,s.high+s.medium+s.low);
+  document.getElementById('res-bar').innerHTML=
+    `<i style="width:${s.high/tot*100}%;background:var(--r-high)"></i>`+
+    `<i style="width:${s.medium/tot*100}%;background:var(--r-med)"></i>`+
+    `<i style="width:${s.low/tot*100}%;background:var(--r-low)"></i>`;
+  const rows=r.top_results.map(x=>{let co='';
+    if(x.company){const d=x.company.is_dissolved?`<span class="dead">${x.company.status}</span>`:x.company.status;
+      co=`<div class="co">${d}${x.company.locality?' · '+x.company.locality:''}${x.company.sic_codes&&x.company.sic_codes.length?' · SIC '+x.company.sic_codes.join(', '):''}</div>`;}
+    return `<tr><td><span class="band ${x.risk.replace(' Risk','')}">${x.risk.replace(' Risk','')}</span></td>
+      <td>${x.type}</td><td><b>${x.mark}</b>${co}</td><td>${x.status}</td></tr>`;}).join('');
+  document.getElementById('res-rows').innerHTML=rows;
+  document.getElementById('res-disclaimers').innerHTML=r.disclaimers.map(d=>`<div class="disc">${d}</div>`).join('');
+}
+
+/* soft lead capture -> portal offer */
+function sendReport(){
+  const first=document.getElementById('r-first').value.trim();
+  const last=document.getElementById('r-last').value.trim();
+  const email=document.getElementById('r-email').value.trim();
+  const phone=document.getElementById('r-phone').value.trim();
+  if(!first||!last||!email||!/.+@.+\..+/.test(email)||!phone){
+    const e=document.getElementById('r-err');e.textContent='Please enter your name, a valid email and a phone number.';
+    e.classList.remove('hidden');return;}
+  document.getElementById('r-err').classList.add('hidden');
+  const biz=document.getElementById('r-biz').value.trim()||null;
+  state.lead={first_name:first,last_name:last,email,phone,business_name:biz,
+    trading_now:nowCodes(),planning_to_trade:planCodes(),tenant_id:CONFIG.TENANT_ID};
+  // The lead moment — this is what Brand Audit will pre-fill its contact
+  // step from if the visitor continues there. Logged + snapshotted
+  // immediately, not deferred to whatever eventually sends the email.
+  logEvent('lead_captured','results',{email:email},false);
+  ensureSession().then(function(id){ if(!id)return;
+    fetch(journeyBase()+'/session/event',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:id,event_type:'lead_captured',screen:'results',payload:{},
+        snapshot:{first_name:first,last_name:last,email:email,phone:phone,
+                  business_name:biz,status:'lead_captured'}}),
+      keepalive:true}).catch(()=>{});
+  });
+  /* LIVE: POST the lead + report request to the Edge Function (Zoho + email).
+     ⚠ When this is wired up: someone can now legitimately go back to Results
+     and press "Send my report" a second time (e.g. to fix a typo'd email).
+     Make that POST idempotent per report/session, the same lesson the
+     Industry Report tool already learned the hard way — see its build doc. */
+  pushScreen('portal');
+}
+function createPortal(){
+  if(state.portalRequested){ finish(true); return; } // already actioned this visit — don't double-fire on back+retry
+  state.portalRequested=true;
+  logEvent('portal_requested','portal',{},false);
+  /* LIVE: create Temmy Portal account (email OTP) + Zoho contact. */
+  finish(true);
+}
+function finish(withAccount){
+  document.getElementById('done-head').textContent=withAccount?'You’re all set 🎉':'Report sent';
+  document.getElementById('done-msg').textContent=withAccount
+    ?`Your report is on its way to ${state.lead.email}, and your free Temmy Portal login is being set up. Check your inbox to verify your email.`
+    :`Your full report is on its way to ${state.lead.email}. You can create a free Temmy Portal login any time.`;
+  pushScreen('done');
+}
+
+function resetAll(){state={name:'',logo:false,logoLater:false,tagline:'',classes:[],
+  now:{mode:'uk',codes:[]},plan:{mode:'none',codes:[]},lastResult:null,lead:null,
+  emailForAI:null,classSource:null,resultsComputedFrom:null,portalRequested:false,
+  sessionId:null};  // a new search is a genuinely new journey, not a continuation
+  ['name','tagline','r-first','r-last','r-email','r-phone','r-biz'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('tick-logo').classList.remove('on');document.getElementById('tick-tag').classList.remove('on');
+  document.getElementById('plan-block').classList.add('hidden');
+  document.getElementById('now-continue').classList.remove('hidden');
+  // reset class-help panel
+  toggleHelp(false);
+  document.querySelectorAll('.help-opt').forEach(o=>o.classList.remove('open'));
+  document.querySelectorAll('.ho-body').forEach(b=>{b.innerHTML='';b.removeAttribute('data-built');});
+  setMode('now','uk');setPlanMode('none');renderBasket();pushScreen('search');}
+
+/* init */
+document.getElementById('name').addEventListener('keydown',e=>{if(e.key==='Enter')go('marks');});
+document.getElementById('logo-later').addEventListener('change',e=>state.logoLater=e.target.checked);
+renderClassList();renderBasket();
+// Seed the history stack so the very first Back press behaves predictably
+// (leaves the tool, same as any normal page one click deep) rather than
+// erroring on a popstate with no prior entry.
+history.replaceState({screen:'search'},'','#search');
+window.addEventListener('popstate',function(e){
+  const id=(e.state&&e.state.screen)||(location.hash||'').replace('#','')||'search';
+  renderScreen(id);
+});
+renderScreen('search');
+document.getElementById('modeflag').textContent =
+  location.protocol==='file:' ? '● NOT CONNECTED — open via the Launch Free Search app, not the file'
+  : '● LIVE' + (CONFIG.API_BASE ? ': '+CONFIG.API_BASE : '');
+</script>
+<script>
+if (window.parent !== window) {
+  var _pushH=function(){parent.postMessage({brauditHeight:document.body.scrollHeight},'*');};
+  new ResizeObserver(_pushH).observe(document.body); _pushH();
+}
+</script>
+</body>
+</html>

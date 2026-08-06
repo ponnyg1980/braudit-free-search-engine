@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Request a Brand Audit — The Trademark Helpline</title>
+<style>
+  /* ---- TMH brand tokens (same as free-search.html — keep in sync) ---- */
+  :root{
+    --pink:#E51652; --pink-dark:#c01044; --navy:#2D455A; --navy-soft:#3d5a74;
+    --ink:#1f2a33; --muted:#6b7a86; --line:#e3e8ec; --bg:#f5f7f9; --white:#fff;
+    --r-high:#F4B084; --r-med:#FFE699; --r-low:#C5E0B4; --r-neg:#D9D9D9;
+    --radius:14px; --shadow:0 6px 24px rgba(45,69,90,.10);
+    --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);
+    line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:920px;margin:0 auto;padding:24px 18px 64px}
+
+  .brand{display:flex;align-items:center;gap:14px;padding:8px 2px 20px}
+  .brand .logo{width:46px;height:46px;border-radius:12px;background:var(--pink);
+    display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;box-shadow:var(--shadow)}
+  .brand h1{font-size:19px;margin:0;color:var(--navy);font-weight:800;letter-spacing:.2px}
+  .brand small{display:block;color:var(--pink);font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+
+  .steps{display:flex;gap:6px;margin:0 0 20px;flex-wrap:wrap}
+  .steps .s{flex:1;min-width:88px;font-size:11px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.06em;padding:8px 4px;border-top:3px solid var(--line);text-align:center}
+  .steps .s.active{color:var(--navy);border-top-color:var(--pink)}
+  .steps .s.done{color:var(--navy);border-top-color:var(--navy)}
+
+  .card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:28px;margin-bottom:18px}
+  .subcard{background:#fbfcfd;border:1.5px dashed var(--line);border-radius:12px;padding:20px;margin-top:16px}
+  h2{color:var(--navy);font-size:22px;margin:0 0 6px}
+  h3{color:var(--navy)}
+  .lead{color:var(--muted);margin:0 0 20px}
+
+  label.fld{display:block;font-weight:700;color:var(--navy);margin:14px 0 6px;font-size:14px}
+  label.fld .opt{color:var(--muted);font-weight:500;font-size:12px}
+  input[type=text],input[type=email],input[type=tel],input[type=url],textarea,select{
+    width:100%;padding:13px 14px;border:1.5px solid var(--line);border-radius:10px;
+    font-size:15px;font-family:inherit;color:var(--ink);background:#fff}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 3px rgba(229,22,82,.12)}
+  textarea{min-height:74px;resize:vertical}
+
+  .btn{appearance:none;border:0;border-radius:10px;padding:14px 26px;font-size:15px;font-weight:700;
+    cursor:pointer;font-family:inherit;transition:.15s}
+  .btn.primary{background:var(--pink);color:#fff}
+  .btn.primary:hover{background:var(--pink-dark)}
+  .btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--line)}
+  .btn.ghost:hover{border-color:var(--navy)}
+  .btn.block{width:100%}
+  .btn.small{padding:9px 16px;font-size:13px}
+  .actions{display:flex;justify-content:space-between;gap:12px;margin-top:24px;align-items:center}
+  .link{color:var(--pink);font-weight:700;cursor:pointer;background:none;border:0;font-size:14px;padding:0}
+  .link:hover{text-decoration:underline}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:640px){.cols{grid-template-columns:1fr}}
+  .cls-search{margin-bottom:12px}
+  .listbox{border:1.5px solid var(--line);border-radius:12px;max-height:220px;overflow:auto}
+  .listbox .row{padding:11px 13px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;gap:10px;align-items:baseline}
+  .listbox .row:hover{background:#fef4f7}
+  .listbox .row:last-child{border-bottom:0}
+  .listbox .n{font-weight:800;color:var(--pink);font-size:13px;min-width:22px}
+  .basket{border:1.5px solid var(--line);border-radius:12px;padding:12px;min-height:60px}
+  .chip{display:inline-flex;align-items:center;gap:8px;background:#fef4f7;color:var(--navy);
+    border:1px solid #f6c9d6;border-radius:999px;padding:6px 12px;margin:4px 4px 0 0;font-size:13px;font-weight:600}
+  .chip b{color:var(--pink)}
+  .chip .x{cursor:pointer;color:var(--pink);font-weight:800}
+  .muted-note{color:var(--muted);font-size:13px;margin-top:8px}
+
+  .tick{display:flex;gap:13px;align-items:flex-start;padding:15px;border:1.5px solid var(--line);
+    border-radius:12px;margin-bottom:12px;cursor:pointer;transition:.15s}
+  .tick:hover{border-color:var(--navy-soft)}
+  .tick.on{border-color:var(--pink);background:#fef4f7}
+  .tick .box{width:22px;height:22px;border-radius:6px;border:2px solid var(--line);display:grid;
+    place-items:center;flex:none;margin-top:1px;font-size:14px;color:#fff}
+  .tick.on .box{background:var(--pink);border-color:var(--pink)}
+  .tick .t{font-weight:700;color:var(--navy)}
+  .tick .sub{margin-top:12px;display:none}
+  .tick.on .sub{display:block}
+
+  .brand-card{border:1.5px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:12px;
+    display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .brand-card .bn{font-weight:800;color:var(--navy);font-size:16px}
+  .brand-card .bd{color:var(--muted);font-size:13px;margin-top:4px}
+  .brand-card .bx{display:flex;gap:8px;flex:none}
+
+  .juris-block{padding-top:6px}
+  .reveal{border-top:1px dashed var(--line);margin-top:22px;padding-top:20px}
+  .seg{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .seg .opt{padding:11px 16px;border:1.5px solid var(--line);border-radius:10px;cursor:pointer;
+    font-weight:700;color:var(--navy);background:#fff}
+  .seg .opt.on{border-color:var(--pink);background:var(--pink);color:#fff}
+  .pop{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
+  .pop .c{padding:9px 14px;border:1.5px solid var(--line);border-radius:999px;cursor:pointer;
+    font-weight:600;font-size:14px;color:var(--navy);background:#fff}
+  .pop .c.on{border-color:var(--pink);background:#fef4f7;color:var(--pink)}
+  .group-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:16px 0 4px}
+
+  .done-mark{width:64px;height:64px;border-radius:50%;background:var(--r-low);color:#2f6b23;display:grid;
+    place-items:center;font-size:34px;margin:0 auto 14px}
+  .hidden{display:none!important}
+  .mode-flag{position:fixed;bottom:10px;right:12px;font-size:11px;color:var(--muted);background:#fff;
+    border:1px solid var(--line);border-radius:8px;padding:4px 8px}
+  .err{color:#c0392b;font-size:13px;margin-top:8px;font-weight:600}
+  .pill-note{background:#f6f2ff;border:1px solid #ddd0ff;color:#5b3fb0;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="logo">TH</div>
+    <div><h1>The Trademark Helpline</h1><small>Request a Brand Audit</small></div>
+  </div>
+
+  <div class="steps" id="stepper"></div>
+
+  <!-- STEP 1: BRANDS — classes & terms first. Jonathan, 01 Aug 2026: "brand
+       audit starts with classes and terms, because they may have multiple
+       brands to check." Contact details are asked last, in step 3. -->
+  <section class="card" data-screen="brands">
+    <h2>Which brand(s) should we audit?</h2>
+    <p class="lead">Add each brand you want checked — name, classes and anything else you know about it. You can add more than one.</p>
+    <div id="prefill-note" class="pill-note hidden">We've carried over what you told us in your free search — check it over and change anything.</div>
+
+    <div id="brand-list"></div>
+
+    <div class="subcard" id="brand-form">
+      <label class="fld">Brand / word to protect</label>
+      <input type="text" id="bf-name" placeholder="e.g. Momentus" oninput="onBrandFieldChange()">
+
+      <div class="cols">
+        <div>
+          <label class="fld">Classes <span class="opt">search &amp; add</span></label>
+          <input class="cls-search" type="text" id="bf-cls-search" placeholder="Search classes…" oninput="renderClassList()">
+          <div class="listbox" id="bf-cls-list"></div>
+        </div>
+        <div>
+          <div class="group-title">This brand's classes</div>
+          <div class="basket" id="bf-cls-basket"><span class="muted-note">None selected yet.</span></div>
+        </div>
+      </div>
+
+      <label class="fld">Terms you already know <span class="opt">(optional — press Enter to add each)</span></label>
+      <input type="text" id="bf-term-input" placeholder="e.g. bakery products" onkeydown="if(event.key==='Enter'){event.preventDefault();addTerm();}">
+      <div class="basket" id="bf-term-basket" style="margin-top:8px"><span class="muted-note">None added yet.</span></div>
+
+      <div class="tick" id="bf-tick-logo" onclick="toggleBrandTick('logo')">
+        <div class="box">✓</div>
+        <div style="flex:1">
+          <div class="t">Logo <span class="opt">— optional</span></div>
+          <div class="sub">
+            <input type="file" id="bf-logo-file" accept="image/*" onclick="event.stopPropagation()">
+            <label class="fld" style="font-weight:600;margin-top:10px" onclick="event.stopPropagation()">
+              <input type="checkbox" id="bf-logo-later" style="width:auto;margin-right:8px" onchange="onBrandFieldChange()">I'll send this later
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="tick" id="bf-tick-tag" onclick="toggleBrandTick('tag')">
+        <div class="box">✓</div>
+        <div style="flex:1">
+          <div class="t">Tagline <span class="opt">— optional</span></div>
+          <div class="sub"><textarea id="bf-tagline" placeholder="Add tagline here" onclick="event.stopPropagation()" onblur="onBrandFieldChange()"></textarea></div>
+        </div>
+      </div>
+
+      <label class="fld">Your website URL <span class="opt">(optional)</span></label>
+      <input type="url" id="bf-website" placeholder="https://yourbusiness.com" onblur="onBrandFieldChange()">
+      <label class="fld">Describe the goods &amp; services this brand offers <span class="opt">(optional)</span></label>
+      <textarea id="bf-desc" onblur="onBrandFieldChange()"></textarea>
+      <div class="cols">
+        <div><label class="fld">Competitor name <span class="opt">(optional)</span></label><input type="text" id="bf-comp-name" onblur="onBrandFieldChange()"></div>
+        <div><label class="fld">Competitor website <span class="opt">(optional)</span></label><input type="url" id="bf-comp-site" onblur="onBrandFieldChange()"></div>
+      </div>
+
+      <div class="err hidden" id="bf-err">Please give this brand a name before saving it.</div>
+      <div class="actions"><span></span><button class="btn ghost small" onclick="saveBrand(true)">+ Save this brand &amp; add another</button></div>
+    </div>
+
+    <div class="actions">
+      <span></span>
+      <button class="btn primary" onclick="continueFromBrands()">Continue →</button>
+    </div>
+  </section>
+
+  <!-- STEP 2: COUNTRIES — shared across every brand in this request -->
+  <section class="card hidden" data-screen="countries">
+    <h2>Where do you trade?</h2>
+    <p class="lead">This applies to the whole audit, across every brand above.</p>
+    <div class="juris-block">
+      <h3 style="font-size:16px;margin:0 0 10px">Where do you trade <u>today</u>?</h3>
+      <div class="seg">
+        <div class="opt on" id="now-uk" onclick="setMode('now','uk')">UK only</div>
+        <div class="opt" id="now-select" onclick="setMode('now','select')">Select countries</div>
+      </div>
+      <div id="pick-now"></div>
+      <div id="now-continue" style="margin-top:14px"><button class="btn ghost" onclick="revealPlan()">Continue →</button></div>
+    </div>
+    <div class="reveal hidden juris-block" id="plan-block">
+      <h3 style="font-size:16px;margin:0 0 10px">Where do you <u>plan</u> to trade?</h3>
+      <div class="seg" id="plan-seg">
+        <div class="opt on" data-plan="none" onclick="setPlanMode('none')">No other countries</div>
+        <div class="opt" data-plan="uk" onclick="setPlanMode('uk')">UK only</div>
+        <div class="opt" data-plan="select" onclick="setPlanMode('select')">Select countries</div>
+      </div>
+      <div id="pick-plan" class="hidden"></div>
+      <div class="actions">
+        <button class="link" onclick="history.back()">← Back</button>
+        <button class="btn primary" onclick="go('details')">Continue →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3: YOUR DETAILS — last, not first. Pre-filled if Free Search
+       already captured them; always editable. -->
+  <section class="card hidden" data-screen="details">
+    <h2>Your details</h2>
+    <p class="lead">So we can send the audit to the right place — no obligation.</p>
+    <div class="cols">
+      <div><label class="fld">First name *</label><input type="text" id="d-first" onblur="onDetailsFieldChange()"></div>
+      <div><label class="fld">Last name *</label><input type="text" id="d-last" onblur="onDetailsFieldChange()"></div>
+    </div>
+    <div class="cols">
+      <div><label class="fld">Email *</label><input type="email" id="d-email" onblur="onDetailsFieldChange()"></div>
+      <div><label class="fld">Phone *</label><input type="tel" id="d-phone" onblur="onDetailsFieldChange()"></div>
+    </div>
+    <label class="fld">Company name <span class="opt">(optional)</span></label>
+    <input type="text" id="d-company" onblur="onDetailsFieldChange()">
+    <label class="fld">Company website <span class="opt">(optional)</span></label>
+    <input type="url" id="d-website" onblur="onDetailsFieldChange()">
+    <label style="display:flex;gap:9px;align-items:flex-start;margin-top:14px;font-size:12.5px;color:var(--muted);cursor:pointer">
+      <input type="checkbox" id="d-consent" style="margin-top:3px" onchange="onDetailsFieldChange()">
+      <span>I'm happy for The Trademark Helpline to contact me about this audit and occasional brand-protection tips. Unsubscribe anytime.</span>
+    </label>
+    <div class="err hidden" id="d-err"></div>
+    <div class="actions">
+      <button class="link" onclick="history.back()">← Back</button>
+      <button class="btn primary" onclick="submitAudit()">Send Audit Request</button>
+    </div>
+  </section>
+
+  <!-- DONE -->
+  <section class="card hidden" data-screen="done">
+    <div class="done-mark">✓</div>
+    <h2 style="text-align:center">Your audit request is in</h2>
+    <p class="lead" style="text-align:center" id="done-msg"></p>
+    <div style="text-align:center"><a class="btn primary" href="/free-search/">Run another free search</a></div>
+  </section>
+</div>
+
+<div class="mode-flag" id="modeflag"></div>
+
+<script>
+/* =======================================================================
+   CONFIG — mirrors free-search.html. journeyBase() must point at the same
+   `journey` Edge Function this page's data is written to.
+   ======================================================================= */
+const CONFIG=(function(){
+  var q=new URLSearchParams(location.search);
+  return { API_BASE:'', TENANT_ID:(q.get('tenant')||'tmh'), SESSION_ID:q.get('s')||null };
+})();
+function journeyBase(){ return (CONFIG.API_BASE||'').replace(/\/$/,'').replace(/\/free-search$/,'')+'/journey'; }
+
+/* Nice class short labels — same list as free-search.html */
+const NICE={1:'Chemicals',2:'Paints & Coatings',3:'Cosmetics & Cleaning',4:'Oils, Lubricants & Fuels',
+ 5:'Pharmaceuticals',6:'Metal Products',7:'Machinery',8:'Hand Tools',9:'Electrical, Scientific & Computers',
+ 10:'Medical Apparatus',11:'Lighting, Heating & Sanitary',12:'Vehicles',13:'Firearms & Fireworks',
+ 14:'Jewellery & Watches',15:'Musical Instruments',16:'Paper & Stationery',17:'Rubber & Plastics',
+ 18:'Leather & Luggage',19:'Building Materials (non-metal)',20:'Furniture',21:'Household & Kitchen Utensils',
+ 22:'Ropes, Nets & Tents',23:'Yarns & Threads',24:'Textiles & Linen',25:'Clothing, Footwear & Headwear',
+ 26:'Lace, Ribbons & Haberdashery',27:'Carpets & Floor Coverings',28:'Games, Toys & Sporting Goods',
+ 29:'Meat, Fish & Dairy',30:'Coffee, Bakery & Staple Foods',31:'Agriculture & Live Animals',
+ 32:'Beers & Soft Drinks',33:'Alcoholic Beverages',34:'Tobacco & Smokers’ Articles',35:'Advertising & Business',
+ 36:'Financial & Insurance',37:'Construction & Repair',38:'Telecommunications',39:'Transport & Storage',
+ 40:'Treatment of Materials',41:'Education & Entertainment',42:'Science & Technology (IT)',
+ 43:'Food & Drink Services',44:'Medical & Beauty Services',45:'Legal & Security Services'};
+
+const PICKER={
+  popular:[{code:'GB',label:'United Kingdom'},{code:'EU',label:'European Union',covers:'27 countries'},
+    {code:'US',label:'United States',covers:'all 50 states'},{code:'AU',label:'Australia'},
+    {code:'NZ',label:'New Zealand'},{code:'AE',label:'Dubai / UAE'},{code:'SG',label:'Singapore'},
+    {code:'SA',label:'Saudi Arabia'}],
+  regions:[{code:'WO',label:'WIPO / Madrid (international)'},{code:'BX',label:'Benelux'},
+    {code:'ARIPO',label:'ARIPO (Africa)'},{code:'OAPI',label:'OAPI (Africa)'}],
+  all_countries:[{code:'AF',label:'Afghanistan'},{code:'AR',label:'Argentina'},{code:'BR',label:'Brazil'},
+    {code:'CA',label:'Canada'},{code:'CN',label:'China'},{code:'FR',label:'France'},{code:'DE',label:'Germany'},
+    {code:'IN',label:'India'},{code:'IE',label:'Ireland'},{code:'IT',label:'Italy'},{code:'JP',label:'Japan'},
+    {code:'MX',label:'Mexico'},{code:'NL',label:'Netherlands'},{code:'ZA',label:'South Africa'},
+    {code:'KR',label:'South Korea'},{code:'ES',label:'Spain'},{code:'SE',label:'Sweden'},
+    {code:'CH',label:'Switzerland'},{code:'TR',label:'Turkey'},{code:'US',label:'United States'}]};
+
+const STEP_ORDER=['brands','countries','details'];
+const STEP_LABELS={brands:'Brand(s)',countries:'Countries',details:'Your Details'};
+
+let state={
+  requestId:null, sessionId:CONFIG.SESSION_ID,
+  brands:[],                                   // saved brand cards
+  brandForm:{name:'',classes:[],terms:[],logo:false,logoLater:false,tagline:''},
+  now:{mode:'uk',codes:[]}, plan:{mode:'none',codes:[]},
+  details:{first_name:'',last_name:'',email:'',phone:'',business_name:'',business_website:'',consent:false}
+};
+
+/* ── Navigation — identical pattern to free-search.html's router. Kept
+   deliberately the same shape (screen/pushScreen/renderScreen/popstate) so
+   the two tools behave identically and either can be extended the same way. */
+function screen(id){document.querySelectorAll('[data-screen]').forEach(s=>s.classList.add('hidden'));
+  const el=document.querySelector(`[data-screen="${id}"]`);if(el)el.classList.remove('hidden');
+  renderStepper(id);window.scrollTo({top:0,behavior:'smooth'});}
+function pushScreen(id){history.pushState({screen:id},'','#'+id);renderScreen(id);}
+function renderScreen(id){ screen(id); }
+function renderStepper(cur){const idx=STEP_ORDER.indexOf(cur);
+  document.getElementById('stepper').innerHTML=STEP_ORDER.map((s,i)=>{
+    const cls=i<idx?'done':(i===idx?'active':'');return `<div class="s ${cls}">${i+1}. ${STEP_LABELS[s]}</div>`;}).join('');}
+function go(id){ logAuditEvent('screen_enter',id,{},true); pushScreen(id); }
+
+/* ── Journey logging + continuity from Free Search ───────────────────────
+   Mirrors free-search.html's logEvent pattern, against the audit/* routes
+   instead of session/*. The draft request row is created immediately on
+   load (see init, bottom of file) — NOT lazily — because arriving on this
+   page at all is already a deliberate decision to request an audit; nothing
+   typed after that point should ever be at risk of being lost. */
+function auditSnapshot(){
+  return {first_name:state.details.first_name,last_name:state.details.last_name,
+    email:state.details.email,phone:state.details.phone,
+    business_name:state.details.business_name,business_website:state.details.business_website,
+    consent_marketing:state.details.consent,
+    trading_now:nowCodes(),planning_to_trade:planCodes()};
+}
+function logAuditEvent(type,screen,payload,includeSnapshot){
+  if(!state.requestId) return; // shouldn't happen — request is created at init — but never block the UI
+  try{
+    fetch(journeyBase()+'/audit/event',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({request_id:state.requestId,session_id:state.sessionId,event_type:type,
+        screen:screen||null,payload:payload||{},snapshot:includeSnapshot?auditSnapshot():null}),
+      keepalive:true}).catch(()=>{});
+  }catch(e){}
+}
+function saveBrandRemote(brand){
+  // Fire-and-forget upsert — brand.id gets filled in once the response
+  // returns, so a SECOND save of the same brand updates rather than
+  // duplicates. The brand is already in state.brands (and thus survives a
+  // refresh of THIS tab) before this even resolves.
+  fetch(journeyBase()+'/audit/brand',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({request_id:state.requestId,brand_id:brand.remoteId||null,
+      brand_name:brand.name,classes:brand.classes,terms:brand.terms,
+      logo_flag:brand.logo,logo_later:brand.logoLater,tagline:brand.tagline,
+      website_url:brand.website||null,business_description:brand.desc||null,
+      competitor_name:brand.compName||null,competitor_website:brand.compSite||null,
+      position:brand.position||0}),keepalive:true})
+    .then(r=>r.json()).then(d=>{ if(d&&d.ok) brand.remoteId=d.brand_id; }).catch(()=>{});
+}
+
+/* ── Step 1: Brands ───────────────────────────────────────────────────── */
+function renderClassList(){const q=(document.getElementById('bf-cls-search').value||'').toLowerCase();
+  const rows=Object.entries(NICE).filter(([n,l])=>!q||l.toLowerCase().includes(q)||('class '+n).includes(q))
+    .map(([n,l])=>`<div class="row" onclick="addBrandClass(${n})"><span class="n">${n}</span><span>${l}</span></div>`).join('');
+  document.getElementById('bf-cls-list').innerHTML=rows||'<div class="row"><span>No match</span></div>';}
+function renderBrandClassBasket(){const b=document.getElementById('bf-cls-basket');
+  b.innerHTML=state.brandForm.classes.length?state.brandForm.classes.map(n=>
+    `<span class="chip"><b>${n}</b> ${NICE[n]} <span class="x" onclick="removeBrandClass(${n})">×</span></span>`).join('')
+    :'<span class="muted-note">None selected yet.</span>';}
+function addBrandClass(n){n=+n;if(!state.brandForm.classes.includes(n))state.brandForm.classes.push(n);
+  state.brandForm.classes.sort((a,b)=>a-b);renderBrandClassBasket();onBrandFieldChange();}
+function removeBrandClass(n){n=+n;state.brandForm.classes=state.brandForm.classes.filter(x=>x!==n);
+  renderBrandClassBasket();onBrandFieldChange();}
+function renderTermBasket(){const b=document.getElementById('bf-term-basket');
+  b.innerHTML=state.brandForm.terms.length?state.brandForm.terms.map((t,i)=>
+    `<span class="chip">${esc(t)} <span class="x" onclick="removeTerm(${i})">×</span></span>`).join('')
+    :'<span class="muted-note">None added yet.</span>';}
+function addTerm(){const el=document.getElementById('bf-term-input');const v=(el.value||'').trim();
+  if(!v)return; state.brandForm.terms.push(v); el.value=''; renderTermBasket(); onBrandFieldChange();}
+function removeTerm(i){state.brandForm.terms.splice(i,1);renderTermBasket();onBrandFieldChange();}
+function toggleBrandTick(k){const el=document.getElementById(k==='logo'?'bf-tick-logo':'bf-tick-tag');el.classList.toggle('on');
+  if(k==='logo')state.brandForm.logo=el.classList.contains('on');
+  if(k==='tag'&&!el.classList.contains('on'))document.getElementById('bf-tagline').value='';
+  onBrandFieldChange();}
+function esc(s){const d=document.createElement('div');d.textContent=(s==null?'':s);return d.innerHTML;}
+
+// Debounced "this brand changed" signal — logs one event + upserts the
+// current form as a DRAFT brand row so nothing typed is ever lost, even
+// before "Save this brand" is pressed. Cheap: only fires on blur/toggle/
+// class-or-term change, never on every keystroke.
+let _brandChangeT=null;
+function onBrandFieldChange(){
+  clearTimeout(_brandChangeT);
+  _brandChangeT=setTimeout(function(){
+    readBrandForm();
+    if(!state.brandForm.name && !state.brandForm.classes.length && !state.brandForm.terms.length) return; // nothing to save yet
+    const draft=Object.assign({},state.brandForm,{remoteId:state._draftBrandRemoteId||null,position:state.brands.length});
+    saveBrandRemote(draft);
+    state._draftBrandRemoteId=draft.remoteId; // will be filled async — fine, next call reuses whatever's set by then
+    logAuditEvent('brand_field_commit','brands',{brand_name:draft.name},false);
+  },400);
+}
+function readBrandForm(){
+  state.brandForm.name=document.getElementById('bf-name').value.trim();
+  state.brandForm.logoLater=document.getElementById('bf-logo-later').checked;
+  state.brandForm.tagline=document.getElementById('bf-tagline').value.trim();
+  state.brandForm.website=document.getElementById('bf-website').value.trim();
+  state.brandForm.desc=document.getElementById('bf-desc').value.trim();
+  state.brandForm.compName=document.getElementById('bf-comp-name').value.trim();
+  state.brandForm.compSite=document.getElementById('bf-comp-site').value.trim();
+}
+function clearBrandForm(){
+  state.brandForm={name:'',classes:[],terms:[],logo:false,logoLater:false,tagline:'',
+    website:'',desc:'',compName:'',compSite:''};
+  state._draftBrandRemoteId=null;
+  document.getElementById('bf-name').value='';
+  document.getElementById('bf-cls-search').value='';renderClassList();renderBrandClassBasket();
+  document.getElementById('bf-term-input').value='';renderTermBasket();
+  document.getElementById('bf-tick-logo').classList.remove('on');
+  document.getElementById('bf-tick-tag').classList.remove('on');
+  document.getElementById('bf-logo-later').checked=false;
+  document.getElementById('bf-tagline').value='';
+  document.getElementById('bf-website').value='';
+  document.getElementById('bf-desc').value='';
+  document.getElementById('bf-comp-name').value='';
+  document.getElementById('bf-comp-site').value='';
+}
+function renderBrandList(){
+  const host=document.getElementById('brand-list');
+  if(!state.brands.length){ host.innerHTML=''; return; }
+  host.innerHTML=state.brands.map((b,i)=>`
+    <div class="brand-card">
+      <div>
+        <div class="bn">${esc(b.name)||'(unnamed brand)'}</div>
+        <div class="bd">${b.classes.length?('Classes '+b.classes.join(', ')):'No classes yet'}${b.terms.length?' · '+b.terms.length+' term(s)':''}</div>
+      </div>
+      <div class="bx"><button class="link" onclick="removeBrand(${i})">Remove</button></div>
+    </div>`).join('');
+}
+function removeBrand(i){
+  const b=state.brands[i];
+  logAuditEvent('brand_removed','brands',{brand_name:b.name},false);
+  if(b.remoteId){ fetch(journeyBase()+'/audit/brand-remove',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({brand_id:b.remoteId}),keepalive:true}).catch(()=>{}); }
+  state.brands.splice(i,1);
+  renderBrandList();
+}
+function saveBrand(addAnother){
+  readBrandForm();
+  if(!state.brandForm.name){ document.getElementById('bf-err').classList.remove('hidden'); return; }
+  document.getElementById('bf-err').classList.add('hidden');
+  const brand=Object.assign({},state.brandForm,{remoteId:state._draftBrandRemoteId||null,position:state.brands.length});
+  state.brands.push(brand);
+  saveBrandRemote(brand);
+  logAuditEvent('brand_added','brands',{brand_name:brand.name,classes:brand.classes},true);
+  renderBrandList();
+  clearBrandForm(); // safe either way: "add another" needs a blank form, and
+                     // "continue" is about to navigate away regardless.
+}
+function continueFromBrands(){
+  readBrandForm();
+  // If they filled the form but never pressed "save & add another", the
+  // in-progress brand still counts — save it as their (only, or last) brand.
+  if(state.brandForm.name || state.brandForm.classes.length || state.brandForm.terms.length){
+    saveBrand(false);
+  }
+  if(!state.brands.length){
+    document.getElementById('bf-err').textContent='Add at least one brand before continuing.';
+    document.getElementById('bf-err').classList.remove('hidden');
+    return;
+  }
+  go('countries');
+}
+
+/* ── Step 2: Countries — identical logic to free-search.html ────────────── */
+function buildPicker(which){
+  const host=document.getElementById(which==='now'?'pick-now':'pick-plan');
+  host.innerHTML=state[which].mode==='select'?pickerBody(which):'';
+}
+function pickerBody(which){const sel=state[which].codes;
+  const chip=(c)=>`<div class="c ${sel.includes(c.code)?'on':''}" onclick="tog('${which}','${c.code}')">${c.label}${c.covers?` <small>(${c.covers})</small>`:''}</div>`;
+  return `<div class="group-title">Popular</div><div class="pop">${PICKER.popular.map(chip).join('')}</div>
+   <div class="group-title">Other regions</div><div class="pop">${PICKER.regions.map(chip).join('')}</div>
+   <div class="group-title">All countries</div>
+   <input type="text" placeholder="Search countries…" oninput="filterAZ('${which}',this.value)" style="margin:6px 0">
+   <div class="pop" id="az-${which}">${PICKER.all_countries.map(chip).join('')}</div>`;}
+function filterAZ(which,q){q=(q||'').toLowerCase();const sel=state[which].codes;
+  document.getElementById('az-'+which).innerHTML=PICKER.all_countries.filter(c=>c.label.toLowerCase().includes(q))
+    .map(c=>`<div class="c ${sel.includes(c.code)?'on':''}" onclick="tog('${which}','${c.code}')">${c.label}</div>`).join('');}
+function tog(which,code){const arr=state[which].codes;const i=arr.indexOf(code);
+  if(i>=0)arr.splice(i,1);else arr.push(code);buildPicker(which);
+  logAuditEvent('jurisdiction_set','countries',{which:which,codes:arr.slice()},true);}
+function setMode(which,mode){state[which].mode=mode;if(mode!=='select')state[which].codes=[];
+  document.getElementById('now-uk').classList.toggle('on',mode==='uk');
+  document.getElementById('now-select').classList.toggle('on',mode==='select');buildPicker(which);
+  logAuditEvent('jurisdiction_set','countries',{which:which,mode:mode},true);}
+function revealPlan(){document.getElementById('plan-block').classList.remove('hidden');
+  document.getElementById('now-continue').classList.add('hidden');
+  document.getElementById('plan-block').scrollIntoView({behavior:'smooth'});}
+function setPlanMode(mode){state.plan.mode=mode;state.plan.codes=[];
+  document.querySelectorAll('#plan-seg .opt').forEach(o=>o.classList.toggle('on',o.dataset.plan===mode));
+  logAuditEvent('jurisdiction_set','countries',{which:'plan',mode:mode},true);
+  const p=document.getElementById('pick-plan');
+  if(mode==='select'){p.classList.remove('hidden');buildPicker('plan');}else p.classList.add('hidden');}
+function nowCodes(){return state.now.mode==='uk'?['GB']:state.now.codes;}
+function planCodes(){if(state.plan.mode==='none')return[];if(state.plan.mode==='uk')return['GB'];return state.plan.codes;}
+
+/* ── Step 3: Your Details — pre-filled if known, always editable, saved
+   progressively (not only on final submit) ──────────────────────────────── */
+function onDetailsFieldChange(){
+  state.details.first_name=document.getElementById('d-first').value.trim();
+  state.details.last_name=document.getElementById('d-last').value.trim();
+  state.details.email=document.getElementById('d-email').value.trim();
+  state.details.phone=document.getElementById('d-phone').value.trim();
+  state.details.business_name=document.getElementById('d-company').value.trim();
+  state.details.business_website=document.getElementById('d-website').value.trim();
+  state.details.consent=document.getElementById('d-consent').checked;
+  logAuditEvent('field_commit','details',{},true);
+}
+function submitAudit(){
+  onDetailsFieldChange();
+  const d=state.details;
+  if(!d.first_name||!d.last_name||!d.email||!/.+@.+\..+/.test(d.email)||!d.phone){
+    const e=document.getElementById('d-err');
+    e.textContent='Please enter your name, a valid email and a phone number.';
+    e.classList.remove('hidden');return;
+  }
+  document.getElementById('d-err').classList.add('hidden');
+  fetch(journeyBase()+'/audit/submit',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({request_id:state.requestId,first_name:d.first_name,last_name:d.last_name,
+      email:d.email,phone:d.phone,business_name:d.business_name||null,
+      business_website:d.business_website||null,consent_marketing:d.consent,
+      trading_now:nowCodes(),planning_to_trade:planCodes()})})
+    .then(r=>r.json()).then(function(res){
+      document.getElementById('done-msg').textContent=
+        `Thanks, ${d.first_name} — we've got your request for ${state.brands.length} brand`+
+        (state.brands.length===1?'':'s')+`. A specialist will be in touch at ${d.email} shortly.`;
+      pushScreen('done');
+    }).catch(function(){
+      // Never lose the submission even if this last call hiccups — the
+      // request/brands are already fully saved server-side from every
+      // prior step; only the final status flip may be delayed.
+      document.getElementById('done-msg').textContent=
+        `Thanks, ${d.first_name} — your request is saved. If you don't hear from us shortly, call 0161 833 5400.`;
+      pushScreen('done');
+    });
+}
+
+/* ── init ─────────────────────────────────────────────────────────────── */
+function init(){
+  renderClassList();renderBrandClassBasket();renderTermBasket();renderBrandList();
+
+  // Create the draft request immediately — landing here is already a
+  // deliberate decision; nothing typed after this point should be at risk.
+  fetch(journeyBase()+'/audit/start',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tenant_id:CONFIG.TENANT_ID,session_id:state.sessionId,screen:'brands'})})
+    .then(r=>r.json()).then(function(d){
+      if(d&&d.ok){ state.requestId=d.request_id; }
+      if(state.sessionId){ return fetch(journeyBase()+'/session?id='+encodeURIComponent(state.sessionId)).then(r=>r.json()); }
+      return null;
+    }).then(function(sd){
+      if(sd&&sd.ok&&sd.session){ applyPrefill(sd.session); }
+    }).catch(function(){ /* dev/mock mode, or the function is unreachable — the form still works, just unsaved until it is */ });
+
+  history.replaceState({screen:'brands'},'','#brands');
+  window.addEventListener('popstate',function(e){
+    const id=(e.state&&e.state.screen)||(location.hash||'').replace('#','')||'brands';
+    renderScreen(id);
+  });
+  renderScreen('brands');
+
+  document.getElementById('modeflag').textContent =
+    location.protocol==='file:' ? '● NOT CONNECTED — open via the Launch app, not the file'
+    : '● LIVE'+(CONFIG.API_BASE?': '+CONFIG.API_BASE:'');
+}
+function applyPrefill(session){
+  // Pre-fill the FIRST brand from the Free Search session, and contact
+  // details if they were already given — everything stays fully editable.
+  if(session.name){ document.getElementById('bf-name').value=session.name; }
+  if(session.classes&&session.classes.length){ state.brandForm.classes=session.classes.slice(); renderBrandClassBasket(); }
+  if(session.tagline){ document.getElementById('bf-tagline').value=session.tagline;
+    document.getElementById('bf-tick-tag').classList.add('on'); state.brandForm.tagline=session.tagline; }
+  if(session.trading_now&&session.trading_now.length){
+    state.now={mode:(session.trading_now.length===1&&session.trading_now[0]==='GB')?'uk':'select',codes:session.trading_now.slice()};
+  }
+  if(session.planning_to_trade&&session.planning_to_trade.length){
+    state.plan={mode:'select',codes:session.planning_to_trade.slice()};
+  }
+  if(session.first_name){document.getElementById('d-first').value=session.first_name;state.details.first_name=session.first_name;}
+  if(session.last_name){document.getElementById('d-last').value=session.last_name;state.details.last_name=session.last_name;}
+  if(session.email){document.getElementById('d-email').value=session.email;state.details.email=session.email;}
+  if(session.phone){document.getElementById('d-phone').value=session.phone;state.details.phone=session.phone;}
+  if(session.business_name){document.getElementById('d-company').value=session.business_name;state.details.business_name=session.business_name;}
+  if(session.business_website){document.getElementById('d-website').value=session.business_website;state.details.business_website=session.business_website;}
+  if(session.name||session.classes&&session.classes.length){
+    document.getElementById('prefill-note').classList.remove('hidden');
+    logAuditEvent('prefilled_from_session','brands',{session_id:session.session_id},false);
+  }
+}
+init();
+</script>
+</body>
+</html>

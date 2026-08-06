@@ -1,0 +1,34 @@
+# Render blueprint for the Braudit Free Search engine.
+# ---------------------------------------------------------------------------
+# The engine is stdlib-only except for `requests` (used by deploy-v2-hotfix/
+# temmy.py), so there is no framework to install and no build step beyond pip.
+# freesearch/api.py serves on $PORT, which Render sets — do not hardcode 8080.
+#
+# Secrets are NOT listed here. sync:false means "prompt me in the dashboard",
+# so no key ever enters this file or Git history.
+services:
+  - type: web
+    name: braudit-free-search
+    runtime: python
+    region: frankfurt          # closest Render region to UK traffic
+    plan: starter              # paid tier — free tier sleeps and cold-starts 30-50s,
+                               # which loses visitors on a live lead-capture form
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m freesearch.api
+    healthCheckPath: /healthz
+    envVars:
+      - key: TEMMY_API_BASE_URL
+        value: https://temmy-api-prod-zfxujusd3q-nw.a.run.app
+      - key: TEMMY_API_KEY
+        sync: false
+      - key: TEMMY_QUERY_RUNS_API_KEY
+        sync: false
+      - key: COMPANIES_HOUSE_API_KEY
+        sync: false
+      # NOTE the casing — deliberately not UPPER_SNAKE. contact_resolver.py
+      # reads os.environ by this exact spelling; renaming it silently breaks
+      # enrichment with no error.
+      - key: SerperClaudeAPI
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://www.thetrademarkhelpline.com,https://thetrademarkhelpline.com

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TMH Trademark / Owner Search Bar — standalone component</title>
+<style>
+  :root{
+    --pink:#E51652; --pink-dark:#c01044; --navy:#2D455A; --navy-soft:#3d5a74;
+    --ink:#1f2a33; --muted:#6b7a86; --line:#e3e8ec; --bg:#f5f7f9; --white:#fff;
+    --r-high:#F4B084; --r-med:#FFE699; --r-low:#C5E0B4; --r-neg:#D9D9D9;
+    --radius:12px; --shadow:0 6px 24px rgba(45,69,90,.10);
+    --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);padding:26px}
+  .demo-head{max-width:760px;margin:0 auto 18px}
+  .demo-head h1{color:var(--navy);font-size:20px;margin:0 0 4px}
+  .demo-head p{color:var(--muted);margin:0 0 12px;font-size:14px}
+  .purpose{display:flex;gap:8px;flex-wrap:wrap}
+  .purpose button{padding:8px 14px;border:1.5px solid var(--line);background:#fff;border-radius:999px;
+    font-weight:700;color:var(--navy);cursor:pointer;font-size:13px}
+  .purpose button.on{border-color:var(--pink);background:#fef4f7;color:var(--pink)}
+
+  /* ---- the component ---- */
+  .tmh-search{max-width:760px;margin:0 auto;background:#fff;border:1px solid var(--line);
+    border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+  .modes{display:flex;gap:6px;margin-bottom:12px}
+  .modes .m{flex:1;text-align:center;padding:10px;border:1.5px solid var(--line);border-radius:10px;
+    font-weight:700;color:var(--navy);cursor:pointer;background:#fff;font-size:14px}
+  .modes .m.on{border-color:var(--pink);background:var(--pink);color:#fff}
+  .bar{display:flex;gap:8px}
+  .bar input{flex:1;padding:13px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;
+    font-family:inherit}
+  .bar input:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 3px rgba(229,22,82,.12)}
+  .bar button{padding:0 20px;border:0;border-radius:10px;background:var(--pink);color:#fff;font-weight:700;
+    cursor:pointer;font-size:14px}
+  .hint{color:var(--muted);font-size:12px;margin:8px 2px 0}
+
+  .list{margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden;display:none}
+  .list.show{display:block}
+  .list .row{display:grid;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer;
+    align-items:center}
+  .list .row:last-child{border-bottom:0}
+  .list .row:hover{background:#fef4f7}
+  .row.mark{grid-template-columns:150px 1fr 130px 1fr}
+  .row.owner{grid-template-columns:1fr 1fr 110px 70px}
+  .row.tm{grid-template-columns:150px 1fr 150px}
+  .row .num{font-weight:700;color:var(--pink);font-size:13px}
+  .row .nm{font-weight:600;color:var(--navy)}
+  .row .sub{color:var(--muted);font-size:13px}
+  .row.head{background:#fbfcfd;font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--muted);cursor:default;font-weight:700}
+  .row.head:hover{background:#fbfcfd}
+  .status{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700}
+  .status.live{background:var(--r-low);color:#2f6b23}
+  .status.dead{background:var(--r-neg);color:#555}
+  .status.pending{background:var(--r-med);color:#775300}
+  .loading{padding:16px;text-align:center;color:var(--muted);font-size:14px;display:none}
+  .loading.show{display:block}
+  .empty{padding:16px;text-align:center;color:var(--muted);font-size:14px}
+
+  /* selection / result panel */
+  .panel{margin-top:16px;border:1.5px solid var(--pink);border-radius:12px;padding:16px;background:#fef4f7;display:none}
+  .panel.show{display:block}
+  .panel h3{margin:0 0 4px;color:var(--navy);font-size:16px}
+  .panel .meta{color:var(--muted);font-size:13px;margin-bottom:10px}
+  .cls{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+  .cls .h{display:flex;justify-content:space-between;font-weight:700;color:var(--navy);cursor:pointer}
+  .cls .h .n{color:var(--pink)}
+  .terms{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+  .term{font-size:12px;padding:5px 10px;border:1px solid #f6c9d6;border-radius:999px;background:#fff;
+    color:var(--navy);cursor:pointer;user-select:none}
+  .term.out{text-decoration:line-through;opacity:.45;background:#f3f5f6;border-color:var(--line)}
+  .panel .cta{margin-top:12px;display:flex;gap:10px;flex-wrap:wrap}
+  .btn{padding:11px 18px;border:0;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px}
+  .btn.primary{background:var(--pink);color:#fff}
+  .btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--line)}
+  .back{color:var(--pink);font-weight:700;cursor:pointer;font-size:13px;background:none;border:0;padding:0;margin-bottom:8px}
+  .mode-flag{position:fixed;bottom:10px;right:12px;font-size:11px;color:var(--muted);background:#fff;
+    border:1px solid var(--line);border-radius:8px;padding:4px 8px}
+</style>
+</head>
+<body>
+<div class="demo-head">
+  <h1>Trademark / Owner Search Bar</h1>
+  <p>Standalone, embeddable component. Same bar, different <b>purpose</b> depending on where it's placed:</p>
+  <div class="purpose" id="purpose">
+    <button data-p="competitor-terms" class="on">Competitor → classes &amp; terms</button>
+    <button data-p="status-check">Check trademark status</button>
+    <button data-p="portfolio">Find IDs for the portal</button>
+  </div>
+</div>
+
+<div class="tmh-search" id="widget"></div>
+
+<div class="mode-flag" id="modeflag"></div>
+
+<script>
+/* =======================================================================
+   TMHSearchBar — reusable component.
+   Config: { apiBase, purpose, mount, onSelect }
+   apiBase='' -> built-in MOCK; set to the engine/Edge URL to go live.
+   purpose: 'competitor-terms' | 'status-check' | 'portfolio'
+   onSelect(payload) fires when the client finalises a trademark.
+   ======================================================================= */
+const CONFIG = { apiBase: '' };
+
+const STATUS_CLASS = s => {
+  s=(s||'').toLowerCase();
+  if(s.includes('regist')) return 'live';
+  if(s.includes('pending')||s.includes('publish')||s.includes('examin')||s.includes('oppos')) return 'pending';
+  return 'dead';
+};
+
+function TMHSearchBar(cfg){
+  const el = cfg.mount;
+  const state = { mode:'trademark', selMark:null, selOwner:null, basket:null };
+  const PURPOSE = cfg.purpose || 'competitor-terms';
+
+  const PLACE = {
+    trademark:'Trademark name (e.g. MONZO) or number (e.g. UK00003439365)',
+    owner:'Owner name (e.g. Monzo Bank) or IPO ID (e.g. 2184215)'
+  };
+
+  el.innerHTML = `
+    <div class="modes">
+      <div class="m on" data-mode="trademark">Search by Trademark</div>
+      <div class="m" data-mode="owner">Search by Owner</div>
+    </div>
+    <div class="bar">
+      <input id="q" type="text" autocomplete="off" placeholder="${PLACE.trademark}">
+      <button id="go">Search</button>
+    </div>
+    <div class="hint" id="hint">Type a name for closest matches, or an exact number.</div>
+    <div class="loading" id="loading">Searching Temmy…</div>
+    <div class="list" id="list"></div>
+    <div class="panel" id="panel"></div>`;
+
+  const $ = s => el.querySelector(s);
+  const q=$('#q'), list=$('#list'), panel=$('#panel'), loading=$('#loading');
+
+  el.querySelectorAll('.m').forEach(m => m.onclick = () => {
+    el.querySelectorAll('.m').forEach(x=>x.classList.remove('on'));
+    m.classList.add('on'); state.mode=m.dataset.mode;
+    q.placeholder=PLACE[state.mode]; q.value=''; hide(list); hide(panel);
+  });
+  $('#go').onclick = run;
+  let t; q.addEventListener('input', ()=>{ clearTimeout(t); t=setTimeout(run, 300); });
+  q.addEventListener('keydown', e=>{ if(e.key==='Enter') run(); });
+
+  function show(x){x.classList.add('show')} function hide(x){x.classList.remove('show')}
+
+  async function run(){
+    const query=q.value.trim();
+    hide(panel);
+    if(query.length<2){ hide(list); return; }
+    show(loading); hide(list);
+    const data = state.mode==='trademark'
+      ? await api('marks',{q:query}) : await api('owners',{q:query});
+    hide(loading);
+    renderList(data);
+  }
+
+  function renderList(data){
+    const rows=(data&&data.results)||[];
+    if(!rows.length){ list.innerHTML='<div class="empty">No matches. Try a different spelling or the exact number.</div>'; show(list); return; }
+    if(state.mode==='trademark'){
+      list.innerHTML='<div class="row mark head"><div>Number</div><div>Mark</div><div>Status</div><div>Applicant</div></div>'+
+        rows.map((r,i)=>`<div class="row mark" data-i="${i}">
+          <div class="num">${r.number}</div><div class="nm">${r.name||'—'}</div>
+          <div><span class="status ${STATUS_CLASS(r.status)}">${r.status||'—'}</span></div>
+          <div class="sub">${r.applicant||'—'}</div></div>`).join('');
+      list.querySelectorAll('.row[data-i]').forEach(row=>row.onclick=()=>pickMark(rows[+row.dataset.i]));
+    } else {
+      list.innerHTML='<div class="row owner head"><div>Applicant</div><div>Address</div><div>Postcode</div><div>TMs</div></div>'+
+        rows.map((r,i)=>`<div class="row owner" data-i="${i}">
+          <div class="nm">${r.name||'—'}</div><div class="sub">${r.address||'—'}</div>
+          <div class="sub">${r.postcode||'—'}</div><div class="sub">${r.trademark_count}</div></div>`).join('');
+      list.querySelectorAll('.row[data-i]').forEach(row=>row.onclick=()=>pickOwner(rows[+row.dataset.i]));
+    }
+    show(list);
+  }
+
+  async function pickOwner(o){
+    state.selOwner=o; show(loading); hide(list);
+    const data=await api('owner',{id:o.ipo_identifier}); hide(loading);
+    const tms=(data&&data.trademarks)||[];
+    list.innerHTML=`<div class="row tm head"><div>Number</div><div>Mark</div><div>Status</div></div>`+
+      tms.map((t,i)=>`<div class="row tm" data-i="${i}">
+        <div class="num">${t.number}</div><div class="nm">${t.name||'—'}</div>
+        <div><span class="status ${STATUS_CLASS(t.status)}">${t.status||'—'}</span></div></div>`).join('');
+    list.querySelectorAll('.row[data-i]').forEach(row=>row.onclick=()=>pickMark(tms[+row.dataset.i]));
+    show(list);
+  }
+
+  async function pickMark(m){
+    hide(list); show(loading);
+    const data=await api('mark',{number:m.number}); hide(loading);
+    state.selMark=(data&&data.mark)||m;
+    renderPanel(state.selMark);
+  }
+
+  function renderPanel(m){
+    const backOwner = state.selOwner ? `<button class="back" id="back">← back to ${state.selOwner.name}'s trademarks</button>` : '';
+    let body='';
+    if(PURPOSE==='status-check'){
+      body=`<div class="meta">Application ${m.number} · Applicant: ${m.applicant||'—'}</div>
+        <p style="margin:6px 0 0;color:var(--navy)">Status: <span class="status ${STATUS_CLASS(m.status)}">${m.status}</span></p>
+        <div class="cta"><button class="btn primary" id="fin">Set up free Temmy Portal for deadline alerts</button></div>`;
+    } else if(PURPOSE==='portfolio'){
+      body=`<div class="meta">Application ${m.number} · ${m.applicant||'—'} · ${m.status}</div>
+        <div class="cta"><button class="btn primary" id="fin">Add this trademark to my portal</button></div>`;
+    } else {
+      const cls=(m.classes||[]);
+      body=`<div class="meta">Application ${m.number} · ${m.applicant||'—'}. Keep or cross out terms, then use them.</div>`+
+        cls.map((c,ci)=>{
+          const terms=splitTerms(c.specification);
+          return `<div class="cls"><div class="h"><span><span class="n">Class ${c.nice_class}</span></span><span>${terms.length} terms</span></div>
+            <div class="terms" data-c="${ci}">${terms.map((tt,ti)=>`<span class="term" data-ti="${ti}">${tt}</span>`).join('')||'<span class="sub">No detailed terms recorded.</span>'}</div></div>`;
+        }).join('')+
+        `<div class="cta"><button class="btn primary" id="fin">Use these classes &amp; terms</button>
+         <button class="btn ghost" id="clear">Start over</button></div>`;
+    }
+    panel.innerHTML=`${backOwner}<h3>${m.name||m.number}</h3>${body}`;
+    if(state.selOwner) panel.querySelector('#back').onclick=()=>{ hide(panel); show(list); };
+    panel.querySelectorAll('.term').forEach(term=>term.onclick=()=>term.classList.toggle('out'));
+    const fin=panel.querySelector('#fin'); if(fin) fin.onclick=()=>finalise(m);
+    const clr=panel.querySelector('#clear'); if(clr) clr.onclick=()=>{ hide(panel); q.value=''; q.focus(); };
+    show(panel);
+  }
+
+  function finalise(m){
+    // Build the selection payload the host page consumes.
+    const kept={};
+    panel.querySelectorAll('.cls').forEach((clsEl,ci)=>{
+      const c=(m.classes||[])[ci]; if(!c) return;
+      const terms=[...clsEl.querySelectorAll('.term')].filter(t=>!t.classList.contains('out')).map(t=>t.textContent);
+      if(terms.length) kept[c.nice_class]=terms;
+    });
+    const payload={ purpose:PURPOSE, number:m.number, name:m.name, status:m.status,
+      applicant:m.applicant, owner:state.selOwner, term_basket:kept };
+    if(cfg.onSelect) cfg.onSelect(payload);
+    else alert('Selected → '+JSON.stringify(payload,null,1).slice(0,600));
+  }
+
+  // ---- transport: live endpoint OR built-in mock ----
+  async function api(action, params){
+    if(CONFIG.apiBase){
+      const u=new URL(CONFIG.apiBase.replace(/\/$/,'')+'/lookup/'+action);
+      Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
+      try { return await (await fetch(u)).json(); } catch(e){ return {results:[]}; }
+    }
+    return MOCK(action, params);
+  }
+  function splitTerms(s){ return (s||'').replace(/\.$/,'').split(/\s*;\s*/).map(x=>x.trim()).filter(Boolean); }
+
+  // seed the placeholder hint per purpose
+  $('#hint').textContent = PURPOSE==='status-check'
+    ? 'Check any UK trademark’s current status by name or number.'
+    : PURPOSE==='portfolio' ? 'Find a trademark or owner ID to add to your Temmy Portal.'
+    : 'Point at a competitor’s trademark to borrow its classes & terms.';
+}
+
+/* ---------- MOCK (mirrors lookup.py output shapes) ---------- */
+function MOCK(action, p){
+  const MARKS=[
+    {number:'UK00003439365',name:'MONZO',status:'Registered',applicant:'Monzo Bank Limited'},
+    {number:'UK00003293438',name:'MONZO',status:'Registered',applicant:'Monzo Bank Limited'},
+    {number:'UK00003300777',name:'MONZORO',status:'Application Published',applicant:'Monzoro Ltd'},
+  ];
+  const OWNERS=[
+    {ipo_identifier:2184215,name:'Monzo Bank Limited',address:'Broadwalk House, 5 Appold St, London',postcode:'EC2A 2AG',trademark_count:14},
+    {ipo_identifier:2249151,name:'Momentus Technologies Limited',address:'35 Ballards Lane, London',postcode:'N3 1XW',trademark_count:1},
+  ];
+  const DETAIL={number:'UK00003439365',name:'MONZO',status:'Registered',applicant:'Monzo Bank Limited',
+    classes:[
+      {nice_class:9,specification:'Computer software; downloadable mobile applications; payment cards; encoded cards'},
+      {nice_class:36,specification:'Banking services; financial services; payment services; issuing of payment cards; foreign exchange services'},
+      {nice_class:42,specification:'Software as a service; design and development of computer software'} ]};
+  const OWNER_TMS={trademarks:[
+    {number:'UK00003439365',name:'MONZO',status:'Registered',classes:[9,36,42]},
+    {number:'UK00003293438',name:'MONZO',status:'Registered',classes:[36]},
+    {number:'UK00003501234',name:'MONZO FLEX',status:'Application Published',classes:[36]} ]};
+  const q=(p.q||'').toLowerCase();
+  if(action==='marks') return {mode:'trademark',results:MARKS.filter(m=>!q||m.name.toLowerCase().includes(q)||m.number.toLowerCase().includes(q))};
+  if(action==='owners') return {mode:'owner',results:OWNERS.filter(o=>!q||o.name.toLowerCase().includes(q)||String(o.ipo_identifier).includes(q))};
+  if(action==='owner') return OWNER_TMS;
+  if(action==='mark') return {mark:DETAIL};
+  return {results:[]};
+}
+
+/* ---------- boot the demo ---------- */
+let current;
+function mount(purpose){
+  current = TMHSearchBar({ mount: document.getElementById('widget'), purpose,
+    onSelect: p => alert('Host page receives:\n'+JSON.stringify(p,null,1).slice(0,700)) });
+}
+document.querySelectorAll('#purpose button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#purpose button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); mount(b.dataset.p);
+});
+mount('competitor-terms');
+document.getElementById('modeflag').textContent = CONFIG.apiBase ? '● LIVE: '+CONFIG.apiBase : '● DEMO MODE (built-in mock)';
+</script>
+</body>
+</html>
