@@ -398,6 +398,15 @@ const CONFIG = (function(){
   // Embedded via /embed.js the tenant rides on the URL; standalone defaults tmh.
   var q=new URLSearchParams(location.search);
   return { API_BASE:'', TENANT_ID:(q.get('tenant')||'tmh'), EMBED:q.get('embed')==='1',
+    // Hand-off from the compact search-box widget (search-box.html), agreed
+    // 6 Aug 2026: it mints the session and logs the search term itself, then
+    // sends the visitor here to land on STEP 2 rather than re-typing the name.
+    //   s      = existing session_id to ADOPT (do not mint a second one)
+    //   screen = which step to open on ('marks' = step 2)
+    //   q      = the name, as a fallback for when /session/start was
+    //            unreachable and there is no session to read it from
+    RESUME_SESSION:q.get('s')||'', RESUME_SCREEN:q.get('screen')||'',
+    RESUME_NAME:q.get('q')||'',
     // Where the new standalone Brand Audit page lives — point this at wherever
     // it's actually deployed (same open question as this page's own hosting).
     BRAND_AUDIT_URL:'/brand-audit/' };
@@ -932,7 +941,45 @@ window.addEventListener('popstate',function(e){
   const id=(e.state&&e.state.screen)||(location.hash||'').replace('#','')||'search';
   renderScreen(id);
 });
-renderScreen('search');
+
+/* ── Hand-off from the compact search-box widget ─────────────────────────
+   The box already minted the session and logged 'name_submitted', so we
+   ADOPT its session_id rather than minting a second one — otherwise one
+   visitor would leave two journey_sessions rows and, later, two Zoho Leads.
+   Adopting means simply setting state.sessionId before anything else runs:
+   ensureSession() is idempotent and returns early when it's already set.
+
+   The name is read back from the session snapshot (the box wrote it there),
+   falling back to the ?q= parameter when there was no session to write to.
+   If neither is available we just open on step 1 as normal — a broken
+   hand-off should degrade to the ordinary journey, never to a dead end. */
+(function resumeFromSearchBox(){
+  const wanted = CONFIG.RESUME_SCREEN;
+  if(!CONFIG.RESUME_SESSION && !CONFIG.RESUME_NAME){ renderScreen('search'); return; }
+
+  function open(name){
+    if(!name){ renderScreen('search'); return; }
+    state.name = name;
+    document.getElementById('name').value = name;
+    const echo = document.getElementById('name-echo');
+    if(echo) echo.textContent = name;
+    const target = wanted === 'marks' ? 'marks' : (wanted || 'marks');
+    renderScreen(target);
+    history.replaceState({screen:target},'','#'+target);
+    // Deliberately NOT re-logging 'name_submitted' — the box already did.
+    logEvent('screen_enter', target, {resumed_from:'search_box'}, false);
+  }
+
+  if(CONFIG.RESUME_SESSION){
+    state.sessionId = CONFIG.RESUME_SESSION;   // adopt, don't mint
+    fetch(journeyBase()+'/session?id='+encodeURIComponent(CONFIG.RESUME_SESSION))
+      .then(r=>r.json())
+      .then(d=>{ open((d && d.ok && d.session && d.session.name) || CONFIG.RESUME_NAME); })
+      .catch(()=>open(CONFIG.RESUME_NAME));
+  } else {
+    open(CONFIG.RESUME_NAME);
+  }
+})();
 document.getElementById('modeflag').textContent =
   location.protocol==='file:' ? '● NOT CONNECTED — open via the Launch Free Search app, not the file'
   : '● LIVE' + (CONFIG.API_BASE ? ': '+CONFIG.API_BASE : '');

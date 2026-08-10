@@ -67,23 +67,44 @@ _PAGES = {
     '/free-search': 'free-search.html',
     '/class-assistant': 'class-assistant.html',
     '/search-bar': 'search-bar.html',
+    '/search-box': 'search-box.html',          # compact drop-anywhere entry point
 }
 
 # Partners drop this one line into their page:
 #   <script src="https://<host>/embed.js" data-tenant="acme" async></script>
 # It injects the wizard in an iframe pinned to this host, so the widget is
 # always the deployed version and the tenant id rides along.
+#
+# data-widget picks which one: 'free-search' (default, the full wizard),
+# 'search-box' (the compact entry point), 'class-assistant', 'search-bar'.
+# 'search-box' additionally accepts data-target (where the wizard lives) and
+# data-journey (the journey function's base URL, since the engine and the
+# Edge Function are different hosts in production).
+#
+# min-height is per-widget: the wizard needs room, the compact box would look
+# absurd in a 640px frame. Both then self-report their real height.
 _EMBED_JS = """(function(){
   var s=document.currentScript, t=(s&&s.dataset.tenant)||'tmh';
   var page=(s&&s.dataset.widget)||'free-search';
+  var q='?tenant='+encodeURIComponent(t)+'&embed=1';
+  if(page==='search-box'){
+    if(s.dataset.target)  q+='&target='+encodeURIComponent(s.dataset.target);
+    if(s.dataset.journey) q+='&journey='+encodeURIComponent(s.dataset.journey);
+  }
   var f=document.createElement('iframe');
-  f.src=s.src.replace(/embed\\.js.*$/, page+'?tenant='+encodeURIComponent(t)+'&embed=1');
-  f.style.cssText='width:100%;min-height:640px;border:0;display:block';
+  f.src=s.src.replace(/embed\\.js.*$/, page+q);
+  f.style.cssText='width:100%;min-height:'+(page==='search-box'?'200px':'640px')
+    +';border:0;display:block';
   f.setAttribute('title','Free Trademark Search');
   f.setAttribute('loading','lazy');
   s.parentNode.insertBefore(f, s);
   window.addEventListener('message', function(e){
-    if(e.data && e.data.brauditHeight) f.style.height = e.data.brauditHeight+'px';
+    if(!e.data) return;
+    if(e.data.brauditHeight) f.style.height = e.data.brauditHeight+'px';
+    // The compact box hands the visitor over to the full wizard. It cannot
+    // navigate the host page itself from inside a cross-origin iframe, so it
+    // asks us to. Only ever a navigation, never arbitrary script.
+    if(e.data.brauditNavigate) window.location.href = e.data.brauditNavigate;
   });
 })();"""
 

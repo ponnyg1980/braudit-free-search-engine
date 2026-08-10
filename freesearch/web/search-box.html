@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Free Trademark Search — The Trademark Helpline</title>
+<!--
+  COMPACT ENTRY POINT — drop anywhere (WordPress pages/posts, partner sites).
+  =========================================================================
+  Agreed 6 Aug 2026 (Jonathan): "Send to page 2 of the search page having
+  logged the search term."
+
+  So this is NOT a miniature wizard. It does exactly what step 1 of
+  free-search.html does and nothing more:
+
+      1. take the brand name
+      2. mint the journey session and log it server-side  <-- the point
+      3. hand over to the full wizard, landing on STEP 2 (the 'marks'
+         screen), with the name already carried across
+
+  Step 2 of doing it that way: the search term is recorded BEFORE the
+  visitor navigates. A person who types a name here and then closes the tab
+  still leaves a row in journey_sessions — which is the whole reason the
+  journey logging exists (migration 0002). If this box just redirected with
+  ?q=NAME and let the wizard log it, every abandoned hand-off would vanish.
+
+  Embedding (one line, same as every other widget on this host):
+
+      <script src="https://<host>/embed.js"
+              data-widget="search-box"
+              data-tenant="tmh"          <- partner id; rides through to Zoho
+              data-target="https://www.thetrademarkhelpline.com/free-search"
+              async></script>
+
+  data-target is OPTIONAL. Unset, the visitor is sent to this host's own
+  /free-search. Set it when the wizard is hosted somewhere else (e.g. on the
+  TMH WordPress site) so the visitor stays on that domain rather than being
+  bounced to the engine's URL.
+
+  ⚠️ NAVIGATION FROM INSIDE AN IFRAME
+  embed.js renders widgets in an iframe. If this page navigated itself, the
+  wizard would open INSIDE the little box — visually broken. So when it
+  detects it's embedded it posts a `brauditNavigate` message and lets
+  embed.js navigate the real page. Standalone, it just navigates itself.
+  Do not "simplify" this to location.href without re-testing embedded.
+-->
+<style>
+  /* TMH brand tokens — kept in sync with free-search.html / brand_tokens.py */
+  :root{
+    --pink:#E51652; --pink-dark:#c01044; --navy:#2D455A;
+    --ink:#1f2a33; --muted:#6b7a86; --line:#e3e8ec; --white:#fff;
+    --radius:14px; --shadow:0 6px 24px rgba(45,69,90,.10);
+    --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:var(--font);color:var(--ink);background:transparent}
+  .wrap{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:18px 18px 16px;max-width:620px}
+  h2{margin:0 0 4px;font-size:1.15rem;color:var(--navy)}
+  p.lead{margin:0 0 14px;font-size:.9rem;color:var(--muted);line-height:1.45}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  input[type=text]{flex:1 1 240px;min-width:0;padding:12px 14px;font-size:1rem;
+    font-family:var(--font);border:1px solid var(--line);border-radius:10px;color:var(--ink)}
+  input[type=text]:focus{outline:2px solid var(--navy);outline-offset:1px;border-color:var(--navy)}
+  button{flex:0 0 auto;padding:12px 22px;font-size:1rem;font-family:var(--font);font-weight:600;
+    color:#fff;background:var(--pink);border:0;border-radius:10px;cursor:pointer}
+  button:hover{background:var(--pink-dark)}
+  button:disabled{opacity:.6;cursor:progress}
+  .note{margin:10px 0 0;font-size:.78rem;color:var(--muted)}
+  .err{margin:10px 0 0;font-size:.85rem;color:var(--pink-dark);display:none}
+  .err.on{display:block}
+  @media (max-width:420px){ button{width:100%} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>Free Trademark Search</h2>
+  <p class="lead">Check the UK trademark register for your brand name in seconds. Free, instant, no obligation.</p>
+  <div class="row">
+    <input id="q" type="text" autocomplete="off" aria-label="Your trademark or brand name"
+           placeholder="Type your trademark or brand name here">
+    <button id="go" type="button">Search</button>
+  </div>
+  <p class="note">Takes about a minute. No card details, no obligation.</p>
+  <p class="err" id="err" role="alert"></p>
+</div>
+
+<script>
+/* ---- config, read off the embedding script tag via the iframe URL ------- */
+const P = new URLSearchParams(location.search);
+const CONFIG = {
+  TENANT_ID: P.get('tenant') || 'tmh',
+  EMBED:     P.get('embed') === '1',
+  // Where the full wizard lives. Defaults to this host's own copy.
+  TARGET:    P.get('target') || (location.origin + '/free-search'),
+  // Empty = same-origin (this host serves /journey too in dev). In the live
+  // setup the engine and the journey function are different hosts, so the
+  // embed passes it through explicitly.
+  JOURNEY:   P.get('journey') || ''
+};
+
+function journeyBase(){
+  if(CONFIG.JOURNEY) return CONFIG.JOURNEY.replace(/\/$/,'');
+  return ''; // relative — dev/mock only
+}
+
+const elQ = document.getElementById('q');
+const elGo = document.getElementById('go');
+const elErr = document.getElementById('err');
+
+function fail(msg){ elErr.textContent = msg; elErr.classList.add('on'); }
+
+/* Hand over to the wizard. Inside an iframe we must navigate the PARENT,
+   not ourselves — see the header comment. */
+function handOff(url){
+  if(CONFIG.EMBED && window.parent !== window){
+    try{ window.parent.postMessage({brauditNavigate:url}, '*'); }catch(e){}
+    // Belt and braces: if the parent isn't listening (someone iframed this
+    // page directly rather than via embed.js), fall back to top-level
+    // navigation, which browsers allow off the back of a user gesture.
+    setTimeout(function(){ try{ window.top.location.href = url; }catch(e){ location.href = url; } }, 250);
+    return;
+  }
+  location.href = url;
+}
+
+function submit(){
+  const name = (elQ.value || '').trim();
+  if(!name){ elQ.focus(); fail('Please enter a brand name to search.'); return; }
+  elErr.classList.remove('on');
+  elGo.disabled = true; elGo.textContent = 'Searching…';
+
+  // Log FIRST, navigate second. If the session call fails we still hand the
+  // visitor over — a lost log is annoying, a dead search box is worse.
+  const done = function(sid){
+    const u = new URL(CONFIG.TARGET, location.href);
+    u.searchParams.set('tenant', CONFIG.TENANT_ID);
+    u.searchParams.set('screen', 'marks');          // step 2, per the brief
+    if(sid) u.searchParams.set('s', sid);
+    else    u.searchParams.set('q', name);          // no session? at least carry the name
+    handOff(u.toString());
+  };
+
+  let settled = false;
+  const finish = function(sid){ if(settled) return; settled = true; done(sid); };
+  // Never let a slow/unreachable backend strand the visitor on this box.
+  setTimeout(function(){ finish(null); }, 3000);
+
+  try{
+    fetch(journeyBase() + '/session/start', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({tenant_id: CONFIG.TENANT_ID, source:'free_search', name: name})
+    }).then(r=>r.json()).then(function(d){
+      if(!(d && d.ok && d.session_id)) return finish(null);
+      const sid = d.session_id;
+      // Same event the wizard's step 1 fires, so a journey that starts here
+      // is indistinguishable downstream from one that started on the page.
+      fetch(journeyBase() + '/session/event', {
+        method:'POST', headers:{'Content-Type':'application/json'}, keepalive:true,
+        body: JSON.stringify({session_id: sid, event_type:'name_submitted', screen:'marks',
+                              payload:{name:name, entry:'search_box'},
+                              snapshot:{name:name}})
+      }).catch(function(){});
+      finish(sid);
+    }).catch(function(){ finish(null); });
+  }catch(e){ finish(null); }
+}
+
+elGo.addEventListener('click', submit);
+elQ.addEventListener('keydown', function(e){ if(e.key === 'Enter') submit(); });
+
+/* Tell embed.js how tall we are so the iframe fits snugly. */
+function reportHeight(){
+  const h = document.querySelector('.wrap').getBoundingClientRect().height + 8;
+  try{ window.parent.postMessage({brauditHeight: Math.ceil(h)}, '*'); }catch(e){}
+}
+window.addEventListener('load', reportHeight);
+window.addEventListener('resize', reportHeight);
+</script>
+</body>
+</html>
