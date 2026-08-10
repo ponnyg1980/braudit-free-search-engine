@@ -633,31 +633,75 @@ function ho5Mode(m){ho5mode=m;
   document.getElementById('ho5-q').placeholder = m==='tm'
     ? 'Trademark name or number' : 'Company / owner name or IPO ID';
   document.getElementById('ho5-q').value=''; document.getElementById('ho5-res').classList.add('hidden');}
-async function ho5Search(){
-  const q=(document.getElementById('ho5-q').value||'').trim();
+
+/* ── Route 5 result list ─────────────────────────────────────────────────
+   FIXED 10 Aug 2026. Reported by Jonathan: searching a trademark found the
+   right mark (UK00801444035 CORSEARCH) but clicking it did nothing.
+
+   Three causes, all in this list:
+
+   1. NO DEBOUNCE. `oninput` called ho5Search() on every keystroke, so
+      "CORSEARCH" fired ~8 overlapping requests. (The company search two
+      functions down always had a 300ms debounce; this one was missed.)
+   2. OUT-OF-ORDER RESPONSES. With requests in flight together, a slow
+      earlier one could land last and render results for a shorter prefix
+      over the correct list.
+   3. HANDLERS LOST ON RE-RENDER. Each response replaced res.innerHTML and
+      re-attached .onclick to the new rows. A response landing between
+      mousedown and mouseup destroyed the row mid-click, so no click event
+      ever fired — exactly the reported symptom.
+
+   Fixes: debounce to match route 3; a sequence token so only the newest
+   response renders; and ONE delegated listener on the container, bound
+   once, so replacing innerHTML can never orphan it again. */
+let ho5t, ho5seq=0, ho5rows=[], ho5kind='mark';
+function ho5Bind(){
   const res=document.getElementById('ho5-res');
-  if(q.length<2){res.classList.add('hidden');return;}
-  if(ho5mode==='owner'){ return ho5SearchOwners(q,res); }
-  const data=await lookupApi('marks',{q});
-  const rows=(data&&data.results)||[];
-  res.innerHTML=rows.slice(0,6).map((r,i)=>`<div class="r" data-i="${i}"><span class="rn">${r.number}</span><span><b>${r.name||'—'}</b> · ${r.status} · ${r.applicant||''}</span></div>`).join('')||'<div class="r">No matches</div>';
-  res.querySelectorAll('.r[data-i]').forEach(row=>row.onclick=()=>ho5Pick(rows[+row.dataset.i]));
-  res.classList.remove('hidden');
+  if(!res || res.dataset.bound) return;
+  res.dataset.bound='1';
+  res.addEventListener('click', function(e){
+    const row=e.target.closest('.r[data-i]');
+    if(!row || !res.contains(row)) return;
+    const item=ho5rows[+row.dataset.i];
+    if(!item) return;
+    if(ho5kind==='owner') ho5PickOwner(item); else ho5Pick(item);
+  });
 }
-async function ho5SearchOwners(q,res){
-  const data=await lookupApi('owners',{q});
-  const rows=(data&&data.results)||[];
-  res.innerHTML=rows.slice(0,6).map((r,i)=>`<div class="r" data-i="${i}"><span class="rn">${r.name||'—'}</span><span>${r.postcode||''} · ${r.trademark_count} marks</span></div>`).join('')||'<div class="r">No matches</div>';
-  res.querySelectorAll('.r[data-i]').forEach(row=>row.onclick=()=>ho5PickOwner(rows[+row.dataset.i]));
-  res.classList.remove('hidden');
+function ho5Search(){
+  const res=document.getElementById('ho5-res');
+  ho5Bind();
+  clearTimeout(ho5t);
+  ho5t=setTimeout(async()=>{
+    const q=(document.getElementById('ho5-q').value||'').trim();
+    if(q.length<2){res.classList.add('hidden');return;}
+    const seq=++ho5seq;
+    if(ho5mode==='owner'){
+      const data=await lookupApi('owners',{q});
+      if(seq!==ho5seq) return;                       // a newer search won
+      const rows=(data&&data.results)||[];
+      ho5rows=rows; ho5kind='owner';
+      res.innerHTML=rows.slice(0,6).map((r,i)=>`<div class="r" data-i="${i}"><span class="rn">${r.name||'—'}</span><span>${r.postcode||''} · ${r.trademark_count} marks</span></div>`).join('')||'<div class="r">No matches</div>';
+    } else {
+      const data=await lookupApi('marks',{q});
+      if(seq!==ho5seq) return;
+      const rows=(data&&data.results)||[];
+      ho5rows=rows; ho5kind='mark';
+      res.innerHTML=rows.slice(0,6).map((r,i)=>`<div class="r" data-i="${i}"><span class="rn">${r.number}</span><span><b>${r.name||'—'}</b> · ${r.status} · ${r.applicant||''}</span></div>`).join('')||'<div class="r">No matches</div>';
+    }
+    res.classList.remove('hidden');
+  },300);
 }
 async function ho5PickOwner(o){
   const res=document.getElementById('ho5-res');
   const data=await lookupApi('owner',{id:o.ipo_identifier});
   const tms=(data&&data.trademarks)||[];
-  res.innerHTML=`<div class="r" onclick="ho5Search()"><span class="rn">← back</span><span>${o.name}’s trademarks</span></div>`+
+  // Drilling into an owner's marks — these become the clickable rows, so the
+  // delegated handler must now treat them as marks, not owners.
+  ho5seq++; ho5rows=tms; ho5kind='mark';
+  res.innerHTML=`<div class="r" id="ho5-back"><span class="rn">← back</span><span>${o.name}’s trademarks</span></div>`+
     tms.slice(0,20).map((t,i)=>`<div class="r" data-i="${i}"><span class="rn">${t.number}</span><span><b>${t.name||'—'}</b> · ${t.status} · cls ${(t.classes||[]).join(', ')}</span></div>`).join('');
-  res.querySelectorAll('.r[data-i]').forEach(row=>row.onclick=()=>ho5Pick(tms[+row.dataset.i]));
+  const back=document.getElementById('ho5-back');
+  if(back) back.onclick=()=>{ ho5kind='owner'; ho5Search(); };
 }
 async function ho5Pick(m){
   const data=await lookupApi('basket',{number:m.number});
