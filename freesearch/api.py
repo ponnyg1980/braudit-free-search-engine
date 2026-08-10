@@ -144,6 +144,18 @@ class _Handler(BaseHTTPRequestHandler):
         self._cors()
         # Allow partner pages to iframe the widget.
         self.send_header('Content-Security-Policy', 'frame-ancestors *')
+        # Added 10 Aug 2026. These responses previously carried NO cache
+        # headers, so browsers fell back to heuristic caching and could keep
+        # serving an old copy of the widget for hours after a deploy — which
+        # is how a fixed bug appears to still be broken, and how a partner
+        # site can sit on stale markup indefinitely.
+        #
+        # no-cache does NOT mean "never store": it means "always revalidate
+        # before use". The browser still keeps the file and we still get a
+        # cheap 304 when nothing changed. These are small single files served
+        # from one host, so the cost is a round trip, and the alternative is
+        # visitors running whichever version they happened to load first.
+        self.send_header('Cache-Control', 'no-cache, must-revalidate')
         self.send_header('Content-Length', str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
