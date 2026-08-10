@@ -151,33 +151,58 @@ function TMHSearchBar(cfg){
 
   function show(x){x.classList.add('show')} function hide(x){x.classList.remove('show')}
 
+  /* ── Result list ───────────────────────────────────────────────────────
+     Hardened 10 Aug 2026, same fix as free-search.html's routes 3 and 5.
+
+     A row that can't be clicked was reported on the free-search panel and
+     traced to two things this list shared: responses resolving out of order,
+     and .onclick being re-attached to fresh elements on every render — so a
+     response landing between mousedown and mouseup destroyed the row
+     mid-click and the browser never fired a click event.
+
+     This list already had a 300ms debounce, which made it much rarer here,
+     but not impossible on a slow connection. Now: a sequence token so only
+     the newest response renders, and ONE delegated listener bound once, so
+     replacing innerHTML can never orphan it. */
+  let seqNo=0, curRows=[], curKind='mark';
+  list.addEventListener('click', function(e){
+    const row=e.target.closest('.row[data-i]');
+    if(!row || !list.contains(row)) return;
+    const item=curRows[+row.dataset.i];
+    if(!item) return;
+    if(curKind==='owner') pickOwner(item); else pickMark(item);
+  });
+
   async function run(){
     const query=q.value.trim();
     hide(panel);
     if(query.length<2){ hide(list); return; }
     show(loading); hide(list);
+    const seq=++seqNo;
     const data = state.mode==='trademark'
       ? await api('marks',{q:query}) : await api('owners',{q:query});
+    if(seq!==seqNo) return;            // a newer search has already won
     hide(loading);
     renderList(data);
   }
 
   function renderList(data){
     const rows=(data&&data.results)||[];
+    curRows=rows;
     if(!rows.length){ list.innerHTML='<div class="empty">No matches. Try a different spelling or the exact number.</div>'; show(list); return; }
     if(state.mode==='trademark'){
+      curKind='mark';
       list.innerHTML='<div class="row mark head"><div>Number</div><div>Mark</div><div>Status</div><div>Applicant</div></div>'+
         rows.map((r,i)=>`<div class="row mark" data-i="${i}">
           <div class="num">${r.number}</div><div class="nm">${r.name||'—'}</div>
           <div><span class="status ${STATUS_CLASS(r.status)}">${r.status||'—'}</span></div>
           <div class="sub">${r.applicant||'—'}</div></div>`).join('');
-      list.querySelectorAll('.row[data-i]').forEach(row=>row.onclick=()=>pickMark(rows[+row.dataset.i]));
     } else {
+      curKind='owner';
       list.innerHTML='<div class="row owner head"><div>Applicant</div><div>Address</div><div>Postcode</div><div>TMs</div></div>'+
         rows.map((r,i)=>`<div class="row owner" data-i="${i}">
           <div class="nm">${r.name||'—'}</div><div class="sub">${r.address||'—'}</div>
           <div class="sub">${r.postcode||'—'}</div><div class="sub">${r.trademark_count}</div></div>`).join('');
-      list.querySelectorAll('.row[data-i]').forEach(row=>row.onclick=()=>pickOwner(rows[+row.dataset.i]));
     }
     show(list);
   }
@@ -186,11 +211,14 @@ function TMHSearchBar(cfg){
     state.selOwner=o; show(loading); hide(list);
     const data=await api('owner',{id:o.ipo_identifier}); hide(loading);
     const tms=(data&&data.trademarks)||[];
+    // Drilling into an owner's marks — the rows are now marks, so the
+    // delegated handler must route clicks to pickMark from here on. Bumping
+    // seqNo also voids any still-in-flight search that would overwrite this.
+    seqNo++; curRows=tms; curKind='mark';
     list.innerHTML=`<div class="row tm head"><div>Number</div><div>Mark</div><div>Status</div></div>`+
       tms.map((t,i)=>`<div class="row tm" data-i="${i}">
         <div class="num">${t.number}</div><div class="nm">${t.name||'—'}</div>
         <div><span class="status ${STATUS_CLASS(t.status)}">${t.status||'—'}</span></div></div>`).join('');
-    list.querySelectorAll('.row[data-i]').forEach(row=>row.onclick=()=>pickMark(tms[+row.dataset.i]));
     show(list);
   }
 

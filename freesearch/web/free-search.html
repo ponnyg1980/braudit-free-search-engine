@@ -719,16 +719,43 @@ async function ho5Pick(m){
   document.getElementById('ho-5').querySelector('.hres').innerHTML=
     `<div class="r"><span>✓ Added classes ${(b&&b.classes||[]).join(', ')} from ${m.name}</span></div>`;
 }
-let ho3t;
-async function ho3coSearch(){
-  clearTimeout(ho3t); ho3t=setTimeout(async()=>{
+/* ── Route 3 company list ────────────────────────────────────────────────
+   Hardened 10 Aug 2026, same treatment as route 5 above.
+
+   This one already had the 300ms debounce, so it was never as broken as
+   route 5 — but debounce alone doesn't make it safe. Two holes remained:
+   a slow response could still land after a newer one and paint stale
+   results, and re-rendering innerHTML re-attached .onclick to fresh
+   elements, so a response arriving mid-click could still swallow the
+   click. Rare on a fast connection, ordinary on a phone on 4G.
+
+   Same three-part fix so both routes now behave identically: debounce,
+   sequence token, and one delegated listener bound once. */
+let ho3t, ho3seq=0, ho3rows=[];
+function ho3Bind(){
+  const res=document.getElementById('ho3-res');
+  if(!res || res.dataset.bound) return;
+  res.dataset.bound='1';
+  res.addEventListener('click', function(e){
+    const row=e.target.closest('.r[data-i]');
+    if(!row || !res.contains(row)) return;
+    const item=ho3rows[+row.dataset.i];
+    if(item) ho3coPick(item);
+  });
+}
+function ho3coSearch(){
+  ho3Bind();
+  clearTimeout(ho3t);
+  ho3t=setTimeout(async()=>{
     const q=(document.getElementById('ho3-q').value||'').trim();
     const res=document.getElementById('ho3-res');
     if(q.length<2){res.classList.add('hidden');return;}
+    const seq=++ho3seq;
     const data=await lookupApi('company',{q});
+    if(seq!==ho3seq) return;                        // a newer search won
     const rows=(data&&data.results)||[];
+    ho3rows=rows;
     res.innerHTML=rows.slice(0,6).map((r,i)=>`<div class="r" data-i="${i}"><span class="rn">${r.number}</span><span><b>${r.name||'—'}</b> · ${r.status} · ${r.address||''}</span></div>`).join('')||'<div class="r">No matches</div>';
-    res.querySelectorAll('.r[data-i]').forEach(row=>row.onclick=()=>ho3coPick(rows[+row.dataset.i]));
     res.classList.remove('hidden');
   },300);
 }
