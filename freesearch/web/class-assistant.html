@@ -45,6 +45,19 @@
   .copybar{display:flex;gap:8px;align-items:center;margin-top:10px}
   .copybar code{background:#f3f5f6;border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:13px;flex:1}
   .loading{color:var(--muted);font-size:13px;padding:8px 0;display:none}.loading.show{display:block}
+
+  /* ---- TMH hexagon pulse loader (Jonathan's spec, 10 Aug 2026) ---- */
+  .tmh-loader{display:inline-flex;gap:9px;align-items:center;vertical-align:middle}
+  .tmh-loader i{width:16px;height:18px;display:block;
+    clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    animation:tmh-hexpulse 1.15s ease-in-out infinite}
+  .tmh-loader i:nth-child(1){background:#E0004D}
+  .tmh-loader i:nth-child(2){background:#2D455A;animation-delay:.16s}
+  .tmh-loader i:nth-child(3){background:#E0004D;animation-delay:.32s}
+  @keyframes tmh-hexpulse{0%,80%,100%{transform:scale(.55);opacity:.25}40%{transform:scale(1);opacity:1}}
+  @media (prefers-reduced-motion:reduce){.tmh-loader i{animation:none;opacity:.6;transform:none}}
+  .loading .tmh-loader{margin-right:9px}
+
   .tick-lite{display:block;border:1.5px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:6px;cursor:pointer;font-size:13px;color:var(--navy)}
   .tick-lite:hover{border-color:var(--navy-soft)}
   .tick-lite small{display:block;color:var(--muted);margin-left:22px;font-size:12px}
@@ -89,21 +102,21 @@ button.route small{display:block;font-weight:400;color:#64748b;margin-top:3px}
     <div id="pane-tm" style="display:none">
       <div class="bar"><input id="tm-q" placeholder="Trademark name or number" oninput="d(tmSearch)"><button class="btn" onclick="tmSearch()">Find</button></div>
       <div class="hint">Pick a mark to borrow its exact classes &amp; terms.</div>
-      <div class="loading" id="tm-load">Searching…</div>
+      <div class="loading" id="tm-load"><span class="tmh-loader" role="status" aria-live="polite" aria-label="Loading"><i></i><i></i><i></i></span>Searching…</div>
       <div class="list" id="tm-list" style="display:none"></div>
     </div>
 
     <div id="pane-owner" style="display:none">
       <div class="bar"><input id="ow-q" placeholder="Company / owner name or IPO id" oninput="d(owSearch)"><button class="btn" onclick="owSearch()">Find</button></div>
       <div class="hint">Pick a company, then we band the classes across their whole portfolio.</div>
-      <div class="loading" id="ow-load">Searching…</div>
+      <div class="loading" id="ow-load"><span class="tmh-loader" role="status" aria-live="polite" aria-label="Loading"><i></i><i></i><i></i></span>Searching…</div>
       <div class="list" id="ow-list" style="display:none"></div>
     </div>
 
     <div id="pane-co" style="display:none">
       <div class="bar"><input id="co-q" placeholder="Company name or number (Companies House)" oninput="d(coSearch)"><button class="btn" onclick="coSearch()">Find</button></div>
       <div class="hint">Pick a company — we pull its SIC codes and map them to classes. No SIC codes to type.</div>
-      <div class="loading" id="co-load">Searching Companies House…</div>
+      <div class="loading" id="co-load"><span class="tmh-loader" role="status" aria-live="polite" aria-label="Loading"><i></i><i></i><i></i></span>Searching Companies House…</div>
       <div class="list" id="co-list" style="display:none"></div>
       <details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px">Advanced: enter SIC codes directly</summary>
         <div class="bar" style="margin-top:8px"><input id="sic-q" placeholder="e.g. 62012, 47110"><button class="btn" onclick="sicGo()">Map</button></div></details>
