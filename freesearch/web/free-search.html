@@ -13,6 +13,30 @@
     --radius:14px; --shadow:0 6px 24px rgba(45,69,90,.10);
     --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
   }
+  /* ---- TMH hexagon pulse loader (Jonathan's spec, 10 Aug 2026) ----
+     Pure CSS, no images, no JS — starts animating the moment it appears.
+     Shown only where a wait is genuinely long enough to warrant it; the
+     timing rules from the spec are enforced in busyOn() below, not here. */
+  .tmh-loader{display:inline-flex;gap:9px;align-items:center}
+  .tmh-loader i{width:20px;height:23px;display:block;
+    clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    animation:tmh-hexpulse 1.15s ease-in-out infinite}
+  .tmh-loader i:nth-child(1){background:#E0004D}
+  .tmh-loader i:nth-child(2){background:#2D455A;animation-delay:.16s}
+  .tmh-loader i:nth-child(3){background:#E0004D;animation-delay:.32s}
+  @keyframes tmh-hexpulse{0%,80%,100%{transform:scale(.55);opacity:.25}40%{transform:scale(1);opacity:1}}
+  /* Respect people who limit motion on their device */
+  @media (prefers-reduced-motion:reduce){.tmh-loader i{animation:none;opacity:.6;transform:none}}
+  .tmh-busy{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:12px;padding:26px 0}
+  .tmh-busy .msg{font-size:14px;color:var(--muted)}
+  /* Full-card overlay for the main search, which is the longest wait and a
+     screen change — the visitor must not be able to press Begin twice. */
+  .tmh-overlay{position:fixed;inset:0;background:rgba(245,247,249,.92);z-index:9999;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+  .tmh-overlay .msg{font-size:15px;color:var(--navy);font-weight:600}
+  .tmh-overlay .sub{font-size:13px;color:var(--muted);margin-top:-8px}
+
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);
     line-height:1.5;-webkit-font-smoothing:antialiased}
@@ -675,14 +699,17 @@ function ho5Search(){
     const q=(document.getElementById('ho5-q').value||'').trim();
     if(q.length<2){res.classList.add('hidden');return;}
     const seq=++ho5seq;
+    busyOn('ho5',res,ho5mode==='owner'?'Searching owners\u2026':'Searching the register\u2026');
     if(ho5mode==='owner'){
       const data=await lookupApi('owners',{q});
+      busyOff('ho5');
       if(seq!==ho5seq) return;                       // a newer search won
       const rows=(data&&data.results)||[];
       ho5rows=rows; ho5kind='owner';
       res.innerHTML=rows.slice(0,6).map((r,i)=>`<div class="r" data-i="${i}"><span class="rn">${r.name||'—'}</span><span>${r.postcode||''} · ${r.trademark_count} marks</span></div>`).join('')||'<div class="r">No matches</div>';
     } else {
       const data=await lookupApi('marks',{q});
+      busyOff('ho5');
       if(seq!==ho5seq) return;
       const rows=(data&&data.results)||[];
       ho5rows=rows; ho5kind='mark';
@@ -693,7 +720,9 @@ function ho5Search(){
 }
 async function ho5PickOwner(o){
   const res=document.getElementById('ho5-res');
+  busyOn('ho5',res,'Loading their trademarks\u2026');
   const data=await lookupApi('owner',{id:o.ipo_identifier});
+  busyOff('ho5');
   const tms=(data&&data.trademarks)||[];
   // Drilling into an owner's marks — these become the clickable rows, so the
   // delegated handler must now treat them as marks, not owners.
@@ -704,7 +733,10 @@ async function ho5PickOwner(o){
   if(back) back.onclick=()=>{ ho5kind='owner'; ho5Search(); };
 }
 async function ho5Pick(m){
+  const res=document.getElementById('ho5-res');
+  busyOn('ho5',res,'Reading the classes and terms\u2026');
   const data=await lookupApi('basket',{number:m.number});
+  busyOff('ho5');
   const b=data&&data.basket;
   if(b&&b.classes){ state.classes=[...new Set([...state.classes,...b.classes])].sort((a,b)=>a-b);
     // The engine already worked out specific terms per class here (b.entries)
@@ -751,7 +783,9 @@ function ho3coSearch(){
     const res=document.getElementById('ho3-res');
     if(q.length<2){res.classList.add('hidden');return;}
     const seq=++ho3seq;
+    busyOn('ho3',res,'Searching Companies House\u2026');
     const data=await lookupApi('company',{q});
+    busyOff('ho3');
     if(seq!==ho3seq) return;                        // a newer search won
     const rows=(data&&data.results)||[];
     ho3rows=rows;
@@ -760,7 +794,9 @@ function ho3coSearch(){
   },300);
 }
 async function ho3coPick(c){
+  busyOn('ho3',document.getElementById('ho3-res'),'Working out the classes\u2026');
   const data=await lookupApi('company-classes',{number:c.number});
+  busyOff('ho3');
   const classes=(data&&data.classes)||[];
   const toAdd=classes.filter(x=>x.tier==='a'||x.tier==='b').map(x=>x.nice_class);
   state.classes=[...new Set([...state.classes,...toAdd])].sort((a,b)=>a-b);
@@ -794,6 +830,55 @@ async function ho3Apply(){
   out.innerHTML='✓ Mapped to'+src+': '+classes.map(c=>`<span class="term" style="cursor:default">${c.nice_class} <small>(${c.band})</small></span>`).join(' ')+
     (data.unmatched&&data.unmatched.length?`<div class="muted-note">Unrecognised: ${data.unmatched.join(', ')}</div>`:'');
 }
+/* ── Busy indicator ──────────────────────────────────────────────────────
+   Added 10 Aug 2026 after Jonathan reported the trademark lookup felt slow.
+   Measured on the live engine before building this, rather than guessing:
+
+     /lookup/marks      2.6 - 3.6s   <- the one that felt slow
+     POST /free-search  3.5s         <- showed NOTHING at all while waiting
+     /lookup/basket     0.42s
+     /lookup/company    0.25s
+
+   His own spec says: under half a second show nothing, because a flash of
+   loader reads as more broken than a short pause. So busyOn() waits 500ms
+   before it draws anything and busyOff() cancels a pending one — the two
+   fast endpoints above will normally never show it, while the two slow ones
+   always will. Don't replace this with an immediate show; the delay is the
+   point. */
+const _busy={};
+function busyOn(key,target,msg){
+  busyOff(key);
+  _busy[key]=setTimeout(function(){
+    _busy[key]=null;
+    if(!target) return;
+    target.classList.remove('hidden');
+    target.innerHTML='<div class="tmh-busy">'+
+      '<span class="tmh-loader" role="status" aria-live="polite" aria-label="Loading">'+
+      '<i></i><i></i><i></i></span>'+(msg?'<span class="msg">'+msg+'</span>':'')+'</div>';
+  },500);
+}
+function busyOff(key){ if(_busy[key]){clearTimeout(_busy[key]);} _busy[key]=null; }
+
+/* The main search is a screen change and the longest wait, so it gets a
+   blocking overlay — which also stops a second press of "Begin Free Search"
+   firing a duplicate search and a duplicate search_run event. */
+function overlayOn(msg,sub){
+  overlayOff();
+  _busy._ov=setTimeout(function(){
+    _busy._ov=null;
+    const d=document.createElement('div');
+    d.className='tmh-overlay'; d.id='tmh-overlay';
+    d.innerHTML='<span class="tmh-loader" role="status" aria-live="polite" aria-label="Loading">'+
+      '<i></i><i></i><i></i></span><div class="msg">'+msg+'</div>'+
+      (sub?'<div class="sub">'+sub+'</div>':'');
+    document.body.appendChild(d);
+  },500);
+}
+function overlayOff(){
+  if(_busy._ov){clearTimeout(_busy._ov);} _busy._ov=null;
+  const d=document.getElementById('tmh-overlay'); if(d) d.remove();
+}
+
 async function lookupApi(action,params){
   // '' = same-origin: the page is served BY the engine (single-host design),
   // so relative /lookup/<action> is always the live API. No mock exists —
@@ -880,9 +965,15 @@ function buildPayload(){return {name:state.name,
   trading_now:nowCodes(),planning_to_trade:planCodes(),tenant_id:CONFIG.TENANT_ID};}
 
 /* run search — soft funnel: always show limited results, no hard gate here */
+let _searching=false;
 async function beginSearch(){
+  if(_searching) return;              // a second press must not fire a second search
+  _searching=true;
   const payload=buildPayload();
-  const out=await callSearch(payload);
+  overlayOn('Checking the UK trademark register\u2026','This usually takes a few seconds.');
+  let out;
+  try{ out=await callSearch(payload); }
+  finally{ overlayOff(); _searching=false; }
   if(!out.ok){alert('Search error: '+(out.error||'unknown'));return;}
   state.lastResult=out.result;renderResults(out.result);
   state.resultsComputedFrom=snapshotInputs(); // for the staleness check on later back/forward
