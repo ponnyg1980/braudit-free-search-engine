@@ -37,6 +37,24 @@
   .tmh-overlay .msg{font-size:15px;color:var(--navy);font-weight:600}
   .tmh-overlay .sub{font-size:13px;color:var(--muted);margin-top:-8px}
 
+
+  /* ---- richer result rows + the class picker (10 Aug 2026) ---- */
+  .hres .r .meta{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+  .hres .r .feat{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.03em;color:var(--navy);background:#eef2f5;border-radius:999px;padding:1px 7px;margin-left:6px}
+  .hres .r .cls{display:block;color:var(--ink);font-size:12px;margin-top:3px;line-height:1.45}
+  .hres .r .cls b{color:var(--pink)}
+  .pickbox{border:1.5px solid var(--pink);border-radius:12px;background:#fef4f7;padding:14px;margin-top:10px}
+  .pickbox h4{margin:0 0 3px;font-size:14px;color:var(--navy)}
+  .pickbox .sub{font-size:12px;color:var(--muted);margin:0 0 10px}
+  .pickrow{display:flex;align-items:flex-start;gap:9px;padding:7px 9px;background:#fff;border:1px solid var(--line);
+    border-radius:9px;margin-bottom:6px;cursor:pointer}
+  .pickrow input{margin-top:3px;flex:0 0 auto;width:16px;height:16px;accent-color:var(--pink);cursor:pointer}
+  .pickrow .n{font-weight:700;color:var(--pink);flex:0 0 28px}
+  .pickrow .lbl{font-size:13px;color:var(--ink);line-height:1.4}
+  .pickacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+  .pickacts .count{font-size:12px;color:var(--muted);margin-left:auto}
+
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);
     line-height:1.5;-webkit-font-smoothing:antialiased}
@@ -713,10 +731,27 @@ function ho5Search(){
       if(seq!==ho5seq) return;
       const rows=(data&&data.results)||[];
       ho5rows=rows; ho5kind='mark';
-      res.innerHTML=rows.slice(0,6).map((r,i)=>`<div class="r" data-i="${i}"><span class="rn">${r.number}</span><span><b>${r.name||'—'}</b> · ${r.status} · ${r.applicant||''}</span></div>`).join('')||'<div class="r">No matches</div>';
+      res.innerHTML=rows.slice(0,6).map(markRowHtml).join('')||'<div class="r">No matches</div>';
     }
     res.classList.remove('hidden');
   },300);
+}
+/* One trademark row. Jonathan, 10 Aug: show the application date, status,
+   mark feature, class numbers AND a plain-English class description — and
+   show an applicant's trademarks exactly the same way, which is why this is
+   one function used by both lists rather than two templates to keep in sync. */
+function markRowHtml(t,i){
+  const feat=t.mark_feature?`<span class="feat">${t.mark_feature}</span>`:'';
+  const date=t.application_date?` · Applied ${t.application_date}`:'';
+  const cd=(t.classes_detail&&t.classes_detail.length)?t.classes_detail:
+           (t.classes||[]).map(n=>({n:n,label:''}));
+  const cls=cd.length
+    ? `<span class="cls">${cd.map(c=>`<b>${c.n}</b>${c.label?' '+c.label:''}`).join(' · ')}</span>`
+    : '';
+  return `<div class="r" data-i="${i}"><span class="rn">${t.number}</span>`+
+    `<span><b>${t.name||'—'}</b>${feat}`+
+    `<span class="meta">${t.status||''}${date}${t.applicant?' · '+t.applicant:''}</span>`+
+    `${cls}</span></div>`;
 }
 async function ho5PickOwner(o){
   const res=document.getElementById('ho5-res');
@@ -728,9 +763,64 @@ async function ho5PickOwner(o){
   // delegated handler must now treat them as marks, not owners.
   ho5seq++; ho5rows=tms; ho5kind='mark';
   res.innerHTML=`<div class="r" id="ho5-back"><span class="rn">← back</span><span>${o.name}’s trademarks</span></div>`+
-    tms.slice(0,20).map((t,i)=>`<div class="r" data-i="${i}"><span class="rn">${t.number}</span><span><b>${t.name||'—'}</b> · ${t.status} · cls ${(t.classes||[]).join(', ')}</span></div>`).join('');
+    tms.slice(0,20).map(markRowHtml).join('');
   const back=document.getElementById('ho5-back');
   if(back) back.onclick=()=>{ ho5kind='owner'; ho5Search(); };
+}
+/* ── Confirm-before-adding class picker ─────────────────────────────────
+   Jonathan, 10 Aug: "it isn't always obvious that classes have populated".
+
+   Picking a competitor mark or a company used to silently push classes into
+   the basket, which is easy to miss. Two reasons this is better than a
+   louder confirmation:
+
+     1. Visibility — you can see exactly what was found before it counts.
+     2. Relevance — a competitor's classes routinely include things that
+        have nothing to do with THIS visitor, and classes drive the search.
+        Taking all of them wholesale makes results worse.
+
+   Pre-ticked so the common case is still one click. */
+function classLabel(n){ return NICE[+n]||''; }
+let _pick={route:null,items:[],meta:null};
+function showClassPicker(route,title,items,meta){
+  _pick={route:route,items:items,meta:meta};
+  const box=document.getElementById(route==='5'?'ho5-res':'ho3-res');
+  if(!box) return;
+  box.classList.remove('hidden');
+  box.innerHTML=`<div class="pickbox">
+    <h4>${title}</h4>
+    <p class="sub">${items.every(c=>c.on!==false)?'All ticked. Untick anything that doesn\u2019t apply':'The strongest matches are ticked. Tick any others that apply'} \u2014 these decide what we search.</p>
+    ${items.map((c)=>`<label class="pickrow"><input type="checkbox" data-n="${c.n}"${c.on===false?'':' checked'}>
+      <span class="n">${c.n}</span><span class="lbl">${c.label||classLabel(c.n)}</span></label>`).join('')}
+    <div class="pickacts">
+      <button class="btn primary" id="pick-add">Add selected classes</button>
+      <button class="btn ghost" id="pick-cancel">Cancel</button>
+      <span class="count" id="pick-count"></span>
+    </div></div>`;
+  const upd=()=>{const n=box.querySelectorAll('.pickrow input:checked').length;
+    document.getElementById('pick-count').textContent=n+' of '+items.length+' selected';
+    document.getElementById('pick-add').disabled=(n===0);};
+  box.querySelectorAll('.pickrow input').forEach(cb=>cb.addEventListener('change',upd));
+  document.getElementById('pick-add').onclick=()=>applyPickedClasses();
+  document.getElementById('pick-cancel').onclick=()=>{ box.innerHTML=''; box.classList.add('hidden'); };
+  upd();
+}
+function applyPickedClasses(){
+  const route=_pick.route;
+  const box=document.getElementById(route==='5'?'ho5-res':'ho3-res');
+  const chosen=[...box.querySelectorAll('.pickrow input:checked')].map(cb=>+cb.dataset.n);
+  if(!chosen.length) return;
+  state.classes=[...new Set([...state.classes,...chosen])].sort((a,b)=>a-b);
+  state.classSource=Object.assign({route:route,chosen_classes:chosen},_pick.meta||{});
+  renderBasket();
+  logEvent('class_source_applied','classes',
+    Object.assign({route:route,classes:chosen},_pick.meta&&_pick.meta.value?{value:_pick.meta.value}:{}),true);
+  box.innerHTML=`<div class="r"><span>\u2713 Added ${chosen.length} class${chosen.length===1?'':'es'}: ${chosen.join(', ')}</span></div>`;
+  // Take them to the basket so the change is impossible to miss.
+  const basket=document.getElementById('cls-basket');
+  if(basket){ basket.scrollIntoView({behavior:'smooth',block:'center'});
+    basket.style.transition='box-shadow .3s'; basket.style.boxShadow='0 0 0 3px rgba(229,22,82,.35)';
+    setTimeout(()=>{basket.style.boxShadow='';},1400); }
 }
 async function ho5Pick(m){
   const res=document.getElementById('ho5-res');
@@ -738,18 +828,19 @@ async function ho5Pick(m){
   const data=await lookupApi('basket',{number:m.number});
   await busyOff('ho5');
   const b=data&&data.basket;
-  if(b&&b.classes){ state.classes=[...new Set([...state.classes,...b.classes])].sort((a,b)=>a-b);
-    // The engine already worked out specific terms per class here (b.entries)
-    // — not shown to the client (the free search stays a quick classes-only
-    // pick), but captured for the record: it's real Nice-specification detail
-    // for exactly this brand, and shouldn't be thrown away just because the
-    // free UI doesn't surface it. Lands in class_source -> journey_sessions
-    // .class_source -> (once wired) G_S_Scope_Classes_Terms.Specific_Terms.
-    state.classSource={route:'5',value:m.number,label:m.name,term_basket:b};
-    renderBasket();
-    logEvent('class_source_applied','classes',{route:'5',trademark:m.number,classes:b.classes},true); }
-  document.getElementById('ho-5').querySelector('.hres').innerHTML=
-    `<div class="r"><span>✓ Added classes ${(b&&b.classes||[]).join(', ')} from ${m.name}</span></div>`;
+  const cls=(b&&b.classes)||[];
+  if(!cls.length){
+    document.getElementById('ho5-res').innerHTML='<div class="r"><span>No classes found for that mark.</span></div>';
+    return;
+  }
+  // b.entries carries the engine's per-class Nice terms. Not shown (the free
+  // search stays a quick classes-only pick) but kept on class_source so it
+  // reaches journey_sessions and, once wired, G_S_Scope_Classes_Terms.
+  const items=(b.entries&&b.entries.length)
+    ? b.entries.map(e=>({n:e.nice_class,label:e.class_label||''}))
+    : cls.map(n=>({n:n,label:''}));
+  showClassPicker('5',`${m.name||m.number} \u2014 classes on this trademark`,items,
+    {value:m.number,label:m.name,term_basket:b});
 }
 /* ── Route 3 company list ────────────────────────────────────────────────
    Hardened 10 Aug 2026, same treatment as route 5 above.
@@ -798,17 +889,20 @@ async function ho3coPick(c){
   const data=await lookupApi('company-classes',{number:c.number});
   await busyOff('ho3');
   const classes=(data&&data.classes)||[];
-  const toAdd=classes.filter(x=>x.tier==='a'||x.tier==='b').map(x=>x.nice_class);
-  state.classes=[...new Set([...state.classes,...toAdd])].sort((a,b)=>a-b);
-  // Same story as ho5Pick — company_classes() already returns a term_basket
-  // (company.py), not just class numbers. Captured, not shown.
-  state.classSource={route:'3',value:c.number,label:c.name,sic:data.sic_codes,
-    method:data.method,term_basket:data.basket};
-  renderBasket();
-  logEvent('class_source_applied','classes',{route:'3',company:c.number,classes:toAdd},true);
+  if(!classes.length){
+    document.getElementById('ho3-res').innerHTML='<div class="r"><span>No classes found for that company.</span></div>';
+    return;
+  }
+  // Pre-tick the strong matches (tiers a/b) exactly as the old auto-add did,
+  // but show the weaker ones too so the visitor can opt in rather than have
+  // the engine's judgement applied silently.
+  const items=classes.map(x=>({n:x.nice_class,
+    label:(x.class_label||classLabel(x.nice_class))+(x.band?' \u00b7 '+x.band:''),
+    on:(x.tier==='a'||x.tier==='b')}));
   const src=data.method==='empirical'?' (from real filings)':data.method==='mixed'?' (part real filings)':'';
-  document.getElementById('ho3-out').innerHTML=`✓ ${c.name} · SIC ${(data.sic_codes||[]).join(', ')} → classes${src}: `+
-    classes.map(x=>`<span class="term" style="cursor:default">${x.nice_class} <small>(${x.band})</small></span>`).join(' ');
+  showClassPicker('3',`${c.name} \u2014 suggested classes${src}`,items,
+    {value:c.number,label:c.name,sic:data.sic_codes,method:data.method,term_basket:data.basket});
+  document.getElementById('ho3-out').textContent='';
 }
 async function ho3Apply(){
   const raw=(document.getElementById('ho3-q').value||'').trim();

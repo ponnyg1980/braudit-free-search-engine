@@ -64,6 +64,80 @@ def _address_oneline(addr: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Display helpers — added 10 Aug 2026 (Jonathan): result rows should show the
+# application date, status, mark feature, class numbers AND a plain-English
+# class description, not just numbers.
+#
+# These are the SHORT labels the wizard already used client-side, lifted here
+# so every widget (free search, search bar, class assistant) renders classes
+# identically from one source instead of each keeping its own copy that can
+# drift. The official NICE headings in deploy-v2-hotfix/nice_classes.py are
+# the full legal text and far too long for a list row — that is the "not the
+# full terms, just the overview" distinction.
+# ---------------------------------------------------------------------------
+
+def class_label(n) -> str:
+    """Short, friendly class name — e.g. 30 -> 'Coffee, bakery & staple foods'.
+
+    Delegates to freesearch/nice_labels.py, which already owned this and is
+    what term_basket uses for `class_label`. Deliberately NOT a second copy
+    of the 45 names here: two lists would drift and the UI would show one
+    wording in a result row and another in the basket for the same class.
+
+    The official NICE heading (nice_classes.NICE_HEADINGS) is the full legal
+    text — far too long for a list row. This is the "overview description".
+    """
+    try:
+        from .nice_labels import short
+    except ImportError:
+        from nice_labels import short           # module run flat, e.g. tests
+    try:
+        return short(int(n)) or ''
+    except (TypeError, ValueError):
+        return ''
+
+
+def classes_detail(classes) -> list[dict]:
+    """[{'n': 30, 'label': 'Coffee, Bakery & Staple Foods'}, ...]
+
+    Structured rather than a pre-joined string so the client can render each
+    class as its own tickable row (the confirm-before-adding picker) without
+    having to parse text back apart.
+    """
+    out = []
+    for n in (classes or []):
+        try:
+            i = int(n)
+        except (TypeError, ValueError):
+            continue
+        out.append({'n': i, 'label': class_label(i)})
+    return out
+
+
+def _app_date(rec: dict) -> str:
+    """'2003-01-17T00:00:00' -> '17 Jan 2003'. Empty string if absent."""
+    raw = _s(rec.get('application_date_time')) or _s(rec.get('application_date'))
+    if not raw:
+        return ''
+    import datetime
+    try:
+        return datetime.datetime.fromisoformat(
+            raw.replace('Z', '')).strftime('%d %b %Y')
+    except ValueError:
+        return raw[:10]
+
+
+def _mark_feature(rec: dict) -> str:
+    """Word / Figurative / Combined etc.
+
+    Present as `mark_type` on a trademark-search row and as `mark.feature` on
+    an applicant-response row — same concept, two shapes, so check both.
+    """
+    mark = rec.get('mark') or {}
+    return _s(rec.get('mark_type')) or _s(mark.get('feature'))
+
+
+# ---------------------------------------------------------------------------
 # TRADEMARK mode
 # ---------------------------------------------------------------------------
 
@@ -98,16 +172,71 @@ def search_marks(client, query: str, *, limit: int = 10) -> dict:
         rows = [_mark_row(it) for it in items]
         rows.sort(key=lambda r: _sim(query, r['name']), reverse=True)
         results = rows[:limit]
+        _fill_details(client, results)
 
     return {'mode': 'trademark', 'query': query, 'results': results}
 
 
+def _fill_details(client, rows: list[dict]) -> None:
+    """Add application_date + classes to search rows, in place.
+
+    The search endpoint doesn't return either (mark_type IS there, so the
+    feature is free). Only a per-trademark detail fetch has them, so this
+    runs them concurrently: measured on the live pooled client, 6 rows take
+    ~1.0s in parallel against ~1.8s sequentially, on top of a ~3s search.
+    That is a real cost, accepted because the list is far more useful with a
+    date and classes on it, and the hexagon loader now covers the wait.
+
+    Best-effort throughout: any row whose detail fetch fails simply keeps its
+    empty date/classes rather than failing the whole search. A slower, richer
+    list is a fair trade; a list that 500s because one mark is odd is not.
+    """
+    todo = [r for r in rows if r.get('number') and not r.get('classes')]
+    if not todo:
+        return
+
+    def one(row):
+        try:
+            d = client.get_trademark(row['number'])
+        except Exception:
+            return
+        if not isinstance(d, dict):
+            return
+        row['application_date'] = row['application_date'] or _app_date(d)
+        row['mark_feature'] = row['mark_feature'] or _mark_feature(d)
+        cls = [int(n) for n in (d.get('classes') or []) if str(n).isdigit()]
+        if cls:
+            row['classes'] = cls
+            row['classes_detail'] = classes_detail(cls)
+
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(6, len(todo))) as ex:
+            list(ex.map(one, todo))
+    except Exception:
+        for r in todo:      # pool unavailable — still correct, just slower
+            one(r)
+
+
 def _mark_row(rec: dict) -> dict:
+    """One row of a result list.
+
+    application_date / classes are absent from a trademark-SEARCH response
+    (it returns only applicants, application_number, expiry_date, id,
+    last_updated_on, mark_type, status, verbal_element_text) but present on
+    an applicant response and on a detail fetch. So they come back empty
+    here and search_marks() fills them in — see the note there.
+    """
+    classes = [int(n) for n in (rec.get('classes') or []) if str(n).isdigit()]
     return {
         'number': _s(rec.get('application_number')),
         'name': _mark_name(rec),
         'status': _s(rec.get('status')),
         'applicant': _applicant_names(rec),
+        'application_date': _app_date(rec),
+        'mark_feature': _mark_feature(rec),
+        'classes': classes,
+        'classes_detail': classes_detail(classes),
     }
 
 
@@ -205,12 +334,18 @@ def get_owner(client, ipo_identifier) -> dict | None:
     for t in (items[0].get('trademarks') or []):
         if not isinstance(t, dict):
             continue
+        cls = [int(n) for n in (t.get('classes') or []) if str(n).isdigit()]
         tms.append({
             'number': _s(t.get('application_number')),
             'name': _mark_name(t),
             'status': _s(t.get('status')),
-            'classes': [int(n) for n in (t.get('classes') or [])
-                        if str(n).isdigit()],
+            'classes': cls,
+            # Free here — unlike the trademark-search path, the applicant
+            # response already carries application_date_time and mark.feature,
+            # so an owner's list needs no extra fetches at all.
+            'application_date': _app_date(t),
+            'mark_feature': _mark_feature(t),
+            'classes_detail': classes_detail(cls),
         })
     return {
         'owner': {
