@@ -55,6 +55,23 @@
   .pickacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
   .pickacts .count{font-size:12px;color:var(--muted);margin-left:auto}
 
+
+  /* ---- guided business-description form (route 1), 10 Aug 2026 ---- */
+  .q{margin:0 0 14px}
+  .q .qt{font-size:13.5px;font-weight:700;color:var(--navy);margin:0 0 5px;line-height:1.4}
+  .q .qh{font-size:12px;color:var(--muted);margin:0 0 6px;line-height:1.45}
+  .q input[type=text],.q input[type=url],.q textarea{width:100%;padding:9px 11px;border:1px solid var(--line);
+    border-radius:9px;font-family:var(--font);font-size:13.5px;color:var(--ink)}
+  .q textarea{min-height:58px;resize:vertical}
+  .q input:focus,.q textarea:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 3px rgba(229,22,82,.12)}
+  .qseg{display:flex;gap:6px;flex-wrap:wrap}
+  .qseg button{padding:8px 13px;border:1.5px solid var(--line);background:#fff;border-radius:999px;
+    font-family:var(--font);font-size:13px;font-weight:600;color:var(--navy);cursor:pointer}
+  .qseg button.on{border-color:var(--pink);background:var(--pink);color:#fff}
+  .qsep{border-top:1px solid var(--line);margin:16px 0 13px;padding-top:13px}
+  .qsep .st{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:10px}
+  .q .opt{font-weight:400;color:var(--muted)}
+
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);
     line-height:1.5;-webkit-font-smoothing:antialiased}
@@ -495,7 +512,7 @@ const STEP_LABELS={search:'Name',marks:'Searches',jurisdiction:'Jurisdictions',c
 let state={name:'',logo:false,logoLater:false,tagline:'',classes:[],
   now:{mode:'uk',codes:[]},plan:{mode:'none',codes:[]},lastResult:null,lead:null,
   emailForAI:null,classSource:null,resultsComputedFrom:null,portalRequested:false,
-  sessionId:null};  // minted on the first real decision — see ensureSession()
+  sessionId:null,businessWebsite:''};  // minted on the first real decision — see ensureSession()
 
 /* ── Navigation ──────────────────────────────────────────────────────────
    Two layers, deliberately kept separate:
@@ -549,7 +566,8 @@ function currentSnapshot(){
   return {name:state.name,
     tagline:document.getElementById('tagline')?document.getElementById('tagline').value.trim():state.tagline,
     has_logo:state.logo&&!state.logoLater, classes:state.classes,
-    trading_now:nowCodes(), planning_to_trade:planCodes(), class_source:state.classSource};
+    trading_now:nowCodes(), planning_to_trade:planCodes(), class_source:state.classSource,
+    business_website:state.businessWebsite||''};
 }
 function ensureSession(){
   // Idempotent — call it any time; only the first call actually mints one.
@@ -639,6 +657,7 @@ function aiGateHtml(opt){
   return aiInputHtml(opt,ph);
 }
 function aiInputHtml(opt,ph){
+  if(opt==='1'){ setTimeout(q1Wire,0); return q1Html(); }
   const multi = opt==='1';
   const label = {1:'Step 2 — describe your business in your own words:',
                  2:'Step 2 — your website address:',
@@ -648,6 +667,153 @@ function aiInputHtml(opt,ph){
            :`<div class="hbar" style="margin-top:8px"><input id="ho${opt}-in" type="url" inputmode="url" autocomplete="url" placeholder="${ph}"></div>`}
     <button class="btn ghost" style="margin-top:8px" onclick="aiSubmit('${opt}')">Add to my report</button>
     <div class="muted-note" id="ho${opt}-out"></div>`;
+}
+/* ── Guided business description (route 1) ───────────────────────────────
+   Jonathan, 10 Aug 2026. Replaces a single free-text box with a short set
+   of questions, rendered as ONE scrolling form rather than a step-by-step
+   wizard — explicitly so the visitor can see at a glance that it's short and
+   doesn't leave the page. A wizard inside a wizard feels longer than it is.
+
+   The goods-vs-services question is the important one: Nice classification
+   splits at exactly that line (classes 1-34 goods, 35-45 services), so
+   answering it halves the search space and heads off the commonest error,
+   which is filing for goods when you actually provide services. The help
+   line under it is not decoration — plenty of people don't know the
+   distinction, and a confident wrong answer is worse than no answer.
+
+   The "new or existing brand" pair sits at the end under its own heading
+   because it is NOT about classification — it's prior use, and it's the
+   best lead-qualification signal here: an established brand trading for
+   years unregistered is a hotter, more urgent lead than a startup. */
+const Q1 = {mode:'', dur:'', web:''};
+function q1Html(){
+  return `
+  <div class="gate-note" style="margin-bottom:12px"><b>A few quick questions</b><br>
+    The more we know, the better the class suggestions. Nothing here is compulsory
+    except the first one — it takes about a minute.</div>
+
+  <div class="q">
+    <p class="qt">If somebody asked what your business does, what’s the first thing you’d say?</p>
+    <input type="text" id="q1-pitch" autocomplete="off" placeholder="e.g. We roast and sell speciality coffee">
+  </div>
+
+  <div class="q">
+    <p class="qt">Do you provide…</p>
+    <p class="qh">Goods are things you make or sell. Services are things you do for people.</p>
+    <div class="qseg" id="q1-mode">
+      <button type="button" data-m="goods">Goods or products</button>
+      <button type="button" data-m="services">Services</button>
+      <button type="button" data-m="both">Both</button>
+    </div>
+  </div>
+
+  <div class="q hidden" id="q1-goods-wrap">
+    <p class="qt">What goods or products do you provide?</p>
+    <textarea id="q1-goods" placeholder="e.g. roasted coffee beans, ground coffee, reusable cups"></textarea>
+  </div>
+
+  <div class="q hidden" id="q1-services-wrap">
+    <p class="qt">What services do you provide?</p>
+    <textarea id="q1-services" placeholder="e.g. barista training, coffee subscriptions, wholesale supply"></textarea>
+  </div>
+
+  <div class="q">
+    <p class="qt">Anything unique we’ve missed? <span class="opt">— optional</span></p>
+    <textarea id="q1-unique" placeholder="Anything that sets you apart, or that the questions above don’t cover"></textarea>
+  </div>
+
+  <div class="qsep">
+    <div class="st">A couple of things about your situation</div>
+    <div class="q">
+      <p class="qt">Is this trademark for a new brand or one you already use?</p>
+      <div class="qseg" id="q1-age">
+        <button type="button" data-a="new">A new brand</button>
+        <button type="button" data-a="existing">An existing brand</button>
+      </div>
+    </div>
+    <div class="q hidden" id="q1-dur-wrap">
+      <p class="qt">Roughly how long has it been in use publicly?</p>
+      <div class="qseg" id="q1-dur">
+        <button type="button" data-d="under1">Under a year</button>
+        <button type="button" data-d="1to3">1–3 years</button>
+        <button type="button" data-d="3to5">3–5 years</button>
+        <button type="button" data-d="5plus">5+ years</button>
+      </div>
+    </div>
+    <div class="q">
+      <p class="qt">Add a website to help our research?</p>
+      <div class="qseg" id="q1-web">
+        <button type="button" data-w="yes">Yes</button>
+        <button type="button" data-w="no">No</button>
+      </div>
+    </div>
+    <div class="q hidden" id="q1-web-wrap">
+      <p class="qt">Your website</p>
+      <input type="url" id="q1-website" inputmode="url" autocomplete="url" placeholder="https://yourbusiness.com">
+    </div>
+  </div>
+
+  <button class="btn primary" onclick="q1Submit()">Add to my report</button>
+  <div class="muted-note" id="ho1-out"></div>`;
+}
+function q1Seg(groupId,attr,val,key){
+  const g=document.getElementById(groupId); if(!g) return;
+  g.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset[attr]===val));
+  Q1[key]=val;
+}
+function q1Wire(){
+  const mode=document.getElementById('q1-mode');
+  if(mode) mode.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return;
+    q1Seg('q1-mode','m',b.dataset.m,'mode');
+    document.getElementById('q1-goods-wrap').classList.toggle('hidden',!(b.dataset.m==='goods'||b.dataset.m==='both'));
+    document.getElementById('q1-services-wrap').classList.toggle('hidden',!(b.dataset.m==='services'||b.dataset.m==='both'));
+  });
+  const age=document.getElementById('q1-age');
+  if(age) age.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return;
+    age.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+    Q1.age=b.dataset.a;
+    document.getElementById('q1-dur-wrap').classList.toggle('hidden',b.dataset.a!=='existing');
+  });
+  const dur=document.getElementById('q1-dur');
+  if(dur) dur.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return;
+    q1Seg('q1-dur','d',b.dataset.d,'dur'); });
+  const web=document.getElementById('q1-web');
+  if(web) web.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return;
+    q1Seg('q1-web','w',b.dataset.w,'web');
+    document.getElementById('q1-web-wrap').classList.toggle('hidden',b.dataset.w!=='yes'); });
+}
+const DUR_LABEL={under1:'under a year','1to3':'1–3 years','3to5':'3–5 years','5plus':'5+ years'};
+function q1Submit(){
+  const v=id=>{const e=document.getElementById(id); return e?(e.value||'').trim():'';};
+  const pitch=v('q1-pitch'), goods=v('q1-goods'), services=v('q1-services'),
+        uniq=v('q1-unique'), site=v('q1-website');
+  const out=document.getElementById('ho1-out');
+  if(!pitch){ document.getElementById('q1-pitch').focus();
+    out.textContent='Please answer the first question so we know what to look for.'; return; }
+  if(Q1.web==='yes' && site && !/^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([\/#?].*)?$/i.test(site)){
+    out.textContent='That doesn’t look like a website address — e.g. yourbusiness.co.uk'; return; }
+
+  // A composed sentence, because the enrichment relay and the AI class
+  // suggestion both read class_source.value as free text. The structured
+  // answers ride alongside; this keeps every existing consumer working.
+  const parts=[pitch];
+  if(goods) parts.push('Goods/products: '+goods);
+  if(services) parts.push('Services: '+services);
+  if(uniq) parts.push('Also: '+uniq);
+  if(Q1.age==='existing') parts.push('Existing brand, in use '+(DUR_LABEL[Q1.dur]||'for some time')+'.');
+  else if(Q1.age==='new') parts.push('New brand, not yet in use.');
+
+  state.classSource={route:'1', value:parts.join(' — '), email:state.emailForAI,
+    answers:{pitch:pitch, provides:Q1.mode||'', goods:goods, services:services,
+             unique:uniq, brand_age:Q1.age||'', in_use_for:Q1.dur||'',
+             website:(Q1.web==='yes'?site:'')}};
+  // A website given here is the visitor's own site, so it belongs on the
+  // session proper, not buried in class_source — otherwise it never reaches
+  // the resolver or Zoho. currentSnapshot() sends it as business_website.
+  if(Q1.web==='yes' && site) state.businessWebsite=site;
+  logEvent('class_source_applied','classes',
+    {route:'1',provides:Q1.mode||'',brand_age:Q1.age||'',has_website:Q1.web==='yes'},true);
+  out.textContent='✓ Thanks — captured. Suggested classes will be in your emailed report.';
 }
 function aiGate(opt){
   const e=(document.getElementById('ho'+opt+'-email').value||'').trim();
@@ -666,6 +832,10 @@ function aiSubmit(opt){
   if(opt!=='1' && !/^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([\/#?].*)?$/i.test(val)){
     alert('That doesn\u2019t look like a website address \u2014 e.g. yourbusiness.co.uk');return;}
   state.classSource={route:opt,value:val,email:state.emailForAI};
+  // Route 2 is the visitor's OWN website (route 4 is a competitor's, which
+  // must never be treated as theirs — see contact_resolver.py's "NEVER
+  // RESOLVE FROM THE COMPETITOR FIELDS"). Only route 2 populates it.
+  if(opt==='2') state.businessWebsite=val;
   document.getElementById('ho'+opt+'-out').textContent='✓ Captured — suggested classes will be in your emailed report.';
 }
 let ho5mode='tm';
