@@ -702,14 +702,14 @@ function ho5Search(){
     busyOn('ho5',res,ho5mode==='owner'?'Searching owners\u2026':'Searching the register\u2026');
     if(ho5mode==='owner'){
       const data=await lookupApi('owners',{q});
-      busyOff('ho5');
+      await busyOff('ho5');
       if(seq!==ho5seq) return;                       // a newer search won
       const rows=(data&&data.results)||[];
       ho5rows=rows; ho5kind='owner';
       res.innerHTML=rows.slice(0,6).map((r,i)=>`<div class="r" data-i="${i}"><span class="rn">${r.name||'—'}</span><span>${r.postcode||''} · ${r.trademark_count} marks</span></div>`).join('')||'<div class="r">No matches</div>';
     } else {
       const data=await lookupApi('marks',{q});
-      busyOff('ho5');
+      await busyOff('ho5');
       if(seq!==ho5seq) return;
       const rows=(data&&data.results)||[];
       ho5rows=rows; ho5kind='mark';
@@ -722,7 +722,7 @@ async function ho5PickOwner(o){
   const res=document.getElementById('ho5-res');
   busyOn('ho5',res,'Loading their trademarks\u2026');
   const data=await lookupApi('owner',{id:o.ipo_identifier});
-  busyOff('ho5');
+  await busyOff('ho5');
   const tms=(data&&data.trademarks)||[];
   // Drilling into an owner's marks — these become the clickable rows, so the
   // delegated handler must now treat them as marks, not owners.
@@ -736,7 +736,7 @@ async function ho5Pick(m){
   const res=document.getElementById('ho5-res');
   busyOn('ho5',res,'Reading the classes and terms\u2026');
   const data=await lookupApi('basket',{number:m.number});
-  busyOff('ho5');
+  await busyOff('ho5');
   const b=data&&data.basket;
   if(b&&b.classes){ state.classes=[...new Set([...state.classes,...b.classes])].sort((a,b)=>a-b);
     // The engine already worked out specific terms per class here (b.entries)
@@ -785,7 +785,7 @@ function ho3coSearch(){
     const seq=++ho3seq;
     busyOn('ho3',res,'Searching Companies House\u2026');
     const data=await lookupApi('company',{q});
-    busyOff('ho3');
+    await busyOff('ho3');
     if(seq!==ho3seq) return;                        // a newer search won
     const rows=(data&&data.results)||[];
     ho3rows=rows;
@@ -796,7 +796,7 @@ function ho3coSearch(){
 async function ho3coPick(c){
   busyOn('ho3',document.getElementById('ho3-res'),'Working out the classes\u2026');
   const data=await lookupApi('company-classes',{number:c.number});
-  busyOff('ho3');
+  await busyOff('ho3');
   const classes=(data&&data.classes)||[];
   const toAdd=classes.filter(x=>x.tier==='a'||x.tier==='b').map(x=>x.nice_class);
   state.classes=[...new Set([...state.classes,...toAdd])].sort((a,b)=>a-b);
@@ -845,19 +845,38 @@ async function ho3Apply(){
    fast endpoints above will normally never show it, while the two slow ones
    always will. Don't replace this with an immediate show; the delay is the
    point. */
-const _busy={};
+const _busy={}, _shownAt={};
+const BUSY_DELAY=500;   // show nothing below this — a flash reads as broken
+const BUSY_MIN=450;     // ...but once shown, stay up at least this long
+
 function busyOn(key,target,msg){
-  busyOff(key);
+  if(_busy[key]) clearTimeout(_busy[key]);
+  _shownAt[key]=0;
   _busy[key]=setTimeout(function(){
     _busy[key]=null;
     if(!target) return;
+    _shownAt[key]=Date.now();
     target.classList.remove('hidden');
     target.innerHTML='<div class="tmh-busy">'+
       '<span class="tmh-loader" role="status" aria-live="polite" aria-label="Loading">'+
       '<i></i><i></i><i></i></span>'+(msg?'<span class="msg">'+msg+'</span>':'')+'</div>';
-  },500);
+  },BUSY_DELAY);
 }
-function busyOff(key){ if(_busy[key]){clearTimeout(_busy[key]);} _busy[key]=null; }
+
+/* AWAIT this before rendering results.
+   Measured on a warm connection the lookup can come back in ~600ms — so
+   without a floor the loader would appear at 500ms and vanish 100ms later,
+   which is the strobe Jonathan's spec explicitly warns against. If it never
+   got drawn this returns immediately and costs nothing; only when it IS on
+   screen do we hold results back, and then by at most ~450ms. */
+function busyOff(key){
+  if(_busy[key]){ clearTimeout(_busy[key]); _busy[key]=null; return Promise.resolve(); }
+  const shown=_shownAt[key];
+  if(!shown) return Promise.resolve();
+  _shownAt[key]=0;
+  const left=BUSY_MIN-(Date.now()-shown);
+  return left>0 ? new Promise(r=>setTimeout(r,left)) : Promise.resolve();
+}
 
 /* The main search is a screen change and the longest wait, so it gets a
    blocking overlay — which also stops a second press of "Begin Free Search"
