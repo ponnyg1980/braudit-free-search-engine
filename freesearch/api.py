@@ -68,6 +68,10 @@ _PAGES = {
     '/class-assistant': 'class-assistant.html',
     '/search-bar': 'search-bar.html',
     '/search-box': 'search-box.html',          # compact drop-anywhere entry point
+    # free-search.html's CONFIG.BRAND_AUDIT_URL points at '/brand-audit/', so
+    # without this the "Request a Brand Audit" button on the results screen
+    # 404s. The file existed and was built; it was simply never routed.
+    '/brand-audit': 'brand-audit.html',
 }
 
 # Partners drop this one line into their page:
