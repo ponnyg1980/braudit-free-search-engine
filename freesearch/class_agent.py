@@ -104,7 +104,14 @@ class AgentError(RuntimeError):
 
 def _call(system: str, user: str, *, cfg: dict, max_tokens: int = 1024,
           retries: int = 2) -> str:
-    key = cfg.get('ANTHROPIC_API_KEY') or os.environ.get('ANTHROPIC_API_KEY')
+    # .strip() is load-bearing. Pasting a key into a dashboard field very
+    # easily carries a trailing newline, and a newline in a header value is
+    # rejected outright by http.client with "Invalid header value" — the key
+    # looks perfect in the UI and every request fails. This exact failure is
+    # already recorded in this project's notes for the Temmy keys, and
+    # api.py's _make_client() strips for the same reason.
+    key = (cfg.get('ANTHROPIC_API_KEY')
+           or os.environ.get('ANTHROPIC_API_KEY') or '').strip()
     if not key:
         raise AgentError('ANTHROPIC_API_KEY not configured')
     # No `temperature`: deprecated on current models, and rejected with a 400.
@@ -130,14 +137,19 @@ def _call(system: str, user: str, *, cfg: dict, max_tokens: int = 1024,
                      if b.get('type') == 'text']
             return ''.join(parts)
         except urllib.error.HTTPError as e:
-            last = f'{e.code} {e.read().decode()[:200]}'
+            last = f'HTTP {e.code}'
             if e.code in (400, 401, 403):     # our fault — retrying won't help
                 break
             time.sleep(1.5 * (attempt + 1))
         except Exception as e:                 # noqa: BLE001 - network flake
-            last = str(e)
+            # NEVER put the raw exception in `last`. A malformed key raises
+            # "Invalid header value b'sk-ant-...'" — i.e. the exception text
+            # CONTAINS THE KEY, and this message is returned to the caller.
+            # That leaked key material to anyone hitting the endpoint until
+            # it was caught on 10 Aug. Keep this generic.
+            last = type(e).__name__
             time.sleep(1.5 * (attempt + 1))
-    raise AgentError(f'model call failed: {last}')
+    raise AgentError(f'model call failed ({last})')
 
 
 def _json_from(txt: str) -> dict:

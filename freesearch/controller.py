@@ -265,9 +265,13 @@ def handle_enrich(payload: dict) -> dict:
             entry_point='freesearch',
         )
     except Exception as exc:  # never leak internals — this is called from a webhook relay
+        # Type name only. This path handles the Serper and Companies House
+        # keys, and an exception message can carry a key verbatim — that is
+        # exactly how the Anthropic key leaked through the sibling handler on
+        # 10 Aug before it was caught. Log it, don't return it.
+        print(f'[enrich] {type(exc).__name__}', flush=True)
         return {'ok': False, 'status': 502,
-                'error': 'Enrichment is temporarily unavailable. Please retry.',
-                'detail': f'{type(exc).__name__}: {exc}'}
+                'error': 'Enrichment is temporarily unavailable. Please retry.'}
 
     result.setdefault('status', 200)
     return result
@@ -321,9 +325,13 @@ def handle_suggest_classes(payload: dict) -> dict:
     try:
         out = class_agent.suggest(text, provides=provides)
     except Exception as exc:  # noqa: BLE001 - never fail the caller's UI
+        # Deliberately NO exception text in the response. This is a public
+        # endpoint, and on 10 Aug a malformed API key produced an exception
+        # whose message contained the key itself — which this handler then
+        # returned to the caller. Log server-side, tell the client nothing.
+        print(f'[suggest-classes] {type(exc).__name__}', flush=True)
         return {'ok': False, 'status': 502, 'error': 'agent_unavailable',
-                'message': 'Suggestions are unavailable — please pick classes manually.',
-                'detail': f'{type(exc).__name__}: {exc}'}
+                'message': 'Suggestions are unavailable — please pick classes manually.'}
 
     out.setdefault('status', 200 if out.get('ok') else 502)
     return out
