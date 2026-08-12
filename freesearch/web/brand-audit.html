@@ -13,6 +13,30 @@
     --radius:14px; --shadow:0 6px 24px rgba(45,69,90,.10);
     --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
   }
+
+  /* AI class suggestion (10 Aug) */
+  .ai-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 4px}
+  .ai-box{border:1.5px solid var(--pink);border-radius:12px;background:#fef4f7;padding:13px;margin:10px 0 4px}
+  .ai-box h4{margin:0 0 3px;font-size:13.5px;color:var(--navy)}
+  .ai-box .sub{font-size:12px;color:var(--muted);margin:0 0 9px}
+  .ai-cls{background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:7px}
+  .ai-cls .h{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:var(--navy)}
+  .ai-cls .h .n{color:var(--pink)}
+  .ai-cls .h input{width:16px;height:16px;accent-color:var(--pink);cursor:pointer}
+  .ai-term{display:flex;align-items:flex-start;gap:8px;padding:4px 0 4px 24px;font-size:12.5px}
+  .ai-term input{width:14px;height:14px;margin-top:2px;accent-color:var(--pink);cursor:pointer}
+  .ai-term .ev{color:var(--muted);font-size:11px;white-space:nowrap;margin-left:auto}
+  .ai-busy{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;padding:12px 0}
+  .tmh-loader{display:inline-flex;gap:8px;align-items:center}
+  .tmh-loader i{width:15px;height:17px;display:block;
+    clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    animation:tmh-hexpulse 1.15s ease-in-out infinite}
+  .tmh-loader i:nth-child(1){background:#E0004D}
+  .tmh-loader i:nth-child(2){background:#2D455A;animation-delay:.16s}
+  .tmh-loader i:nth-child(3){background:#E0004D;animation-delay:.32s}
+  @keyframes tmh-hexpulse{0%,80%,100%{transform:scale(.55);opacity:.25}40%{transform:scale(1);opacity:1}}
+  @media (prefers-reduced-motion:reduce){.tmh-loader i{animation:none;opacity:.6;transform:none}}
+
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);
     line-height:1.5;-webkit-font-smoothing:antialiased}
@@ -172,7 +196,18 @@
       <label class="fld">Your website URL <span class="opt">(optional)</span></label>
       <input type="url" id="bf-website" placeholder="https://yourbusiness.com" onblur="onBrandFieldChange()">
       <label class="fld">Describe the goods &amp; services this brand offers <span class="opt">(optional)</span></label>
-      <textarea id="bf-desc" onblur="onBrandFieldChange()"></textarea>
+      <textarea id="bf-desc" onblur="onBrandFieldChange()"
+        placeholder="e.g. We roast and sell speciality coffee beans, and run barista training courses."></textarea>
+      <!-- Same agent as Free Search and the staff tool: one endpoint, three
+           callers (Jonathan, 10 Aug — "transferrable to other applications").
+           Reads the description above, or the website if one was given. -->
+      <div class="ai-row">
+        <button type="button" class="btn ghost small" id="bf-ai" onclick="suggestForBrand()">
+          ✨ Suggest classes &amp; terms
+        </button>
+        <span class="muted-note" id="bf-ai-note">Uses your description above — or your website if you’ve given one.</span>
+      </div>
+      <div id="bf-ai-out"></div>
       <div class="cols">
         <div><label class="fld">Competitor name <span class="opt">(optional)</span></label><input type="text" id="bf-comp-name" onblur="onBrandFieldChange()"></div>
         <div><label class="fld">Competitor website <span class="opt">(optional)</span></label><input type="url" id="bf-comp-site" onblur="onBrandFieldChange()"></div>
@@ -360,6 +395,119 @@ function renderClassList(){const q=(document.getElementById('bf-cls-search').val
   const rows=Object.entries(NICE).filter(([n,l])=>!q||l.toLowerCase().includes(q)||('class '+n).includes(q))
     .map(([n,l])=>`<div class="row" onclick="addBrandClass(${n})"><span class="n">${n}</span><span>${l}</span></div>`).join('');
   document.getElementById('bf-cls-list').innerHTML=rows||'<div class="row"><span>No match</span></div>';}
+/* ── Class & term suggestion ─────────────────────────────────────────────
+   Calls POST /suggest-classes — the same endpoint Free Search and the staff
+   tool use. Nothing about classification lives here; this page just asks and
+   renders. Change the agent once and all three follow.
+
+   Every term shown came from a trademark registered in the last five years.
+   The model selects from that list by index and cannot write a term, so
+   nothing here is invented — the count beside each term is how many real
+   registrations use that exact wording.
+
+   Terms are pre-ticked per class and land in this brand's term basket, which
+   is what an application actually needs. Classes alone are not enough. */
+function engineBase(){ return (CONFIG.API_BASE||'').replace(/\/$/,''); }
+
+async function suggestForBrand(){
+  const desc=(document.getElementById('bf-desc').value||'').trim();
+  const site=(document.getElementById('bf-website').value||'').trim();
+  const name=(document.getElementById('bf-name').value||'').trim();
+  const out=document.getElementById('bf-ai-out');
+  const btn=document.getElementById('bf-ai');
+
+  if(desc.length<10 && !site){
+    out.innerHTML='<p class="muted-note">Add a short description above (or your website) and try again.</p>';
+    return;
+  }
+  btn.disabled=true;
+  out.innerHTML='<div class="ai-busy"><span class="tmh-loader" role="status" aria-live="polite" aria-label="Loading"><i></i><i></i><i></i></span><span>Working out the classes…</span></div>';
+
+  let text=desc;
+  // No description but a website? Read the site first — same two-step the
+  // Free Search route uses, so a misread page is visible rather than silent.
+  if(desc.length<10 && site){
+    try{
+      const r=await fetch(engineBase()+'/read-website',{method:'POST',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({url:site})});
+      const d=await r.json();
+      if(d && d.ok && d.answers){
+        const a=d.answers;
+        text=[a.pitch, a.goods&&('Goods: '+a.goods), a.services&&('Services: '+a.services),
+              a.unique].filter(Boolean).join(' — ');
+        // Put it in the description box so they can see and correct it.
+        document.getElementById('bf-desc').value=text;
+        onBrandFieldChange();
+      } else {
+        btn.disabled=false;
+        out.innerHTML='<p class="muted-note">'+((d&&d.message)||'We couldn’t read that website.')+' Please describe the brand above instead.</p>';
+        return;
+      }
+    }catch(e){
+      btn.disabled=false;
+      out.innerHTML='<p class="muted-note">We couldn’t reach that website. Please describe the brand above instead.</p>';
+      return;
+    }
+  }
+
+  try{
+    const r=await fetch(engineBase()+'/suggest-classes',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:text, context:name?{brand:name}:undefined})});
+    const d=await r.json();
+    btn.disabled=false;
+    if(!d || !d.ok || !(d.classes||[]).length){
+      out.innerHTML='<p class="muted-note">'+((d&&d.message)||'We couldn’t work that out — please pick classes manually.')+'</p>';
+      return;
+    }
+    renderBrandSuggestions(d, out);
+  }catch(e){
+    btn.disabled=false;
+    out.innerHTML='<p class="muted-note">Suggestions are unavailable — please pick classes manually.</p>';
+  }
+}
+
+function renderBrandSuggestions(d, out){
+  out.innerHTML='<div class="ai-box">'+
+    '<h4>Suggested for this brand</h4>'+
+    '<p class="sub">All ticked. Untick anything that doesn’t apply, then add. '+
+    'Every term below comes from a real registered trademark.</p>'+
+    d.classes.map(c=>`
+      <div class="ai-cls" data-c="${c.n}">
+        <label class="h"><input type="checkbox" class="ai-c" data-c="${c.n}" checked>
+          <span class="n">Class ${c.n}</span> <span>${c.label}</span></label>
+        ${(c.terms||[]).map(t=>`
+          <label class="ai-term"><input type="checkbox" class="ai-t" data-c="${c.n}"
+            data-t="${encodeURIComponent(t.term)}" checked>
+            <span>${t.term}</span>
+            <span class="ev">${t.n_marks.toLocaleString()} marks</span></label>`).join('')}
+      </div>`).join('')+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+
+      '<button type="button" class="btn primary small" onclick="applyBrandSuggestions()">Add to this brand</button>'+
+      '<button type="button" class="btn ghost small" onclick="document.getElementById(\'bf-ai-out\').innerHTML=\'\'">Cancel</button>'+
+    '</div></div>';
+  // Unticking a class unticks its terms — they can't apply without it.
+  out.querySelectorAll('.ai-c').forEach(cb=>cb.addEventListener('change',()=>{
+    out.querySelectorAll(`.ai-t[data-c="${cb.dataset.c}"]`).forEach(t=>{
+      t.checked=cb.checked; t.disabled=!cb.checked; });
+  }));
+}
+
+function applyBrandSuggestions(){
+  const out=document.getElementById('bf-ai-out');
+  const classes=[...out.querySelectorAll('.ai-c:checked')].map(cb=>+cb.dataset.c);
+  const terms=[...out.querySelectorAll('.ai-t:checked')].map(cb=>decodeURIComponent(cb.dataset.t));
+  if(!classes.length){ return; }
+  classes.forEach(n=>addBrandClass(n));
+  // Terms matter more than classes here — an application needs a
+  // specification, and these are real ones rather than free text.
+  terms.forEach(t=>{
+    if(!state.brandForm.terms.includes(t)) state.brandForm.terms.push(t);
+  });
+  renderBrandClassBasket(); renderTermBasket(); onBrandFieldChange();
+  out.innerHTML='<p class="muted-note">✓ Added '+classes.length+' class'+
+    (classes.length===1?'':'es')+' and '+terms.length+' term'+(terms.length===1?'':'s')+'.</p>';
+}
 function renderBrandClassBasket(){const b=document.getElementById('bf-cls-basket');
   b.innerHTML=state.brandForm.classes.length?state.brandForm.classes.map(n=>
     `<span class="chip"><b>${n}</b> ${NICE[n]} <span class="x" onclick="removeBrandClass(${n})">×</span></span>`).join('')
