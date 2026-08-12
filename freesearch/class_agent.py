@@ -248,6 +248,72 @@ def _stage2(text: str, cls: int, candidates: list[dict], cfg: dict) -> list[dict
 
 # ---------------------------------------------------------------- public API --
 
+_SA = """You read a company's website and fill in a short form about them.
+
+You will be given the visible text of a business's own website. Answer only \
+from what the text actually says. Where the site does not tell you something, \
+leave that field empty — do not infer, embellish, or write marketing copy.
+
+Reply with JSON only:
+{
+  "pitch": "one plain sentence: what this business does",
+  "provides": "goods" | "services" | "both" | "",
+  "goods": "the physical products they make or sell, comma separated",
+  "services": "the services they perform for people, comma separated",
+  "unique": "anything distinctive the site states about them",
+  "confidence": "high" | "medium" | "low"
+}
+
+"provides" is about what they OFFER: goods are physical things they make or \
+sell, services are things they do for customers. A shop selling other \
+people's products is still selling goods.
+
+Set confidence to "low" if the page is mostly navigation, a holding page, or \
+too vague to tell what they actually sell."""
+
+
+def answers_from_website(page_text: str, *, cfg: dict | None = None) -> dict:
+    """Turn website text into answers to the describe-your-business questions.
+
+    Jonathan, 10 Aug: "What the website URL should do, is try and answer the
+    questions from describe your business."
+
+    Deliberately fills the SAME form the visitor would otherwise complete by
+    hand, rather than jumping straight to classes. They see what we read off
+    their site, correct anything wrong, and only then do we classify. A page
+    we misread becomes a visible mistake they can fix, instead of a silently
+    wrong set of classes.
+
+    Never raises — a failed read means an empty form, not a broken page.
+    """
+    cfg = dict(cfg or {})
+    text = (page_text or '').strip()[:6000]
+    if len(text) < 40:
+        return {'ok': False, 'error': 'thin_page'}
+    try:
+        raw = _call(_SA, f'Website text:\n"""{text}"""', cfg=cfg, max_tokens=700)
+        data = _json_from(raw)
+    except AgentError as exc:
+        return {'ok': False, 'error': 'agent_failed', 'detail': str(exc)}
+
+    def s(k, cap=600):
+        v = data.get(k)
+        return str(v).strip()[:cap] if isinstance(v, (str, int, float)) else ''
+
+    provides = s('provides', 20).lower()
+    if provides not in ('goods', 'services', 'both'):
+        provides = ''
+    conf = s('confidence', 10).lower()
+    if conf not in ('high', 'medium', 'low'):
+        conf = 'medium'
+
+    return {'ok': True, 'answers': {
+        'pitch': s('pitch', 300), 'provides': provides,
+        'goods': s('goods'), 'services': s('services'),
+        'unique': s('unique'),
+    }, 'confidence': conf}
+
+
 def suggest(text: str, *, provides: str | None = None, cfg: dict | None = None,
             candidates_per_class: int = CANDIDATES_PER_CLASS) -> dict:
     """Suggest Nice classes and verified terms for a business description.

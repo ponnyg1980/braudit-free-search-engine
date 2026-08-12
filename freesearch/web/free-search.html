@@ -322,15 +322,12 @@
 
       <div class="help-opt gated" data-opt="2" onclick="openHelp('2')">
         <div class="ho-h"><b>Your website URL</b> <span class="tag ai">AI · email needed</span></div>
-        <div class="ho-s">We read your site and suggest classes — only as accurate as your website.</div>
+        <div class="ho-s">Only use this if your site has a genuine breakdown of the goods
+          &amp; services you offer. If it’s just a landing page, use
+          <b>Describe your business</b> instead — you’ll get a better answer.</div>
         <div class="ho-body" id="ho-2"></div>
       </div>
 
-      <div class="help-opt gated" data-opt="4" onclick="openHelp('4')">
-        <div class="ho-h"><b>A competitor’s website</b> <span class="tag ai">AI · email needed</span></div>
-        <div class="ho-s">Best when a direct competitor’s site covers exactly your products &amp; services.</div>
-        <div class="ho-body" id="ho-4"></div>
-      </div>
 
       <div style="text-align:center;margin-top:8px"><button class="link" onclick="toggleHelp(false)">Hide</button></div>
     </div>
@@ -644,7 +641,7 @@ function openHelp(opt){
 }
 function aiGateHtml(opt){
   const ph={1:'Describe what your business does — the more detail the better',
-            2:'https://your-website.com',4:'https://a-direct-competitor.com'}[opt];
+            2:'https://your-website.com'}[opt];
   if(!state.emailForAI){
     return `<div class="gate-note"><b>Step 1 of 2 — unlock this option.</b><br>
       This option uses AI to read what you give it, so we ask for your email
@@ -660,12 +657,11 @@ function aiInputHtml(opt,ph){
   if(opt==='1'){ setTimeout(q1Wire,0); return q1Html(); }
   const multi = opt==='1';
   const label = {1:'Step 2 — describe your business in your own words:',
-                 2:'Step 2 — your website address:',
-                 4:'Step 2 — a direct competitor\u2019s website address:'}[opt];
+                 2:'Step 2 — your website address:'}[opt];
   return `<div class="gate-note"><b>${label}</b><br>We\u2019ll process this with AI and include the suggested classes in your report to ${state.emailForAI}.</div>
     ${multi?`<textarea id="ho${opt}-in" style="width:100%;margin-top:8px;min-height:70px" placeholder="${ph}"></textarea>`
            :`<div class="hbar" style="margin-top:8px"><input id="ho${opt}-in" type="url" inputmode="url" autocomplete="url" placeholder="${ph}"></div>`}
-    <button class="btn ghost" style="margin-top:8px" onclick="aiSubmit('${opt}')">Add to my report</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="${opt==='2'?'readWebsite()':`aiSubmit('${opt}')`}">${opt==='2'?'Read my website':'Add to my report'}</button>
     <div class="muted-note" id="ho${opt}-out"></div>`;
 }
 /* ── Guided business description (route 1) ───────────────────────────────
@@ -807,22 +803,104 @@ function q1Submit(){
     answers:{pitch:pitch, provides:Q1.mode||'', goods:goods, services:services,
              unique:uniq, brand_age:Q1.age||'', in_use_for:Q1.dur||'',
              website:(Q1.web==='yes'?site:'')}};
+  runClassAgent(parts.join(' — '), Q1.mode||null, out);
   // A website given here is the visitor's own site, so it belongs on the
   // session proper, not buried in class_source — otherwise it never reaches
   // the resolver or Zoho. currentSnapshot() sends it as business_website.
   if(Q1.web==='yes' && site) state.businessWebsite=site;
   logEvent('class_source_applied','classes',
     {route:'1',provides:Q1.mode||'',brand_age:Q1.age||'',has_website:Q1.web==='yes'},true);
-  out.textContent='✓ Thanks — captured. Suggested classes will be in your emailed report.';
+}
+
+/* ── The agent ───────────────────────────────────────────────────────────
+   Calls POST /suggest-classes and drops the result into the SAME pre-ticked
+   picker the trademark and company routes use, so however a visitor got
+   here the confirm step looks identical.
+
+   Every term shown came from a mark registered in the last five years; the
+   model chose from that list by index and cannot write a term of its own.
+   Until 10 Aug this route captured an email and promised classes in a report
+   nothing sent — that promise is now actually kept. */
+function runClassAgent(text, provides, outEl){
+  const res=document.getElementById('ho1-res') || (function(){
+    const d=document.createElement('div'); d.className='hres'; d.id='ho1-res';
+    outEl.parentNode.insertBefore(d, outEl); return d; })();
+  busyOn('ho1', res, 'Working out your classes\u2026');
+  fetch((CONFIG.API_BASE||'').replace(/\/$/,'')+'/suggest-classes',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({text:text, provides:provides||undefined})
+  }).then(r=>r.json()).then(async function(d){
+    await busyOff('ho1');
+    if(!d || !d.ok || !(d.classes||[]).length){
+      res.innerHTML='<div class="r"><span>'+
+        ((d&&d.message)||'We couldn\u2019t work that out — please pick your classes below.')+
+        '</span></div>';
+      return;
+    }
+    // Flatten to the picker's shape. Terms ride along on class_source so the
+    // specification detail reaches Zoho even though the free UI only shows
+    // class numbers.
+    const items=d.classes.map(c=>({n:c.n, label:c.label, on:true}));
+    const terms={}; d.classes.forEach(c=>{ terms[c.n]=c.terms.map(t=>t.term); });
+    showClassPicker('1','What we think you need', items,
+      {value:text, label:'described business', agent_terms:terms, model:d.model});
+  }).catch(async function(){
+    await busyOff('ho1');
+    res.innerHTML='<div class="r"><span>Suggestions are unavailable — please pick your classes below.</span></div>';
+  });
 }
 function aiGate(opt){
   const e=(document.getElementById('ho'+opt+'-email').value||'').trim();
   if(!/.+@.+\..+/.test(e)){alert('Please enter a valid email.');return;}
   state.emailForAI=e;
   const body=document.getElementById('ho-'+opt);
-  const ph={1:'Describe what your business does — the more detail the better',2:'https://your-website.com',4:'https://a-direct-competitor.com'}[opt];
+  const ph={1:'Describe what your business does — the more detail the better',2:'https://your-website.com'}[opt];
   body.innerHTML=aiInputHtml(opt,ph);
 }
+/* Route 2: read their site, then hand them the SAME questions pre-filled.
+   Jonathan, 10 Aug: "What the website URL should do, is try and answer the
+   questions from describe your business." Showing what we read — rather than
+   jumping to classes — turns a misread page into a visible mistake they can
+   correct, instead of silently wrong classes. */
+function readWebsite(){
+  const val=(document.getElementById('ho2-in').value||'').trim();
+  const out=document.getElementById('ho2-out');
+  if(!/^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([\/#?].*)?$/i.test(val)){
+    out.textContent='That doesn\u2019t look like a website address — e.g. yourbusiness.co.uk'; return; }
+  const body=document.getElementById('ho-2');
+  busyOn('ho2', out, 'Reading your website\u2026');
+  fetch((CONFIG.API_BASE||'').replace(/\/$/,'')+'/read-website',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({url:val})
+  }).then(r=>r.json()).then(async function(d){
+    await busyOff('ho2');
+    if(!d || !d.ok){
+      out.textContent=(d&&d.message)||'We couldn\u2019t read that website.';
+      return;
+    }
+    state.businessWebsite=val;
+    // Swap in the guided questions, pre-filled from the page.
+    body.innerHTML='<div class="gate-note" style="margin-bottom:12px"><b>Here\u2019s what we read from your site.</b><br>'+
+      'Please check it and correct anything that\u2019s wrong — then we\u2019ll work out your classes.</div>'+q1Html();
+    q1Wire();
+    const a=d.answers||{};
+    if(a.pitch) document.getElementById('q1-pitch').value=a.pitch;
+    if(a.goods) document.getElementById('q1-goods').value=a.goods;
+    if(a.services) document.getElementById('q1-services').value=a.services;
+    if(a.unique) document.getElementById('q1-unique').value=a.unique;
+    if(a.provides){
+      const b=document.querySelector('#q1-mode button[data-m="'+a.provides+'"]');
+      if(b) b.click();
+    }
+    // They gave us the site, so pre-answer that question too.
+    const wy=document.querySelector('#q1-web button[data-w=yes]');
+    if(wy){ wy.click(); const w=document.getElementById('q1-website'); if(w) w.value=val; }
+  }).catch(async function(){
+    await busyOff('ho2');
+    out.textContent='We couldn\u2019t reach that website — please describe the business instead.';
+  });
+}
+
 function aiSubmit(opt){
   // Does NOT run live (AI cost / abuse guard). Captures the input + email; the
   // report build runs the AI class suggestion server-side once queued.

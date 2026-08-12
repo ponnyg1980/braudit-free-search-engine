@@ -32,7 +32,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from .controller import (handle_enrich, handle_free_search, handle_jurisdictions,
-                          handle_lookup, handle_suggest_classes)
+                          handle_lookup, handle_read_website, handle_suggest_classes)
 
 
 def _make_client():
@@ -202,7 +202,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.rstrip('/')
-        if path not in ('/free-search', '/enrich', '/suggest-classes'):
+        if path not in ('/free-search', '/enrich', '/suggest-classes', '/read-website'):
             self._send({'ok': False, 'error': 'not found'}, 404)
             return
         try:
@@ -215,6 +215,8 @@ class _Handler(BaseHTTPRequestHandler):
             out = handle_enrich(payload)
         elif path == '/suggest-classes':
             out = handle_suggest_classes(payload)
+        elif path == '/read-website':
+            out = handle_read_website(payload)
         else:
             out = handle_free_search(payload, _make_client())
         self._send(out, out.get('status', 200))

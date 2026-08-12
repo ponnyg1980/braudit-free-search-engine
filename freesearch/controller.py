@@ -329,6 +329,59 @@ def handle_suggest_classes(payload: dict) -> dict:
     return out
 
 
+def handle_read_website(payload: dict) -> dict:
+    """Read a visitor's own website and answer the business questions from it.
+
+    Jonathan, 10 Aug: "What the website URL should do, is try and answer the
+    questions from describe your business."
+
+    Returns the SAME answer shape the guided questions produce, so the client
+    can drop it straight into that form for the visitor to check and correct.
+    Deliberately does NOT classify — that is a second, explicit step once a
+    human has confirmed what we read is right.
+
+    Also deliberately honest about thin pages: a landing page or a
+    JavaScript-rendered shell yields nothing useful, and saying so beats
+    guessing from a domain name.
+    """
+    if not isinstance(payload, dict):
+        return {'ok': False, 'status': 400, 'error': 'payload must be a JSON object'}
+    url = str(payload.get('url') or '').strip()
+    if not url:
+        return {'ok': False, 'status': 400, 'error': 'url_required',
+                'message': 'Please give a website address.'}
+
+    try:
+        from . import web_reader, class_agent
+    except ImportError:
+        import web_reader, class_agent  # type: ignore
+
+    try:
+        text, final_url = web_reader.fetch_text(url)
+    except web_reader.FetchError as exc:
+        return {'ok': False, 'status': 200, 'error': 'fetch_failed',
+                'message': str(exc)}
+    except Exception:  # noqa: BLE001
+        return {'ok': False, 'status': 200, 'error': 'fetch_failed',
+                'message': "We couldn't read that website."}
+
+    if web_reader.looks_thin(text):
+        return {'ok': False, 'status': 200, 'error': 'thin_page',
+                'message': ("There isn't enough on that page for us to work from "
+                            "— it may be a landing page, or built in a way we "
+                            "can't read. Please describe the business instead.")}
+
+    out = class_agent.answers_from_website(text, cfg={})
+    if not out.get('ok'):
+        return {'ok': False, 'status': 200, 'error': out.get('error', 'agent_failed'),
+                'message': ("We couldn't make sense of that page — please "
+                            "describe the business instead.")}
+
+    out['status'] = 200
+    out['source_url'] = final_url
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Search-bar lookup handlers (the reusable component's backend)
 # ---------------------------------------------------------------------------
