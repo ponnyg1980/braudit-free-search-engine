@@ -168,8 +168,13 @@ def class_terms(cls: int, cfg: dict, *, years: int, top: int) -> list[dict]:
     """
     out: list[dict] = []
     for off in range(0, top, PAGE):
+        # count(DISTINCT t.id), NOT count(*). A mark can list the same term
+        # twice — usually an amended specification that kept both versions —
+        # and count(*) counts specification ENTRIES, not marks. On class 30's
+        # "coffee" that was 6,271 vs a true 6,182, about 1.4% high. It didn't
+        # change any ranking, but a column called n_marks must count marks.
         rows = qr(f"""
-SELECT lower(trim(term)) AS term, count(*) AS n_marks
+SELECT lower(trim(term)) AS term, count(DISTINCT t.id) AS n_marks
 FROM nice_class_trademarks nct
 JOIN nice_classes nc ON nc.id = nct.nice_class_id AND nc.number = {cls}
 JOIN trademarks t ON t.id = nct.trademark_id
@@ -205,6 +210,10 @@ def normalise(rows: list[dict]) -> list[tuple[str, int]]:
             continue
         if not re.search(r'[a-z]', t):
             continue
+        # Summing is right for the punctuation merge ('accounting software.'
+        # + 'accounting software'), though it can double-count the handful of
+        # marks that used BOTH spellings. Slight overstatement, capped below
+        # so share can never exceed 1.
         merged[t] = merged.get(t, 0) + int(r.get('n_marks') or 0)
     return sorted(merged.items(), key=lambda kv: (-kv[1], kv[0]))
 
@@ -221,6 +230,7 @@ def build(classes: list[int], cfg: dict, *, years: int, top: int,
             terms = normalise(raw)
             rows = []
             for term, n in terms:
+                n = min(n, total) if total else n   # merge can't exceed the class
                 share = (n / total) if total else 0.0
                 rows.append({'nice_class': cls, 'term': term, 'n_marks': n,
                              'class_marks': total, 'share': round(share, 5),
