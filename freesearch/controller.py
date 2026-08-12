@@ -273,6 +273,62 @@ def handle_enrich(payload: dict) -> dict:
     return result
 
 
+def handle_suggest_classes(payload: dict) -> dict:
+    """Class & term suggestion — the shared entry point.
+
+    Jonathan, 10 Aug: "I want this sonnet agent to be accessible in Brand
+    Audit and also as a standalone class selection tool for my staff... all
+    of these class selection tools we want to build in a way that is
+    transferrable to other applications."
+
+    So this is deliberately generic. It takes text and returns classes with
+    verified terms; it knows nothing about Free Search, Brand Audit or who is
+    calling. Every caller — the wizard, the audit form, the staff tool, and
+    whatever comes next — uses this same shape.
+
+    Request:
+      { text, provides?: 'goods'|'services'|'both', context?: {...} }
+
+    `context` is an optional dict of extra description the caller has (goods
+    list, services list, tagline, anything). It is appended to the text, not
+    interpreted, so a new caller can pass new fields without changing this.
+
+    Never raises: the class picker must still work when the agent is down.
+    """
+    if not isinstance(payload, dict):
+        return {'ok': False, 'status': 400, 'error': 'payload must be a JSON object'}
+
+    text = str(payload.get('text') or '').strip()
+    ctx = payload.get('context') or {}
+    if isinstance(ctx, dict):
+        extra = [f'{k.replace("_", " ")}: {v}' for k, v in ctx.items()
+                 if v and isinstance(v, (str, int, float))]
+        if extra:
+            text = (text + '\n' + '\n'.join(extra)).strip()
+    if len(text) < 10:
+        return {'ok': False, 'status': 400, 'error': 'too_short',
+                'message': 'Tell us a little more about the business.'}
+
+    provides = payload.get('provides')
+    if provides not in ('goods', 'services', 'both'):
+        provides = None
+
+    try:
+        from . import class_agent
+    except ImportError:
+        import class_agent  # type: ignore
+
+    try:
+        out = class_agent.suggest(text, provides=provides)
+    except Exception as exc:  # noqa: BLE001 - never fail the caller's UI
+        return {'ok': False, 'status': 502, 'error': 'agent_unavailable',
+                'message': 'Suggestions are unavailable — please pick classes manually.',
+                'detail': f'{type(exc).__name__}: {exc}'}
+
+    out.setdefault('status', 200 if out.get('ok') else 502)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Search-bar lookup handlers (the reusable component's backend)
 # ---------------------------------------------------------------------------

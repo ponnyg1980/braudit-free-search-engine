@@ -32,7 +32,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from .controller import (handle_enrich, handle_free_search, handle_jurisdictions,
-                          handle_lookup)
+                          handle_lookup, handle_suggest_classes)
 
 
 def _make_client():
@@ -72,6 +72,9 @@ _PAGES = {
     # without this the "Request a Brand Audit" button on the results screen
     # 404s. The file existed and was built; it was simply never routed.
     '/brand-audit': 'brand-audit.html',
+    # Standalone staff tool over POST /suggest-classes (Jonathan, 10 Aug).
+    # Same endpoint Free Search and Brand Audit call — one agent, three UIs.
+    '/class-agent': 'class-agent.html',
 }
 
 # Partners drop this one line into their page:
@@ -199,7 +202,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.rstrip('/')
-        if path not in ('/free-search', '/enrich'):
+        if path not in ('/free-search', '/enrich', '/suggest-classes'):
             self._send({'ok': False, 'error': 'not found'}, 404)
             return
         try:
@@ -210,6 +213,8 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if path == '/enrich':
             out = handle_enrich(payload)
+        elif path == '/suggest-classes':
+            out = handle_suggest_classes(payload)
         else:
             out = handle_free_search(payload, _make_client())
         self._send(out, out.get('status', 200))
