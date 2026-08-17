@@ -17,6 +17,7 @@ the band — because the number invites argument and the band sells the audit.
 """
 from __future__ import annotations
 
+from . import viability as vb
 from .models import CompanyInfo, FreeSearchResult, MarkRecord
 
 TOP_N = 5
@@ -92,11 +93,20 @@ def _shortlist_row(r: MarkRecord, *, gated: bool) -> dict:
     return row
 
 
-def serialize_result(result: FreeSearchResult, *, gated: bool = False) -> dict:
+def serialize_result(result: FreeSearchResult, *, gated: bool = False,
+                     brand_years: float | None = None,
+                     sector_terms=()) -> dict:
     """Build the results-page payload.
 
     `gated=False` -> anonymous view (counts + top-5 shortlist, no detail).
     `gated=True`  -> unlocked view after lead capture (full list + ownership).
+
+    `brand_years` / `sector_terms` feed the viability opinion and are both
+    optional: they come from the guided questions and the chosen class terms,
+    and a visitor who skipped that route simply gets the opinion computed from
+    the register evidence alone. Nothing is invented to fill the gap — an
+    unanswered "how long have you used it?" scores as no evidence of use, not
+    as a penalty.
     """
     conflicts = result.conflicts
     active = [r for r in conflicts if _is_active(r)]
@@ -115,6 +125,25 @@ def serialize_result(result: FreeSearchResult, *, gated: bool = False) -> dict:
         disclaimers.append(LOGO_TAGLINE_DISCLAIMER)
     disclaimers.append(result.disclaimer())  # UK-only + jurisdiction gap
 
+    band = _band_counts(conflicts)
+    summary = {
+        'total_flagged': result.total_conflicts,
+        'displayed': len(rows),
+        'high': band['High Risk'],
+        'medium': band['Medium Risk'],
+        'low': band['Low Risk'],
+        'overall_risk': result.overall_risk,
+        'active_count': len(active),
+        'truncated': result.truncated,
+    }
+
+    # The on-page opinion. Computed here rather than in the browser so the
+    # emailed report, the Zoho record and the screen can never disagree about
+    # what we told the visitor — the front end renders this, it does not
+    # recalculate it.
+    opinion = vb.verdict(summary, name=req.word_marks[0] if req.word_marks else '',
+                         years=brand_years, sector_terms=sector_terms)
+
     return {
         'tenant_id': req.tenant_id,
         'searched_office': result.searched_office,
@@ -124,34 +153,46 @@ def serialize_result(result: FreeSearchResult, *, gated: bool = False) -> dict:
             'has_logo': bool(req.image_bytes),
             'classes': list(req.classes),
         },
-        'summary': {
-            'total_flagged': result.total_conflicts,
-            'displayed': len(rows),
-            'high': _band_counts(conflicts)['High Risk'],
-            'medium': _band_counts(conflicts)['Medium Risk'],
-            'low': _band_counts(conflicts)['Low Risk'],
-            'overall_risk': result.overall_risk,
-            'active_count': len(active),
-            'truncated': result.truncated,
-        },
+        'summary': summary,
+        'viability': opinion,
         'top_results': rows if not gated else rows[:TOP_N],
         'all_results': rows if gated else None,   # full list only when unlocked
         'gated': gated,
         'disclaimers': disclaimers,
         'notes': result.notes,
+        # Copy supplied verbatim by Jonathan, 11 Aug (one typo corrected).
+        # `lead` decides which of the two gets the primary button; both are
+        # always on the page, because telling someone they may not apply is
+        # not our call to make, and hiding the audit from a messy result would
+        # be the same mistake in the other direction.
         'cta': {
+            'lead': opinion['lead'],
+            'brand_audit': {
+                'label': 'Request a Brand Audit — £99',
+                'eyebrow': 'Our recommended next step',
+                'blurb': "You've already done the hard work. The Brand Audit "
+                         'expands on this search to cover logos, taglines, '
+                         'social media, marketplaces, domains, company '
+                         'registers, international & prior-use risk, and '
+                         'allows us to give you all the information you need '
+                         'to make an informed decision.',
+                'offer': 'The great news is we can offer the Brand Audit and '
+                         'consultation worth £299 for only £99 — and if you '
+                         'choose to use us for your application we deduct it '
+                         'from your fees.',
+            },
+            'apply': {
+                'label': 'Proceed to application',
+                'blurb': 'Ready to go? Start your application and one of our '
+                         'team will check the detail with you before anything '
+                         'is filed.',
+            },
             'download_report': {
-                'label': 'Download your full report',
+                'label': 'Email me the full results',
                 'requires': ['first_name', 'last_name', 'email', 'phone',
                              'consent'],
                 'unlocks': 'Full conflict list with ownership, company status '
                            'and goods/services detail.',
-            },
-            'brand_audit': {
-                'label': 'Request a Brand Audit',
-                'blurb': 'Covers logos, taglines, social media, marketplaces, '
-                         'domains, company registers and international '
-                         'registers — plus prior-use risk.',
             },
         },
     }
