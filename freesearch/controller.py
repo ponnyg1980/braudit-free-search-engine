@@ -126,10 +126,28 @@ def parse_request(payload: dict) -> FreeSearchRequest:
         extra = [extra]
     word_marks = tuple(m for m in (name, *[_clean_mark(x, 'word_marks')
                                            for x in extra]) if m)[:MAX_WORD_MARKS]
-    if not word_marks:
-        raise BadRequest('a name (word mark) is required')
-
     tagline = _clean_mark(payload.get('tagline'), 'tagline') or None
+
+    # Word / tagline rule (Jonathan, 17 Aug):
+    #   word only        -> search the word
+    #   word AND tagline -> search the word
+    #   tagline only     -> search the tagline
+    #
+    # The reason step 2 lets the name field be edited is that people type a
+    # tagline into the search box, realise it is a tagline, and want to move
+    # it. So the two fields have to be able to swap, and a request with only a
+    # tagline has to be searchable.
+    #
+    # The engine below already handled this — service.py builds its phrase
+    # list from (*word_marks, tagline) and even carries a "No word mark or
+    # tagline supplied" note. This function was the only thing in the way: it
+    # hard-required a name and rejected a tagline-only request at the door.
+    if not word_marks and tagline:
+        word_marks = (tagline,)
+        tagline = None          # it IS the search subject now, not an extra
+    if not word_marks:
+        raise BadRequest('a name or a tagline is required')
+
     image = _decode_image(payload.get('logo') or payload.get('image_base64'))
 
     trading_now = _clean_codes(
@@ -183,9 +201,17 @@ def handle_free_search(payload: dict, client, *, gated: bool = False) -> dict:
                 'error': 'Search is temporarily unavailable. Please retry.'}
 
     years, terms = _opinion_inputs(payload)
-    return {'ok': True, 'status': 200,
-            'result': serialize_result(result, gated=gated,
-                                       brand_years=years, sector_terms=terms)}
+    out = serialize_result(result, gated=gated,
+                           brand_years=years, sector_terms=terms)
+    # Which of the two fields is the lead's brand name. The word field wins
+    # whenever it has anything in it; on a tagline-only search there is no
+    # word, so the tagline becomes the brand name and the record says so
+    # rather than silently presenting a strapline as a trading name.
+    word = _clean_mark(payload.get('name') or payload.get('word_mark'), 'name')
+    tag = _clean_mark(payload.get('tagline'), 'tagline') or None
+    out['query']['brand_name'] = word or tag or ''
+    out['query']['brand_name_source'] = 'word' if word else ('tagline' if tag else 'none')
+    return {'ok': True, 'status': 200, 'result': out}
 
 
 def _opinion_inputs(payload: dict):
