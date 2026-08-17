@@ -44,14 +44,11 @@
   embed.js navigate the real page. Standalone, it just navigates itself.
   Do not "simplify" this to location.href without re-testing embedded.
 -->
+  <!-- Shared design layer. Loads BEFORE this page's own <style>, so
+       anything below overrides it — page-specific rules stay local. -->
+  <link rel="stylesheet" href="/braudit.css">
 <style>
   /* TMH brand tokens — kept in sync with free-search.html / brand_tokens.py */
-  :root{
-    --pink:#E51652; --pink-dark:#c01044; --navy:#2D455A;
-    --ink:#1f2a33; --muted:#6b7a86; --line:#e3e8ec; --white:#fff;
-    --radius:14px; --shadow:0 6px 24px rgba(45,69,90,.10);
-    --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
-  }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
   body{font-family:var(--font);color:var(--ink);background:transparent}
