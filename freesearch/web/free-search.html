@@ -177,8 +177,58 @@
   .disc{background:#fbfcfd;border:1px solid var(--line);border-left:4px solid var(--navy);
     border-radius:8px;padding:12px 14px;margin:10px 0;font-size:13px;color:var(--navy)}
 
-  .report{border:1.5px solid var(--pink);border-radius:14px;padding:22px;margin-top:22px;background:#fef4f7}
-  .report h3{margin:0 0 4px}
+  /* ---- the opinion block (viability, ported from the Industry Report) ----
+     Dials are pure conic-gradient: no canvas, no charting library, and they
+     survive print-to-PDF, which matters because the same markup has to work
+     in the emailed report. */
+  .opinion{border:1px solid var(--line);border-radius:14px;padding:20px 22px;
+    margin-top:24px;background:linear-gradient(180deg,#fbfcfd,#fff)}
+  .opinion .op-head{margin:0 0 14px;font-size:13px;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--muted)}
+  .op-top{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+  .op-master{flex:0 0 auto}
+  .op-say{flex:1;min-width:240px}
+  .op-say h4{margin:0 0 8px;font-size:19px;color:var(--navy);line-height:1.3}
+  .op-say p{margin:0 0 9px;font-size:14px;line-height:1.55;color:var(--ink)}
+  .op-say p:last-child{margin-bottom:0}
+  .op-say p.op-caveat{font-size:13px;color:var(--muted)}
+  .dial{border-radius:50%;display:grid;place-items:center;position:relative;
+    background:conic-gradient(var(--dc,var(--navy)) calc(var(--v,0)*3.6deg),#ECEFF1 0deg)}
+  .dial:before{content:'';position:absolute;border-radius:50%;background:#fff;
+    inset:11%}
+  .dial .val,.dial .cap{position:relative;z-index:1}
+  .dial-master{width:118px;height:118px;flex-direction:column}
+  .dial-master .val{font-size:27px;font-weight:800;color:var(--navy);line-height:1}
+  .dial-master .cap{display:block;font-size:11px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+  .op-dials{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px;
+    padding-top:18px;border-top:1px solid var(--line)}
+  @media(max-width:640px){.op-dials{grid-template-columns:repeat(2,1fr)}}
+  .subdial{text-align:center}
+  .subdial .dial{width:62px;height:62px;margin:0 auto 7px}
+  .subdial .dial .val{font-size:15px;font-weight:800;color:var(--navy)}
+  .subdial .nm{font-size:12px;font-weight:700;color:var(--navy)}
+  .subdial .sb{font-size:11px;color:var(--muted);line-height:1.35;margin-top:2px}
+
+  /* ---- recommended next steps ---- */
+  .next-head{margin:26px 0 4px;color:var(--navy)}
+  .nexts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px;
+    align-items:stretch}
+  @media(max-width:700px){.nexts{grid-template-columns:1fr}}
+  .nx{border:1px solid var(--line);border-radius:14px;padding:20px;background:#fff;
+    display:flex;flex-direction:column}
+  .nx.lead{border:2px solid var(--pink);background:#fef4f7}
+  .nx .eyebrow{font-size:11px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--pink);margin-bottom:6px}
+  .nx h4{margin:0 0 8px;color:var(--navy);font-size:17px}
+  .nx p{margin:0 0 10px;font-size:13.5px;line-height:1.55;color:var(--ink)}
+  .nx .offer{background:#fff;border:1px dashed var(--pink);border-radius:10px;
+    padding:10px 12px;font-size:13px;color:var(--navy);margin:0 0 14px}
+  .nx.lead .offer{background:#fff}
+  .nx .btn{margin-top:auto}
+
+  .report{border:1px solid var(--line);border-radius:14px;padding:22px;margin-top:22px;background:#fbfcfd}
+  .report h3{margin:0 0 4px;font-size:17px}
   .report .sub{color:var(--muted);font-size:14px;margin:0 0 14px}
   .cta.audit{border:1.5px solid var(--line);border-radius:12px;padding:18px;text-align:center;margin-top:14px}
   .cta.audit h4{margin:0 0 6px;color:var(--navy)}
@@ -382,11 +432,33 @@
     <table class="res"><thead><tr>
       <th>Risk</th><th>Type</th><th>Mark</th><th>Status</th>
     </tr></thead><tbody id="res-rows"></tbody></table>
+
+    <!-- OPINION — the viability read, ported from the Industry Report's
+         Tailored Report. Rendered from what the engine sent; never
+         recalculated here, so screen, email and CRM can't disagree. -->
+    <div class="opinion" id="res-opinion">
+      <h3 class="op-head">Our view</h3>
+      <div class="op-top">
+        <div class="op-master">
+          <div class="dial dial-master" id="op-dial"><span class="val" id="op-val">—</span><span class="cap">viable</span></div>
+        </div>
+        <div class="op-say">
+          <h4 id="op-headline"></h4>
+          <div id="op-body"></div>
+        </div>
+      </div>
+      <div class="op-dials" id="op-dials"></div>
+    </div>
+
     <div id="res-disclaimers"></div>
 
-    <!-- soft lead capture -->
+    <!-- RECOMMENDED NEXT STEPS — order adapts to what the search found -->
+    <h3 class="next-head">Recommended next steps</h3>
+    <div class="nexts" id="res-nexts"></div>
+
+    <!-- soft lead capture — third option, never a gate -->
     <div class="report" id="report-form">
-      <h3>Get your full report by email</h3>
+      <h3>Or have the full results emailed to you</h3>
       <p class="sub">See ownership, company status and goods &amp; services for every result — sent straight to your inbox.</p>
       <div class="cols">
         <div><label class="fld">First name</label><input id="r-first" type="text"></div>
@@ -400,12 +472,6 @@
       <input id="r-biz" type="text">
       <div class="err hidden" id="r-err"></div>
       <button class="btn primary block" style="margin-top:16px" onclick="sendReport()">Send my report</button>
-    </div>
-
-    <div class="cta audit">
-      <h4>Prefer a full Brand Audit?</h4>
-      <p>Logos, taglines, social media, marketplaces, domains, company registers, international &amp; prior-use risk.</p>
-      <button class="btn ghost" id="brand-audit-cta" onclick="goToBrandAudit()">Request a Brand Audit</button>
     </div>
 
     <div class="actions">
@@ -465,7 +531,13 @@ const CONFIG = (function(){
     RESUME_NAME:q.get('q')||'',
     // Where the new standalone Brand Audit page lives — point this at wherever
     // it's actually deployed (same open question as this page's own hosting).
-    BRAND_AUDIT_URL:'/brand-audit/' };
+    BRAND_AUDIT_URL:'/brand-audit/',
+    // "Proceed to application" — the other half of the recommended next
+    // steps. Points at the enquiry route rather than a checkout: an
+    // application still needs a human to check the specification before
+    // anything is filed, and promising otherwise on a free word search
+    // would be the one thing this page must not do.
+    APPLY_URL:'https://www.thetrademarkhelpline.com/make-an-enquiry/' };
 })();
 // The `journey` Edge Function is a sibling of `free-search` (same Supabase
 // project) — swap the last path segment rather than needing a second config
@@ -1390,6 +1462,99 @@ function renderResults(r){const s=r.summary;
       <td>${x.type}</td><td><b>${x.mark}</b>${co}</td><td>${x.status}</td></tr>`;}).join('');
   document.getElementById('res-rows').innerHTML=rows;
   document.getElementById('res-disclaimers').innerHTML=r.disclaimers.map(d=>`<div class="disc">${d}</div>`).join('');
+  renderOpinion(r);
+  renderNexts(r);
+}
+
+/* ── the opinion ────────────────────────────────────────────────────────
+   Every number and every sentence here was computed by the engine
+   (freesearch/viability.py, ported from the Industry Report's Tailored
+   Report). This function only paints them. Do NOT add scoring logic here:
+   the moment the browser can reach a different verdict from the server, the
+   screen and the emailed report start telling the visitor different things.
+
+   If an older engine responds without a `viability` block the whole section
+   hides rather than showing an empty dial. */
+const OP_COLOUR=v=>v>=70?'#2E7D32':(v>=45?'#E69500':'#C0392B');
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,
+  c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function renderOpinion(r){
+  const box=document.getElementById('res-opinion'), v=r.viability;
+  if(!v||typeof v.score!=='number'){ box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  const d=document.getElementById('op-dial');
+  d.style.setProperty('--v',v.score);
+  // Tier colour, NOT the score's own colour. A name can score 76 and still be
+  // one we've flagged for advice because of a close mark on the register; if
+  // the dial went green off its own number it would argue with the headline
+  // sitting next to it. The engine sends the colour for exactly this reason.
+  d.style.setProperty('--dc',v.colour||OP_COLOUR(v.score));
+  document.getElementById('op-val').textContent=v.score+'%';
+  document.getElementById('op-headline').textContent=v.headline||'';
+  // The last paragraph is always the "this is not legal advice, book an
+  // appointment" line — styled quieter so it reads as a footnote and not as
+  // a retraction of everything above it.
+  const body=(v.body||[]);
+  document.getElementById('op-body').innerHTML=body.map((p,i)=>
+    `<p${i===body.length-1?' class="op-caveat"':''}>${esc(p)}</p>`).join('');
+  document.getElementById('op-dials').innerHTML=(v.dials||[]).map(x=>{
+    // A negative dial is scored as HEADROOM (100 = clear), so the same
+    // green-is-good colour rule applies to it — no inversion needed.
+    return `<div class="subdial">
+      <div class="dial" style="--v:${x.value};--dc:${OP_COLOUR(x.value)}"><span class="val">${x.value}</span></div>
+      <div class="nm">${esc(x.label)}</div><div class="sb">${esc(x.sub)}</div></div>`;}).join('');
+}
+
+/* ── recommended next steps ──────────────────────────────────────────────
+   Both options are always shown. Which one gets the pink card is the
+   engine's call (`cta.lead`): a clean result leads with the application
+   because that is what most people want and it would be dishonest to push
+   an audit they don't need; a messy one leads with the audit because that
+   is the answer that actually saves them a filing fee. */
+function renderNexts(r){
+  // Fallbacks matter here: the engine and this page deploy separately, and a
+  // results screen that renders two blank cards because the engine is one
+  // version behind is worse than one that renders the standing copy.
+  const c=(r.cta||{}), a=c.brand_audit||{}, ap=c.apply||{};
+  if(!a.blurb) a.blurb="You've already done the hard work. The Brand Audit "+
+    'expands on this search to cover logos, taglines, social media, '+
+    'marketplaces, domains, company registers, international & prior-use '+
+    'risk, and allows us to give you all the information you need to make an '+
+    'informed decision.';
+  if(!a.offer) a.offer='The great news is we can offer the Brand Audit and '+
+    'consultation worth £299 for only £99 — and if you choose to use us for '+
+    'your application we deduct it from your fees.';
+  if(!ap.blurb) ap.blurb='Ready to go? Start your application and one of our '+
+    'team will check the detail with you before anything is filed.';
+  if(!a.label) a.label='Request a Brand Audit — £99';
+  const lead=(c.lead==='application')?'application':'audit';
+  const audit=`<div class="nx${lead==='audit'?' lead':''}">
+    ${lead==='audit'?'<div class="eyebrow">'+esc(a.eyebrow||'Our recommended next step')+'</div>':''}
+    <h4>Brand Audit</h4>
+    <p>${esc(a.blurb||'')}</p>
+    ${a.offer?`<div class="offer">${esc(a.offer)}</div>`:''}
+    <button class="btn ${lead==='audit'?'primary':'ghost'} block" id="brand-audit-cta"
+      onclick="goToBrandAudit()">${esc(a.label||'Request a Brand Audit')}</button></div>`;
+  const apply=`<div class="nx${lead==='application'?' lead':''}">
+    ${lead==='application'?'<div class="eyebrow">Our recommended next step</div>':''}
+    <h4>Proceed to application</h4>
+    <p>${esc(ap.blurb||'')}</p>
+    <button class="btn ${lead==='application'?'primary':'ghost'} block"
+      onclick="goToApply()">${esc(ap.label||'Proceed to application')}</button></div>`;
+  document.getElementById('res-nexts').innerHTML=
+    lead==='audit' ? audit+apply : apply+audit;
+}
+function goToApply(){
+  logEvent('apply_clicked','results',
+    {score:(state.lastResult&&state.lastResult.viability||{}).score||null},false);
+  // Same sendBeacon reasoning as goToBrandAudit(): the page is about to go.
+  if(state.sessionId && navigator.sendBeacon){
+    try{ navigator.sendBeacon(journeyBase()+'/session/event',
+      new Blob([JSON.stringify({session_id:state.sessionId,
+        event_type:'apply_clicked',screen:'results',payload:{},
+        snapshot:{status:'apply_clicked'}})],{type:'application/json'})); }catch(e){}
+  }
+  window.open(CONFIG.APPLY_URL,'_blank','noopener');
 }
 
 /* soft lead capture -> portal offer */
