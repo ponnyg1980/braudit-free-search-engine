@@ -4,15 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Free Trademark Search — The Trademark Helpline</title>
+  <!-- Shared design layer. Loads BEFORE this page's own <style>, so
+       anything below overrides it — page-specific rules stay local. -->
+  <link rel="stylesheet" href="/braudit.css">
 <style>
   /* ---- TMH brand tokens (from brand_tokens.py) ---- */
-  :root{
-    --pink:#E51652; --pink-dark:#c01044; --navy:#2D455A; --navy-soft:#3d5a74;
-    --ink:#1f2a33; --muted:#6b7a86; --line:#e3e8ec; --bg:#f5f7f9; --white:#fff;
-    --r-high:#F4B084; --r-med:#FFE699; --r-low:#C5E0B4; --r-neg:#D9D9D9;
-    --radius:14px; --shadow:0 6px 24px rgba(45,69,90,.10);
-    --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
-  }
   /* ---- TMH hexagon pulse loader (Jonathan's spec, 10 Aug 2026) ----
      Pure CSS, no images, no JS — starts animating the moment it appears.
      Shown only where a wait is genuinely long enough to warrant it; the
