@@ -197,8 +197,21 @@ def _tier(master_score: int, high: int) -> tuple[str, bool]:
 _RANK = {'crowded': 0, 'mixed': 1, 'good': 2, 'strong': 3}
 # The master dial takes its colour from the TIER, not from its own number, so
 # the override can never leave a green dial next to a red-flag headline.
-_TIER_COLOUR = {'strong': '#2E7D32', 'good': '#2E7D32',
-                'mixed': '#E69500', 'crowded': '#C0392B'}
+# These MUST stay in step with --dial-good / --dial-mid / --dial-poor in
+# freesearch/web/braudit.css. They are sent in the payload rather than chosen
+# in the browser, so the emailed report and the screen cannot disagree.
+#
+# The amber moved from #E69500 to #9A7015 on 17 Aug: measured against the dial
+# track (#E9EDF1) the old value was 2.06:1, i.e. the ring was barely
+# distinguishable from the empty part of it. 3:1 is the WCAG minimum for a
+# graphic that carries meaning, and this one carries the whole score.
+DIAL_GOOD = '#1F8A5B'
+DIAL_MID = '#9A7015'
+DIAL_POOR = '#C0392B'
+
+
+_TIER_COLOUR = {'strong': DIAL_GOOD, 'good': DIAL_GOOD,
+                'mixed': DIAL_MID, 'crowded': DIAL_POOR}
 
 
 def _body(tier: str, *, name: str, high: int, medium: int, low: int,
@@ -316,7 +329,7 @@ def verdict(summary: dict, *, name: str, years: float | None = None,
 
 def _value_colour(v: int) -> str:
     """Green / amber / red read off the value itself — the sub-dial rule."""
-    return '#2E7D32' if v >= 70 else ('#E69500' if v >= 45 else '#C0392B')
+    return DIAL_GOOD if v >= 70 else (DIAL_MID if v >= 45 else DIAL_POOR)
 
 
 def _dial(key: str, label: str, sub: str, scores: dict,
