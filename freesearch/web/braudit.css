@@ -1,0 +1,200 @@
+/* ============================================================================
+   braudit.css — the shared design layer for every Braudit widget.
+
+   Served by the engine at /braudit.css and linked by all six pages:
+   free-search, brand-audit, class-agent, class-assistant, search-bar,
+   search-box.
+
+   WHY THIS FILE EXISTS
+   --------------------
+   Until Aug 2026 each of those six pages carried its own private copy of the
+   design — 640 lines of CSS across the set — and they had already drifted:
+   class-agent was missing five tokens, class-assistant was missing four and
+   had invented four of its own, and --radius was 12px on one page and 14px on
+   the rest. Six copies means every change is a six-file job and every missed
+   file is a widget that quietly looks wrong on a partner's site.
+
+   WHAT BELONGS HERE
+   -----------------
+   Only things genuinely shared: the tokens, the reset, and the primitives
+   that appear on four or more of the six pages (.wrap, .card, .btn, .seg,
+   .err, .fld, .disc, the risk pills, the dials and the loader).
+
+   Anything one page needs alone stays in that page's <style> block, which
+   loads after this file and therefore wins. class-assistant's --a/--b/--c/--d
+   tier colours are the reference case: page-specific, so page-local.
+
+   Token values here are the design handoff of 17 Aug 2026.
+   ========================================================================= */
+
+:root{
+  /* ---- brand ---- */
+  --pink:#E51652; --pink-dark:#c01044; --navy:#2D455A; --navy-soft:#3d5a74;
+  --ink:#1f2a33; --muted:#6b7a86; --line:#e3e8ec; --bg:#f5f7f9; --white:#fff;
+
+  /* ---- added by the design handoff ---- */
+  --pink-hover:#c9134a;    /* every action button hover */
+  --pink-tint:#FFF5F8;     /* selected option block background */
+  --pink-line:#E9ADC1;     /* dashed upload zone, dashed offer box */
+  --pink-badge:#FDE7EE;    /* term chips */
+  --pink-on-navy:#FFB3C7;  /* eyebrow text on navy bands */
+  --navy-deep:#1c2d3b;
+  --slate:#3f4c58;         /* body copy inside cards */
+  --dial-track:#E9EDF1;
+  --eg-tile:#FDF3E3;       /* cream behind the worked examples */
+  --eg-tile-line:#F0E3CB;
+
+  /* ---- risk ----
+     Two systems on purpose. The flat --r-* fills are for the split bar,
+     where solid blocks of colour read as proportion. The pill colours are
+     text-on-tint, because the flat fills read as highlighter at pill size. */
+  --r-high:#F4B084; --r-med:#FFE699; --r-low:#C5E0B4; --r-neg:#D9D9D9;
+  --pill-high-fg:#C0392B; --pill-high-bg:#FBE3DE;
+  --pill-med-fg:#8A6A17;  --pill-med-bg:#FCF1D8;
+  --pill-low-fg:#1F8A5B;  --pill-low-bg:#E7F6EE;
+  --pill-neg-fg:#5b6670;  --pill-neg-bg:#EEF1F3;
+
+  /* ---- dial states ----
+     Read off the VALUE, never off the verdict. Kept as tokens so a designer
+     can retune them without touching Python — but note the engine sends the
+     same three colours per dial in the payload, so if you change these,
+     change _value_colour() in freesearch/viability.py to match. */
+  --dial-good:#2E7D32; --dial-mid:#E69500; --dial-poor:#C0392B;
+
+  --radius:14px; --shadow:0 6px 24px rgba(45,69,90,.10);
+
+  /* ---- type ----
+     --font is body copy and stays on the system stack: it is instant, it has
+     no third-party request, and it is what the visitor's OS already renders
+     best. --font-display is the handoff's Public Sans, used for the step bar,
+     eyebrows, numbers and dial figures.
+
+     Public Sans is NOT loaded here. It degrades silently to the system stack
+     if absent, so every page works today, and loading it is one decision
+     later — see FONT NOTE at the foot of this file. */
+  --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  --font-display:'Public Sans','Segoe UI',system-ui,-apple-system,Roboto,
+                 Helvetica,Arial,sans-serif;
+}
+
+/* ---- reset + page ---- */
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:22px 18px 60px}
+.hidden{display:none !important}
+
+/* ---- surfaces ---- */
+.card{background:var(--white);border:1px solid var(--line);
+  border-radius:var(--radius);box-shadow:var(--shadow);padding:26px}
+
+/* ---- buttons ---- */
+.btn{appearance:none;border:0;border-radius:10px;padding:12px 20px;
+  font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;
+  transition:background .15s,border-color .15s,box-shadow .15s}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--pink);color:#fff}
+.btn.primary:hover:not(:disabled){background:var(--pink-hover)}
+.btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--line)}
+.btn.ghost:hover:not(:disabled){border-color:var(--navy)}
+.btn.block{width:100%}
+.link{background:none;border:0;color:var(--navy);font-family:var(--font);
+  font-size:14px;cursor:pointer;text-decoration:underline;padding:0}
+
+/* ---- form fields ---- */
+.fld{display:block;font-size:12px;font-weight:700;color:var(--navy);
+  text-transform:uppercase;letter-spacing:.05em;margin:14px 0 5px}
+.fld .opt{text-transform:none;letter-spacing:0;color:var(--muted);
+  font-weight:400}
+input[type=text],input[type=email],input[type=tel],input[type=url],
+textarea,select{width:100%;font-family:var(--font);font-size:15px;
+  padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;
+  background:#fff;color:var(--ink)}
+input:focus,textarea:focus,select:focus{outline:0;border-color:var(--pink);
+  box-shadow:0 0 0 3px rgba(229,22,82,.14)}
+.err{color:#c0392b;font-size:13px;font-weight:600;margin-top:8px}
+
+/* ---- segmented control ---- */
+.seg{display:inline-flex;background:#eef1f4;border-radius:10px;padding:3px;
+  gap:3px;flex-wrap:wrap}
+.seg .opt,.seg button{background:none;border:0;border-radius:8px;
+  padding:8px 14px;font-family:var(--font);font-size:14px;font-weight:600;
+  color:var(--navy);cursor:pointer}
+.seg .opt.on,.seg button.on{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+
+/* ---- disclaimers / notes ---- */
+.disc{background:#fbfcfd;border:1px solid var(--line);
+  border-left:4px solid var(--navy);border-radius:8px;padding:12px 14px;
+  margin:10px 0;font-size:13px;color:var(--navy)}
+
+/* ---- risk pills ---- */
+.band{display:inline-block;padding:3px 11px;border-radius:999px;
+  font-family:var(--font-display);font-size:12px;font-weight:800;
+  letter-spacing:.01em}
+.band.High{color:var(--pill-high-fg);background:var(--pill-high-bg)}
+.band.Medium{color:var(--pill-med-fg);background:var(--pill-med-bg)}
+.band.Low{color:var(--pill-low-fg);background:var(--pill-low-bg)}
+.band.Negligible{color:var(--pill-neg-fg);background:var(--pill-neg-bg)}
+
+/* ---- risk split bar (flat fills, deliberately) ---- */
+.riskbar{height:10px;border-radius:6px;display:flex;overflow:hidden;
+  margin:14px 0 4px}
+.riskbar i{display:block}
+
+/* ---- dials ----
+   Pure conic-gradient: no canvas, no charting library, survives print-to-PDF,
+   which matters because the same markup goes into the emailed report.
+   --v is 0-100 and --dc is the colour; BOTH come from the engine payload.
+   Nothing here derives, rounds or re-bands anything client-side. */
+.dial{border-radius:50%;display:grid;place-items:center;position:relative;
+  background:conic-gradient(var(--dc,var(--navy)) calc(var(--v,0)*3.6deg),
+                            var(--dial-track) 0)}
+.dial:before{content:'';position:absolute;border-radius:50%;background:#fff;
+  inset:11%}
+.dial .val,.dial .cap{position:relative;z-index:1;
+  font-family:var(--font-display)}
+
+/* ---- TMH hexagon pulse loader (Jonathan's spec, 10 Aug 2026) ----
+   Pure CSS, no images, no JS — starts animating the moment it appears. The
+   timing rules (when it is allowed to show at all) live in each page's
+   busyOn(), not here. */
+.tmh-loader{display:inline-flex;gap:9px;align-items:center}
+.tmh-loader i{width:20px;height:23px;display:block;
+  clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+  animation:tmh-hexpulse 1.15s ease-in-out infinite}
+.tmh-loader i:nth-child(1){background:var(--pink);animation-delay:0s}
+.tmh-loader i:nth-child(2){background:var(--navy);animation-delay:.16s}
+.tmh-loader i:nth-child(3){background:var(--pink);animation-delay:.32s}
+@keyframes tmh-hexpulse{
+  0%{transform:scale(.72);opacity:.35}
+  40%{transform:scale(1);opacity:1}
+  80%{transform:scale(.72);opacity:.35}
+  100%{transform:scale(.72);opacity:.35}}
+
+@media (prefers-reduced-motion:reduce){
+  .tmh-loader i{animation:none;opacity:.85}
+  .btn{transition:none}
+}
+
+/* ============================================================================
+   FONT NOTE — read before loading Public Sans
+
+   The obvious move is a <link> to fonts.googleapis.com. Don't, without
+   deciding it deliberately:
+
+   * These widgets are embedded in iframes on PARTNER sites. A Google Fonts
+     link makes every partner's visitor issue a third-party request to Google
+     from our frame.
+   * Google Fonts serving from Google's own origin transmits the visitor's IP
+     to Google. A German court (LG Munich I, Jan 2022) held that doing so
+     without consent breached the GDPR, and it has driven a steady stream of
+     warning letters since. We are a UK legal-services business embedding on
+     other people's sites — this is the wrong place to take that risk.
+   * It is also a render-blocking request on a page whose whole selling point
+     is that it is a single self-contained file.
+
+   Self-host instead: drop the .woff2 files in freesearch/web/fonts/ and add
+   an @font-face block here pointing at /fonts/. The engine's static route
+   already serves that directory. Until then --font-display falls back to the
+   system stack and every page renders correctly.
+   ========================================================================= */
