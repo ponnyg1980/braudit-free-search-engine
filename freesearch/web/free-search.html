@@ -154,7 +154,10 @@
   .jhead{display:flex;align-items:center;gap:14px;margin-bottom:14px}
   .jhead h3{font-size:19px;letter-spacing:-.3px;margin:0}
   .pill.lg{padding:12px 20px;font-size:15px}
-  .pill.navy{color:var(--quiet)}
+  /* Only the RESTING navy pill is grey — this rule sits in the page layer,
+     which loads after braudit.css, so without :not(.on) it overrode the
+     white text on the selected state and left grey-on-navy. */
+  .pill.navy:not(.on){color:var(--quiet)}
   .eu-note{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px}
 
   /* step 4 */
@@ -1744,6 +1747,7 @@ function renderNexts(r){
     ${lead==='application'?'<div class="eyebrow">Our recommended next step</div>':''}
     <h4>Proceed to application</h4>
     <p>${esc(ap.blurb||'')}</p>
+    ${ap.note?`<p>${esc(ap.note)}</p>`:''}
     <button class="btn ${lead==='application'?'primary':'ghost'} block"
       onclick="goToApply()">${esc(ap.label||'Proceed to application')}</button></div>`;
   document.getElementById('res-nexts').innerHTML=
