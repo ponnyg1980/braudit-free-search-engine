@@ -1,163 +1,266 @@
 /* ============================================================================
    braudit.css — the shared design layer for every Braudit widget.
 
-   Served by the engine at /braudit.css and linked by all six pages:
-   free-search, brand-audit, class-agent, class-assistant, search-bar,
-   search-box.
+   Served at /braudit.css and linked by all six pages: free-search,
+   brand-audit, class-agent, class-assistant, search-bar, search-box.
 
    WHY THIS FILE EXISTS
    --------------------
-   Until Aug 2026 each of those six pages carried its own private copy of the
-   design — 640 lines of CSS across the set — and they had already drifted:
-   class-agent was missing five tokens, class-assistant was missing four and
-   had invented four of its own, and --radius was 12px on one page and 14px on
-   the rest. Six copies means every change is a six-file job and every missed
-   file is a widget that quietly looks wrong on a partner's site.
+   Until Aug 2026 each page carried its own copy of the design — 640 lines
+   across the set — and they had drifted: class-agent was missing five tokens,
+   class-assistant had invented four of its own, --radius was 12px on one page
+   and 14px on the rest. Six copies means every change is a six-file job and
+   every missed file is a widget that quietly looks wrong on a partner's site.
 
    WHAT BELONGS HERE
    -----------------
-   Only things genuinely shared: the tokens, the reset, and the primitives
-   that appear on four or more of the six pages (.wrap, .card, .btn, .seg,
-   .err, .fld, .disc, the risk pills, the dials and the loader).
+   Tokens, the reset, and the primitives shared by four or more of the six
+   pages. Anything one page needs alone stays in that page's <style>, which
+   loads after this file and therefore wins.
 
-   Anything one page needs alone stays in that page's <style> block, which
-   loads after this file and therefore wins. class-assistant's --a/--b/--c/--d
-   tier colours are the reference case: page-specific, so page-local.
-
-   Token values here are the design handoff of 17 Aug 2026.
+   Values are the design handoff of 17 Aug 2026 (Free Search Wizard.dc.html),
+   with the contrast corrections noted under CONTRAST at the foot.
    ========================================================================= */
 
 :root{
   /* ---- brand ---- */
-  --pink:#E51652; --pink-dark:#c01044; --navy:#2D455A; --navy-soft:#3d5a74;
-  --ink:#1f2a33; --muted:#6b7a86; --line:#e3e8ec; --bg:#f5f7f9; --white:#fff;
+  --pink:#E51652; --pink-hover:#c9134a; --pink-dark:#c01044;
+  --navy:#2D455A; --navy-soft:#3d5a74; --navy-deep:#1c2d3b;
 
-  /* ---- added by the design handoff ---- */
-  --pink-hover:#c9134a;    /* every action button hover */
-  --pink-tint:#FFF5F8;     /* selected option block background */
-  --pink-line:#E9ADC1;     /* dashed upload zone, dashed offer box */
-  --pink-badge:#FDE7EE;    /* term chips */
-  --pink-on-navy:#FFB3C7;  /* eyebrow text on navy bands */
-  --navy-deep:#1c2d3b;
-  --slate:#3f4c58;         /* body copy inside cards */
-  --dial-track:#E9EDF1;
-  --eg-tile:#FDF3E3;       /* cream behind the worked examples */
-  --eg-tile-line:#F0E3CB;
+  /* ---- text ----
+     Three weights of grey, all AA on white and on --panel:
+       --ink    headings and base text
+       --slate  body copy
+       --quiet  secondary copy (the comp's most-used secondary, 23 uses)
+       --muted  micro-copy: labels, table headers, captions, caveats */
+  --ink:#1D1D1B; --slate:#3f4c58; --quiet:#617383; --muted:#667481;
+
+  /* ---- lines and surfaces ---- */
+  --line:#E6E9ED;          /* the universal hairline, 15 uses in the comp */
+  --line-soft:#E1E5EA;      /* future step rule, unselected tool card */
+  --field-line:#C9D2DA;     /* input borders at rest */
+  --bg:#F7F8FA;             /* page background */
+  --panel:#F7F8FA;          /* filled panels inside cards */
+  --panel-soft:#FBFCFD;     /* the sub-dial strip */
+  --white:#fff;
+
+  /* ---- pink family ---- */
+  --pink-tint:#FFF5F8;      /* selected block / row / card fill */
+  --pink-line:#E9ADC1;      /* dashed borders, disabled primary */
+  --pink-badge:#FDE7EE;     /* term chips */
+  --pink-on-navy:#FFB3C7;   /* eyebrow on a navy panel */
+  --on-navy:#c7d2dc;        /* body copy on a navy panel */
+  --eg-tile-line:#F0E3CB;   /* the cream example tiles */
 
   /* ---- risk ----
-     Two systems on purpose. The flat --r-* fills are for the split bar,
-     where solid blocks of colour read as proportion. The pill colours are
-     text-on-tint, because the flat fills read as highlighter at pill size. */
-  --r-high:#F4B084; --r-med:#FFE699; --r-low:#C5E0B4; --r-neg:#D9D9D9;
-  --pill-high-fg:#C0392B; --pill-high-bg:#FBE3DE;
+     Two palettes on purpose. The soft triad is the split bar, where solid
+     blocks read as proportion. The strong triad is text: numerals and pills. */
+  --r-high:#E07A5F; --r-med:#F4D06F; --r-low:#A8D5A2; --r-neg:#D9D9D9;
+  --risk-high:#C0392B; --risk-med:#9A7015; --risk-low:#1F8A5B;
+  --pill-high-fg:#BE392B; --pill-high-bg:#FBE3DE;
   --pill-med-fg:#8A6A17;  --pill-med-bg:#FCF1D8;
-  --pill-low-fg:#1F8A5B;  --pill-low-bg:#E7F6EE;
+  --pill-low-fg:#1C7E53;  --pill-low-bg:#E7F6EE;
   --pill-neg-fg:#5b6670;  --pill-neg-bg:#EEF1F3;
 
-  /* ---- dial states ----
-     Read off the VALUE, never off the verdict. Kept as tokens so a designer
-     can retune them without touching Python — but note the engine sends the
-     same three colours per dial in the payload, so if you change these,
-     change _value_colour() in freesearch/viability.py to match. */
-  --dial-good:#2E7D32; --dial-mid:#E69500; --dial-poor:#C0392B;
+  /* ---- dials ----
+     Read off the VALUE, never off the verdict. The engine sends the same
+     three in the payload, so if you change these, change _value_colour() in
+     freesearch/viability.py to match. */
+  --dial-track:#E9EDF1;
+  --dial-good:#1F8A5B; --dial-mid:#9A7015; --dial-poor:#C0392B;
 
-  --radius:14px; --shadow:0 6px 24px rgba(45,69,90,.10);
+  /* ---- shape ----
+     The comp uses 10 / 12 / 14 / 16 / 99px, in that order of frequency. */
+  --r-sm:10px; --r-md:12px; --r-lg:14px; --r-xl:16px; --r-card:20px;
+  --r-pill:99px;
+  --radius:var(--r-lg);                      /* back-compat for older markup */
+  --shadow:0 6px 26px rgba(45,69,90,.08);    /* the only shadow in the comp */
+  --lift:drop-shadow(0 12px 22px rgba(45,69,90,.16));
 
   /* ---- type ----
-     --font is body copy and stays on the system stack: it is instant, it has
-     no third-party request, and it is what the visitor's OS already renders
-     best. --font-display is the handoff's Public Sans, used for the step bar,
-     eyebrows, numbers and dial figures.
+     --font is body copy and stays on the system stack: instant, no third
+     party, and what the visitor's OS renders best. --font-display is Public
+     Sans, used only for uppercase micro-type and numerals.
 
-     Public Sans is NOT loaded here. It degrades silently to the system stack
-     if absent, so every page works today, and loading it is one decision
-     later — see FONT NOTE at the foot of this file. */
-  --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
-  --font-display:'Public Sans','Segoe UI',system-ui,-apple-system,Roboto,
-                 Helvetica,Arial,sans-serif;
+     Public Sans is NOT loaded here — it degrades silently to the system
+     stack. See FONT NOTE at the foot. */
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --font-display:'Public Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',
+                 Roboto,Helvetica,Arial,sans-serif;
 }
 
-/* ---- reset + page ---- */
+/* ---- reset + page ---------------------------------------------------- */
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
-  line-height:1.55;-webkit-font-smoothing:antialiased}
-.wrap{max-width:860px;margin:0 auto;padding:22px 18px 60px}
+  line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:30px 24px 80px}
 .hidden{display:none !important}
+a{color:var(--pink)} a:hover{color:var(--pink-hover)}
 
-/* ---- surfaces ---- */
+/* ---- typography ------------------------------------------------------ */
+h1{font-size:33px;font-weight:800;letter-spacing:-.9px;margin:0 0 12px;
+   text-wrap:balance}
+h2{font-size:26px;font-weight:800;letter-spacing:-.6px;margin:0 0 10px}
+h3{font-size:23px;font-weight:800;letter-spacing:-.5px;margin:0 0 8px}
+h4{font-size:18.5px;font-weight:800;letter-spacing:-.3px;margin:0 0 6px}
+.lead{font-size:16.5px;line-height:1.62;color:var(--slate);margin:0 0 26px;
+  max-width:680px;text-wrap:pretty}
+.sub{font-size:15px;line-height:1.5;color:var(--quiet);margin:0}
+.eyebrow{font-family:var(--font-display);font-size:11px;font-weight:800;
+  letter-spacing:1.3px;text-transform:uppercase;color:var(--pink);
+  margin-bottom:8px}
+.micro{font-family:var(--font-display);font-size:10.5px;font-weight:800;
+  letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+
+/* ---- surfaces -------------------------------------------------------- */
 .card{background:var(--white);border:1px solid var(--line);
-  border-radius:var(--radius);box-shadow:var(--shadow);padding:26px}
+  border-radius:var(--r-card);box-shadow:var(--shadow);overflow:hidden;
+  padding:44px 40px 48px}
+.panel{background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--r-lg);padding:18px 20px}
+.panel-navy{background:var(--navy);border-radius:var(--r-lg);
+  padding:18px 20px;color:#fff;display:flex;gap:14px;align-items:flex-start}
+.panel-navy .eyebrow{color:var(--pink-on-navy)}
+.panel-navy p{font-size:14px;line-height:1.6;color:var(--on-navy);margin:0}
 
-/* ---- buttons ---- */
-.btn{appearance:none;border:0;border-radius:10px;padding:12px 20px;
-  font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;
-  transition:background .15s,border-color .15s,box-shadow .15s}
-.btn:disabled{opacity:.45;cursor:not-allowed}
+/* ---- buttons --------------------------------------------------------- */
+.btn{appearance:none;border:0;border-radius:var(--r-sm);padding:15px 28px;
+  font-family:var(--font);font-size:15.5px;font-weight:700;cursor:pointer;
+  transition:background .15s ease,color .15s ease,border-color .15s ease}
 .btn.primary{background:var(--pink);color:#fff}
 .btn.primary:hover:not(:disabled){background:var(--pink-hover)}
-.btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--line)}
-.btn.ghost:hover:not(:disabled){border-color:var(--navy)}
+/* Disabled keeps the hover colour identical — the button must not appear to
+   respond to a pointer it is going to ignore. */
+.btn.primary:disabled,.btn.primary:disabled:hover{background:var(--pink-line);
+  cursor:not-allowed}
+.btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
+.btn.ghost:hover:not(:disabled){background:var(--navy);color:#fff}
 .btn.block{width:100%}
-.link{background:none;border:0;color:var(--navy);font-family:var(--font);
-  font-size:14px;cursor:pointer;text-decoration:underline;padding:0}
+.btn:disabled{cursor:not-allowed}
+.link{background:none;border:0;padding:12px 4px;font-family:var(--font);
+  font-size:15px;font-weight:700;color:var(--quiet);cursor:pointer;
+  transition:color .15s ease}
+.link:hover{color:var(--navy)}
+.link.pink{color:var(--pink)} .link.pink:hover{color:var(--pink-hover)}
 
-/* ---- form fields ---- */
-.fld{display:block;font-size:12px;font-weight:700;color:var(--navy);
-  text-transform:uppercase;letter-spacing:.05em;margin:14px 0 5px}
-.fld .opt{text-transform:none;letter-spacing:0;color:var(--muted);
-  font-weight:400}
+/* ---- form fields ----------------------------------------------------- */
+.fld{display:block;font-size:14px;font-weight:700;color:var(--navy);
+  margin:14px 0 6px}
+.fld .opt{font-weight:600;color:var(--muted)}
 input[type=text],input[type=email],input[type=tel],input[type=url],
-textarea,select{width:100%;font-family:var(--font);font-size:15px;
-  padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;
-  background:#fff;color:var(--ink)}
-input:focus,textarea:focus,select:focus{outline:0;border-color:var(--pink);
+input[type=search],textarea,select{
+  width:100%;font-family:inherit;font-size:16px;padding:15px 16px;
+  border:1.5px solid var(--field-line);border-radius:var(--r-sm);
+  background:#fff;color:var(--ink);outline:none;
+  transition:border-color .15s ease,box-shadow .15s ease}
+textarea{min-height:120px;line-height:1.6;resize:vertical}
+input:focus,textarea:focus,select:focus{border-color:var(--pink);
   box-shadow:0 0 0 3px rgba(229,22,82,.14)}
-.err{color:#c0392b;font-size:13px;font-weight:600;margin-top:8px}
+/* Keyboard users must be able to see where they are. The comp only styled
+   focus on hand-written inputs and left the generated ones with outline:none,
+   which is the one accessibility gap worth closing on the way in. */
+:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
+.err{color:#C0392B;font-size:14px;font-weight:700;margin-top:8px}
 
-/* ---- segmented control ---- */
-.seg{display:inline-flex;background:#eef1f4;border-radius:10px;padding:3px;
-  gap:3px;flex-wrap:wrap}
-.seg .opt,.seg button{background:none;border:0;border-radius:8px;
-  padding:8px 14px;font-family:var(--font);font-size:14px;font-weight:600;
-  color:var(--navy);cursor:pointer}
-.seg .opt.on,.seg button.on{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+/* ---- step bar -------------------------------------------------------- */
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;
+  margin-bottom:22px}
+.steps i{display:block;height:4px;border-radius:var(--r-pill);
+  margin-bottom:10px;background:var(--line-soft)}
+.steps b{font-family:var(--font-display);font-size:12.5px;font-weight:800;
+  letter-spacing:1.1px;text-transform:uppercase;color:var(--muted)}
+.steps .done i{background:var(--navy)} .steps .done b{color:var(--navy)}
+.steps .now i{background:var(--pink)}  .steps .now b{color:var(--pink)}
 
-/* ---- disclaimers / notes ---- */
-.disc{background:#fbfcfd;border:1px solid var(--line);
-  border-left:4px solid var(--navy);border-radius:8px;padding:12px 14px;
-  margin:10px 0;font-size:13px;color:var(--navy)}
+/* ---- the option block (steps 2 and 4) -------------------------------- */
+.opt-list{display:flex;flex-direction:column;gap:14px;max-width:820px}
+.opt-block{background:#fff;border:2px solid var(--line);
+  border-radius:var(--r-xl);overflow:hidden;
+  transition:border-color .15s ease,background .15s ease}
+.opt-block.on{background:var(--pink-tint);border-color:var(--pink)}
+.opt-row{display:grid;grid-template-columns:26px 104px 1fr;gap:18px;
+  align-items:center;width:100%;background:transparent;border:0;
+  padding:18px 22px;cursor:pointer;font-family:inherit;text-align:left}
+.opt-row.no-tile{grid-template-columns:26px 1fr}
+.tick{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+  background:#fff;border:1.5px solid var(--field-line);color:transparent;
+  font-size:15px;line-height:1;transition:background .15s ease,
+  border-color .15s ease,color .15s ease}
+.opt-block.on .tick{background:var(--navy);border-color:var(--navy);color:#fff}
+.opt-row h4{margin:0}
+.opt-row h4 span{font-weight:600;color:var(--quiet)}
+.opt-row .sub{margin-top:4px}
+.eg{width:104px;height:104px;border-radius:var(--r-md);
+  border:1px solid var(--eg-tile-line);object-fit:cover;display:block}
+.opt-drawer{padding:0 22px 20px}
 
-/* ---- risk pills ---- */
-.band{display:inline-block;padding:3px 11px;border-radius:999px;
-  font-family:var(--font-display);font-size:12px;font-weight:800;
-  letter-spacing:.01em}
+/* ---- pills ----------------------------------------------------------- */
+.pill{border-radius:var(--r-pill);padding:11px 17px;font-family:inherit;
+  font-size:14.5px;font-weight:700;cursor:pointer;background:#fff;
+  color:var(--navy);border:1.5px solid var(--line);
+  transition:background .15s ease,border-color .15s ease,color .15s ease}
+.pill.on{background:var(--pink);color:#fff;border-color:var(--pink)}
+.pill.navy.on{background:var(--navy);border-color:var(--navy)}
+.pills{display:flex;flex-wrap:wrap;gap:9px}
+.chip{display:inline-flex;align-items:center;gap:9px;background:#fff;
+  border:1px solid var(--line);color:var(--navy);border-radius:var(--r-pill);
+  padding:8px 13px;font-size:14.5px;font-weight:700}
+.chip .x{color:var(--pink);font-weight:800;cursor:pointer}
+.chip.term{background:var(--pink-badge);border-color:transparent;
+  font-weight:600;padding:7px 13px;font-size:14px}
+
+/* ---- risk pills ------------------------------------------------------ */
+.band{display:inline-block;border-radius:var(--r-pill);padding:6px 13px;
+  font-family:var(--font-display);font-size:13px;font-weight:800}
 .band.High{color:var(--pill-high-fg);background:var(--pill-high-bg)}
 .band.Medium{color:var(--pill-med-fg);background:var(--pill-med-bg)}
 .band.Low{color:var(--pill-low-fg);background:var(--pill-low-bg)}
 .band.Negligible{color:var(--pill-neg-fg);background:var(--pill-neg-bg)}
 
-/* ---- risk split bar (flat fills, deliberately) ---- */
-.riskbar{height:10px;border-radius:6px;display:flex;overflow:hidden;
-  margin:14px 0 4px}
+/* ---- stat tiles + split bar ------------------------------------------ */
+.summary{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;
+  margin-bottom:16px}
+.stat{border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:18px 16px;text-align:center;background:#fff}
+.stat .v{font-family:var(--font-display);font-size:30px;font-weight:800;
+  line-height:1;color:var(--navy)}
+.stat .k{font-family:var(--font-display);font-size:10.5px;font-weight:800;
+  letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);
+  margin-top:7px}
+.stat.high .v{color:var(--risk-high)}
+.stat.med .v{color:var(--risk-med)}
+.stat.low .v{color:var(--risk-low)}
+.riskbar{display:flex;height:9px;border-radius:var(--r-pill);overflow:hidden;
+  margin-bottom:10px}
 .riskbar i{display:block}
 
-/* ---- dials ----
-   Pure conic-gradient: no canvas, no charting library, survives print-to-PDF,
-   which matters because the same markup goes into the emailed report.
-   --v is 0-100 and --dc is the colour; BOTH come from the engine payload.
-   Nothing here derives, rounds or re-bands anything client-side. */
+/* ---- dials ----------------------------------------------------------- */
+/* Pure conic-gradient: no canvas, no charting library, survives print-to-PDF,
+   which matters because the same markup goes into the emailed report. --v is
+   0-100 and --dc is the colour; BOTH come from the engine payload. Nothing
+   here derives, rounds or re-bands anything client-side. */
 .dial{border-radius:50%;display:grid;place-items:center;position:relative;
   background:conic-gradient(var(--dc,var(--navy)) calc(var(--v,0)*3.6deg),
                             var(--dial-track) 0)}
-.dial:before{content:'';position:absolute;border-radius:50%;background:#fff;
-  inset:11%}
+.dial:before{content:'';position:absolute;border-radius:50%;
+  background:var(--hole,#fff);inset:var(--ring,12px)}
 .dial .val,.dial .cap{position:relative;z-index:1;
-  font-family:var(--font-display)}
+  font-family:var(--font-display);font-weight:800}
+.dial-master{width:150px;height:150px;--ring:19px;flex-direction:column}
+.dial-master .val{font-size:31px;color:var(--navy);line-height:1}
+.dial-master .cap{font-size:10px;letter-spacing:1.3px;text-transform:uppercase;
+  color:var(--muted);margin-top:3px}
+.dial-sub{width:78px;height:78px;--ring:10px;--hole:var(--panel-soft)}
+.dial-sub .val{font-size:19px;color:var(--navy)}
 
-/* ---- TMH hexagon pulse loader (Jonathan's spec, 10 Aug 2026) ----
-   Pure CSS, no images, no JS — starts animating the moment it appears. The
-   timing rules (when it is allowed to show at all) live in each page's
-   busyOn(), not here. */
+/* ---- disclaimers ----------------------------------------------------- */
+.disc{border:1px solid var(--line);border-left:4px solid var(--navy);
+  border-radius:var(--r-md);padding:16px 20px;font-size:15px;line-height:1.6;
+  color:var(--slate);margin:0 0 12px;background:#fff}
+
+/* ---- loader (Jonathan's spec, 10 Aug 2026) ---------------------------- */
+/* Pure CSS, no images, no JS. The timing rules — when it may show at all —
+   live in each page's busyOn(), not here. */
 .tmh-loader{display:inline-flex;gap:9px;align-items:center}
 .tmh-loader i{width:20px;height:23px;display:block;
   clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
@@ -165,36 +268,87 @@ input:focus,textarea:focus,select:focus{outline:0;border-color:var(--pink);
 .tmh-loader i:nth-child(1){background:var(--pink);animation-delay:0s}
 .tmh-loader i:nth-child(2){background:var(--navy);animation-delay:.16s}
 .tmh-loader i:nth-child(3){background:var(--pink);animation-delay:.32s}
-@keyframes tmh-hexpulse{
-  0%{transform:scale(.72);opacity:.35}
-  40%{transform:scale(1);opacity:1}
-  80%{transform:scale(.72);opacity:.35}
-  100%{transform:scale(.72);opacity:.35}}
+@keyframes tmh-hexpulse{0%,80%,100%{transform:scale(.55);opacity:.25}
+  40%{transform:scale(1);opacity:1}}
 
+/* ---- illustrations --------------------------------------------------- */
+.ill{display:block;height:auto;filter:var(--lift)}
+
+/* ---- footer / trust strip -------------------------------------------- */
+.actions{display:flex;align-items:center;justify-content:space-between;
+  gap:16px;flex-wrap:wrap;padding-top:24px;margin-top:26px;
+  border-top:1px solid var(--line)}
+.trust{display:flex;align-items:center;justify-content:center;gap:18px;
+  flex-wrap:wrap;margin-top:22px;font-size:13.5px;color:var(--muted)}
+.trust s{width:4px;height:4px;border-radius:50%;background:var(--field-line);
+  display:block}
+
+/* ---- RESPONSIVE ------------------------------------------------------
+   The comp is desktop-only at 1080px with zero media queries: every
+   repeat(N,1fr) and every fixed-column grid in it would overflow on a phone.
+   More than half of TMH's traffic is mobile and the widget is embedded in
+   other people's pages at whatever width they give us, so the breakpoints
+   are authored here rather than left to the browser. */
+@media (max-width:880px){
+  .card{padding:32px 24px 36px}
+  .summary{grid-template-columns:repeat(3,1fr)}
+  .steps{gap:8px}
+  .steps b{font-size:10.5px;letter-spacing:.6px}
+}
+@media (max-width:640px){
+  .wrap{padding:18px 14px 56px}
+  .card{padding:26px 18px 30px;border-radius:var(--r-xl)}
+  h1{font-size:26px;letter-spacing:-.6px}
+  h2{font-size:21px} h3{font-size:19px}
+  .lead{font-size:15.5px}
+  .summary{grid-template-columns:repeat(2,1fr)}
+  .opt-row{grid-template-columns:26px 1fr;gap:12px;padding:16px}
+  .eg{display:none}          /* the example tile is decorative; the copy isn't */
+  .dial-master{width:118px;height:118px;--ring:15px}
+  .dial-master .val{font-size:25px}
+  .actions{flex-direction:column;align-items:stretch}
+  .actions .btn{width:100%}
+}
 @media (prefers-reduced-motion:reduce){
   .tmh-loader i{animation:none;opacity:.85}
-  .btn{transition:none}
+  *{transition-duration:.01ms !important}
 }
 
 /* ============================================================================
+   CONTRAST — four values changed from the comp, and why
+
+   Measured against WCAG 2.1 AA. Everything else is carried over untouched.
+
+     #96A2AC -> --muted #667481    2.61:1 -> 4.79:1
+        The comp's micro-copy grey. It carries stat-tile labels, table
+        headers, the opinion caveat paragraph and the privacy line — all real
+        text, all failing badly. This is the one visible change.
+     #E0A72B -> --risk-med #9A7015  2.16:1 -> 4.6:1
+        The medium-risk numeral and the uniqueness dial arc. At 2.16 it failed
+        even the large-text threshold, and the dial arc was 1.83:1 against its
+        own track, i.e. the ring was barely visible.
+     #C0392B -> --pill-high-fg #BE392B   4.44 -> 4.50 on its tint
+     #1F8A5B -> --pill-low-fg  #1C7E53   3.88 -> 4.52 on its tint
+        Both a hair under on the pill tints. Imperceptible shifts.
+
+   Hue is preserved in every case — these were darkened in HLS, not replaced.
+
    FONT NOTE — read before loading Public Sans
 
    The obvious move is a <link> to fonts.googleapis.com. Don't, without
    deciding it deliberately:
 
-   * These widgets are embedded in iframes on PARTNER sites. A Google Fonts
-     link makes every partner's visitor issue a third-party request to Google
-     from our frame.
-   * Google Fonts serving from Google's own origin transmits the visitor's IP
-     to Google. A German court (LG Munich I, Jan 2022) held that doing so
-     without consent breached the GDPR, and it has driven a steady stream of
-     warning letters since. We are a UK legal-services business embedding on
-     other people's sites — this is the wrong place to take that risk.
-   * It is also a render-blocking request on a page whose whole selling point
-     is that it is a single self-contained file.
+     * these widgets run in iframes on PARTNER sites, so that link makes every
+       partner's visitor issue a third-party request to Google from our frame
+     * Google Fonts served from Google's own origin transmits the visitor's IP;
+       LG Munich I held in Jan 2022 that doing so without consent breached the
+       GDPR, and it has driven warning letters since. We are a UK legal
+       business embedding on other people's sites
+     * it is render-blocking on a page whose selling point is being one
+       self-contained file
 
-   Self-host instead: drop the .woff2 files in freesearch/web/fonts/ and add
-   an @font-face block here pointing at /fonts/. The engine's static route
-   already serves that directory. Until then --font-display falls back to the
-   system stack and every page renders correctly.
+   Self-host: drop the .woff2 files in freesearch/web/fonts/ and add an
+   @font-face here pointing at /fonts/. The engine's static route already
+   serves that directory. Until then --font-display falls back to the system
+   stack and every page renders correctly.
    ========================================================================= */
