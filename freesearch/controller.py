@@ -182,8 +182,73 @@ def handle_free_search(payload: dict, client, *, gated: bool = False) -> dict:
         return {'ok': False, 'status': 502,
                 'error': 'Search is temporarily unavailable. Please retry.'}
 
+    years, terms = _opinion_inputs(payload)
     return {'ok': True, 'status': 200,
-            'result': serialize_result(result, gated=gated)}
+            'result': serialize_result(result, gated=gated,
+                                       brand_years=years, sector_terms=terms)}
+
+
+def _opinion_inputs(payload: dict):
+    """Pull the two soft inputs the viability opinion can use, if present.
+
+    Both live in `class_source` because that is where the guided questions
+    already put them; neither is required, and a malformed or missing block
+    just means the opinion is computed from the register evidence alone.
+    Wrapped defensively because this is an anonymous public payload — a
+    visitor sending `class_source: "hello"` must not 500 the search.
+    """
+    try:
+        from . import viability as vb
+        cs = payload.get('class_source')
+        if not isinstance(cs, dict):
+            return None, ()
+        answers = cs.get('answers')
+        answers = answers if isinstance(answers, dict) else {}
+        years = vb.years_from_answers(answers.get('brand_age'),
+                                      answers.get('in_use_for'))
+        # The chosen terms are what makes "descriptive" mean something for
+        # THIS business: "wealth management" is descriptive for a wealth
+        # manager and distinctive for a bakery.
+        #
+        # Deliberately ONLY structured Nice terms, never the visitor's free
+        # description. Their prose usually contains the brand name itself
+        # ("ZYVEX makes software"), and feeding that in would classify their
+        # own invented word as ordinary trade language and tank the
+        # distinctiveness dial for the one kind of name that deserves the
+        # highest score. Specification terms never contain it.
+        #
+        # Three shapes exist in the wild, one per class route:
+        #   agent_terms  {class: [term, ...]}   AI / describe-your-business
+        #   term_basket  {classes|entries: ...} company + trademark routes
+        #   terms        [term, ...]            anything future
+        return years, _terms_from(cs)
+    except Exception:
+        return None, ()
+
+
+def _terms_from(cs: dict) -> tuple:
+    """Flatten whichever term shape the class route left behind."""
+    out = []
+
+    def eat(v, depth=0):
+        if len(out) >= 300 or depth > 4:
+            return
+        if isinstance(v, str):
+            out.append(v[:120])
+        elif isinstance(v, dict):
+            # {'term': 'coffee'} rows, or {class: [...]} maps.
+            if isinstance(v.get('term'), str):
+                out.append(v['term'][:120])
+                return
+            for x in v.values():
+                eat(x, depth + 1)
+        elif isinstance(v, (list, tuple)):
+            for x in v:
+                eat(x, depth + 1)
+
+    for key in ('agent_terms', 'term_basket', 'terms', 'selected_terms'):
+        eat(cs.get(key))
+    return tuple(out[:300])
 
 
 def handle_jurisdictions() -> dict:
