@@ -20,7 +20,6 @@
   .tmh-loader i:nth-child(1){background:#E0004D}
   .tmh-loader i:nth-child(2){background:#2D455A;animation-delay:.16s}
   .tmh-loader i:nth-child(3){background:#E0004D;animation-delay:.32s}
-  @keyframes tmh-hexpulse{0%,80%,100%{transform:scale(.55);opacity:.25}40%{transform:scale(1);opacity:1}}
   /* Respect people who limit motion on their device */
   @media (prefers-reduced-motion:reduce){.tmh-loader i{animation:none;opacity:.6;transform:none}}
   .tmh-busy{display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -31,7 +30,6 @@
   .tmh-overlay{position:fixed;inset:0;background:rgba(245,247,249,.92);z-index:9999;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
   .tmh-overlay .msg{font-size:15px;color:var(--navy);font-weight:600}
-  .tmh-overlay .sub{font-size:13px;color:var(--muted);margin-top:-8px}
 
 
   /* ---- richer result rows + the class picker (10 Aug 2026) ---- */
@@ -42,14 +40,12 @@
   .hres .r .cls b{color:var(--pink)}
   .pickbox{border:1.5px solid var(--pink);border-radius:12px;background:#fef4f7;padding:14px;margin-top:10px}
   .pickbox h4{margin:0 0 3px;font-size:14px;color:var(--navy)}
-  .pickbox .sub{font-size:12px;color:var(--muted);margin:0 0 10px}
   .pickrow{display:flex;align-items:flex-start;gap:9px;padding:7px 9px;background:#fff;border:1px solid var(--line);
     border-radius:9px;margin-bottom:6px;cursor:pointer}
   .pickrow input{margin-top:3px;flex:0 0 auto;width:16px;height:16px;accent-color:var(--pink);cursor:pointer}
   .pickrow .n{font-weight:700;color:var(--pink);flex:0 0 28px}
   .pickrow .lbl{font-size:13px;color:var(--ink);line-height:1.4}
   .pickacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
-  .pickacts .count{font-size:12px;color:var(--muted);margin-left:auto}
 
 
   /* ---- guided business-description form (route 1), 10 Aug 2026 ---- */
@@ -71,25 +67,16 @@
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);
     line-height:1.5;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:920px;margin:0 auto;padding:24px 18px 64px}
 
   .brand{display:flex;align-items:center;gap:14px;padding:8px 2px 20px}
-  .brand .logo{width:46px;height:46px;border-radius:12px;background:var(--pink);
-    display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;box-shadow:var(--shadow)}
-  .brand h1{font-size:19px;margin:0;color:var(--navy);font-weight:800;letter-spacing:.2px}
-  .brand small{display:block;color:var(--pink);font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase}
 
   .steps{display:flex;gap:6px;margin:0 0 20px;flex-wrap:wrap}
   .steps .s{flex:1;min-width:88px;font-size:11px;font-weight:700;color:var(--muted);
     text-transform:uppercase;letter-spacing:.06em;padding:8px 4px;border-top:3px solid var(--line);text-align:center}
   .steps .s.active{color:var(--navy);border-top-color:var(--pink)}
   .steps .s.done{color:var(--navy);border-top-color:var(--navy)}
-
-  .card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);
-    box-shadow:var(--shadow);padding:28px;margin-bottom:18px}
   h2{color:var(--navy);font-size:22px;margin:0 0 6px}
   h3{color:var(--navy)}
-  .lead{color:var(--muted);margin:0 0 20px}
 
   label.fld{display:block;font-weight:700;color:var(--navy);margin:14px 0 6px;font-size:14px}
   label.fld .opt{color:var(--muted);font-weight:500;font-size:12px}
@@ -98,46 +85,7 @@
     font-size:15px;font-family:inherit;color:var(--ink);background:#fff}
   input:focus,textarea:focus,select:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 3px rgba(229,22,82,.12)}
   textarea{min-height:74px;resize:vertical}
-  .search-row{display:flex;gap:10px}
-  .search-row input{flex:1;font-size:17px;padding:16px}
-
-  .btn{appearance:none;border:0;border-radius:10px;padding:14px 26px;font-size:15px;font-weight:700;
-    cursor:pointer;font-family:inherit;transition:.15s}
-  .btn.primary{background:var(--pink);color:#fff}
-  .btn.primary:hover{background:var(--pink-dark)}
-  .btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--line)}
-  .btn.ghost:hover{border-color:var(--navy)}
-  .btn.block{width:100%}
-  .actions{display:flex;justify-content:space-between;gap:12px;margin-top:24px}
-  .link{color:var(--pink);font-weight:700;cursor:pointer;background:none;border:0;font-size:14px;padding:0}
-  .link:hover{text-decoration:underline}
-
-  .tick{display:flex;gap:13px;align-items:flex-start;padding:15px;border:1.5px solid var(--line);
-    border-radius:12px;margin-bottom:12px;cursor:pointer;transition:.15s}
-  .tick:hover{border-color:var(--navy-soft)}
-  .tick.on{border-color:var(--pink);background:#fef4f7}
-  .tick .box{width:22px;height:22px;border-radius:6px;border:2px solid var(--line);display:grid;
-    place-items:center;flex:none;margin-top:1px;font-size:14px;color:#fff}
-  .tick.on .box{background:var(--pink);border-color:var(--pink)}
-  .tick .box.locked{background:var(--navy);border-color:var(--navy)}
-  .tick .t{font-weight:700;color:var(--navy)}
-  .tick .eg{color:var(--muted);font-size:13px}
-  .tick .sub{margin-top:12px;display:none}
-  .tick.on .sub{display:block}
-
-  .cls-search{margin-bottom:12px}
-  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:640px){.cols{grid-template-columns:1fr}.search-row{flex-direction:column}}
-  .listbox{border:1.5px solid var(--line);border-radius:12px;max-height:280px;overflow:auto}
-  .listbox .row{padding:11px 13px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;gap:10px;align-items:baseline}
-  .listbox .row:hover{background:#fef4f7}
-  .listbox .row:last-child{border-bottom:0}
-  .listbox .n{font-weight:800;color:var(--pink);font-size:13px;min-width:22px}
-  .basket{border:1.5px solid var(--line);border-radius:12px;padding:12px;min-height:120px}
-  .chip{display:inline-flex;align-items:center;gap:8px;background:#fef4f7;color:var(--navy);
-    border:1px solid #f6c9d6;border-radius:999px;padding:6px 12px;margin:4px 4px 0 0;font-size:13px;font-weight:600}
-  .chip b{color:var(--pink)}
-  .chip .x{cursor:pointer;color:var(--pink);font-weight:800}
   .muted-note{color:var(--muted);font-size:13px;margin-top:8px}
 
   .juris-block{padding-top:6px}
@@ -151,101 +99,16 @@
     font-weight:600;font-size:14px;color:var(--navy);background:#fff}
   .pop .c.on{border-color:var(--pink);background:#fef4f7;color:var(--pink)}
   .pop .c small{color:var(--muted);font-weight:500}
-  .group-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:16px 0 4px}
-
-  .summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:8px}
   @media(max-width:640px){.summary{grid-template-columns:repeat(2,1fr)}}
-  .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center}
-  .stat .v{font-size:26px;font-weight:800;color:var(--navy);line-height:1}
-  .stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:6px}
-  .stat.high .v{color:#c0392b}.stat.med .v{color:#b7791f}.stat.low .v{color:#3d7a34}
-  .riskbar{height:10px;border-radius:6px;display:flex;overflow:hidden;margin:14px 0 4px}
-  .riskbar i{display:block}
-  table.res{width:100%;border-collapse:collapse;margin-top:8px}
-  table.res th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
-    padding:8px 10px;border-bottom:2px solid var(--line)}
-  table.res td{padding:11px 10px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:top}
-  .band{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800;color:#4a2f00}
-  .band.High{background:var(--r-high)}.band.Medium{background:var(--r-med)}
-  .band.Low{background:var(--r-low)}.band.Negligible{background:var(--r-neg);color:#555}
-  .co{font-size:12px;color:var(--muted);margin-top:3px}
-  .co .dead{color:#c0392b;font-weight:700}
-  .disc{background:#fbfcfd;border:1px solid var(--line);border-left:4px solid var(--navy);
-    border-radius:8px;padding:12px 14px;margin:10px 0;font-size:13px;color:var(--navy)}
-
-  /* ---- the opinion block (viability, ported from the Industry Report) ----
-     Dials are pure conic-gradient: no canvas, no charting library, and they
-     survive print-to-PDF, which matters because the same markup has to work
-     in the emailed report. */
-  .opinion{border:1px solid var(--line);border-radius:14px;padding:20px 22px;
-    margin-top:24px;background:linear-gradient(180deg,#fbfcfd,#fff)}
-  .opinion .op-head{margin:0 0 14px;font-size:13px;text-transform:uppercase;
-    letter-spacing:.06em;color:var(--muted)}
-  .op-top{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
-  .op-master{flex:0 0 auto}
-  .op-say{flex:1;min-width:240px}
-  .op-say h4{margin:0 0 8px;font-size:19px;color:var(--navy);line-height:1.3}
-  .op-say p{margin:0 0 9px;font-size:14px;line-height:1.55;color:var(--ink)}
-  .op-say p:last-child{margin-bottom:0}
-  .op-say p.op-caveat{font-size:13px;color:var(--muted)}
-  .dial{border-radius:50%;display:grid;place-items:center;position:relative;
-    background:conic-gradient(var(--dc,var(--navy)) calc(var(--v,0)*3.6deg),#ECEFF1 0deg)}
-  .dial:before{content:'';position:absolute;border-radius:50%;background:#fff;
-    inset:11%}
-  .dial .val,.dial .cap{position:relative;z-index:1}
-  .dial-master{width:118px;height:118px;flex-direction:column}
-  .dial-master .val{font-size:27px;font-weight:800;color:var(--navy);line-height:1}
-  .dial-master .cap{display:block;font-size:11px;color:var(--muted);
-    text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
-  .op-dials{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px;
-    padding-top:18px;border-top:1px solid var(--line)}
   @media(max-width:640px){.op-dials{grid-template-columns:repeat(2,1fr)}}
-  .subdial{text-align:center}
-  .subdial .dial{width:62px;height:62px;margin:0 auto 7px}
-  .subdial .dial .val{font-size:15px;font-weight:800;color:var(--navy)}
-  .subdial .nm{font-size:12px;font-weight:700;color:var(--navy)}
-  .subdial .sb{font-size:11px;color:var(--muted);line-height:1.35;margin-top:2px}
-
-  /* ---- recommended next steps ---- */
-  .next-head{margin:26px 0 4px;color:var(--navy)}
-  .nexts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px;
-    align-items:stretch}
   @media(max-width:700px){.nexts{grid-template-columns:1fr}}
-  .nx{border:1px solid var(--line);border-radius:14px;padding:20px;background:#fff;
-    display:flex;flex-direction:column}
-  .nx.lead{border:2px solid var(--pink);background:#fef4f7}
-  .nx .eyebrow{font-size:11px;font-weight:800;text-transform:uppercase;
-    letter-spacing:.06em;color:var(--pink);margin-bottom:6px}
-  .nx h4{margin:0 0 8px;color:var(--navy);font-size:17px}
-  .nx p{margin:0 0 10px;font-size:13.5px;line-height:1.55;color:var(--ink)}
-  .nx .offer{background:#fff;border:1px dashed var(--pink);border-radius:10px;
-    padding:10px 12px;font-size:13px;color:var(--navy);margin:0 0 14px}
-  .nx.lead .offer{background:#fff}
-  .nx .btn{margin-top:auto}
-
-  .report{border:1px solid var(--line);border-radius:14px;padding:22px;margin-top:22px;background:#fbfcfd}
-  .report h3{margin:0 0 4px;font-size:17px}
-  .report .sub{color:var(--muted);font-size:14px;margin:0 0 14px}
-  .cta.audit{border:1.5px solid var(--line);border-radius:12px;padding:18px;text-align:center;margin-top:14px}
-  .cta.audit h4{margin:0 0 6px;color:var(--navy)}
-  .cta.audit p{margin:0 0 12px;font-size:13px;color:var(--muted)}
 
   .benefits{list-style:none;padding:0;margin:16px 0}
   .benefits li{padding:8px 0 8px 30px;position:relative;color:var(--navy);font-weight:600}
   .benefits li:before{content:'✓';position:absolute;left:0;color:var(--pink);font-weight:800}
   .portal-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}
-  .portal-actions .btn{flex:1;min-width:200px}
   .done-mark{width:64px;height:64px;border-radius:50%;background:var(--r-low);color:#2f6b23;display:grid;
     place-items:center;font-size:34px;margin:0 auto 14px}
-
-  /* class-help panel */
-  .help-opt{border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;transition:.15s}
-  .help-opt:hover{border-color:var(--navy-soft)}
-  .help-opt.open{border-color:var(--pink);background:#fef4f7}
-  .ho-h{font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .ho-s{color:var(--muted);font-size:13px;margin-top:4px}
-  .ho-body{margin-top:12px;display:none}
-  .help-opt.open .ho-body{display:block}
   .tag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:3px 8px;border-radius:999px;background:#eef2f4;color:var(--muted)}
   .tag.best{background:var(--pink);color:#fff}
   .tag.free{background:var(--r-low);color:#2f6b23}
@@ -258,189 +121,429 @@
   .hres .r:hover{background:#fff}
   .hres .rn{font-weight:700;color:var(--pink);min-width:120px}
   .gate-note{background:#f6f2ff;border:1px solid #ddd0ff;color:#5b3fb0;border-radius:9px;padding:10px 12px;font-size:13px}
-  .hidden{display:none!important}
   .mode-flag{position:fixed;bottom:10px;right:12px;font-size:11px;color:var(--muted);background:#fff;
     border:1px solid var(--line);border-radius:8px;padding:4px 8px}
-  .err{color:#c0392b;font-size:13px;margin-top:8px;font-weight:600}
-</style>
+
+  /* ===== free-search page layer — everything shared lives in braudit.css ===== */
+  .brand{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+  .site-logo{height:44px;width:auto;display:block}
+
+  /* step 1 */
+  .card.s1{display:grid;grid-template-columns:1fr 200px;gap:36px;align-items:center;
+    padding:52px 40px 56px}
+  .card.s1 h1{font-size:38px;letter-spacing:-1.1px}
+  .card.s1 .lead{font-size:17px;max-width:560px}
+  .hero-in{border-radius:var(--r-md);padding:19px 20px;font-size:19px;font-weight:600}
+  .s1-owl{width:100%;max-width:200px}
+
+  /* step 2 */
+  .name-in{max-width:420px;padding:13px 15px;font-weight:600}
+  .drop{border:1.5px dashed var(--pink-line);border-radius:var(--r-md);background:#fff;
+    padding:20px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .drop b{font-size:15.5px;font-weight:800;color:var(--navy)}
+  .skip{background:none;border:0;padding:10px 0 0;font-size:14.5px;font-weight:700;
+    color:var(--pink);text-decoration:underline;cursor:pointer;font-family:inherit}
+  .skip:hover{color:var(--pink-hover)}
+  .later{border:1px solid var(--line);border-radius:var(--r-md);background:#fff;
+    padding:18px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    font-size:15px;color:var(--slate)}
+  .btn.sm{padding:12px 18px;font-size:14.5px}
+
+  /* step 3 */
+  .juris-block{margin-bottom:30px}
+  .jhead{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+  .jhead h3{font-size:19px;letter-spacing:-.3px;margin:0}
+  .pill.lg{padding:12px 20px;font-size:15px}
+  .pill.navy{color:var(--quiet)}
+  .eu-note{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px}
+
+  /* step 4 */
+  .cls-grid{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+  .cls-search{margin-bottom:12px}
+  .listbox{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;
+    max-height:330px;overflow-y:auto;background:#fff}
+  .listbox .row{display:grid;grid-template-columns:44px 1fr 22px;gap:8px;align-items:center;
+    width:100%;border:0;border-top:1px solid var(--line);padding:14px 16px;cursor:pointer;
+    text-align:left;font-family:inherit;background:#fff;font-size:16px}
+  .listbox .row:first-child{border-top:0}
+  .listbox .row.on{background:var(--pink-tint)}
+  .listbox .row.on span:nth-child(2){font-weight:700}
+  .listbox .row .n{font-family:var(--font-display);font-size:13px;font-weight:800;
+    color:var(--pink)}
+  .listbox .row .g{color:var(--pink);font-size:16px;font-weight:800;text-align:right}
+  .basket{border:1px solid var(--line);border-radius:var(--r-md);padding:18px;
+    min-height:110px;display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;
+    background:var(--panel)}
+  .help-head{display:flex;gap:20px;flex-wrap:wrap;align-items:center;
+    margin-top:30px;padding-top:30px;border-top:1px solid var(--line)}
+  .opt-block.tool .opt-row{align-items:start}
+  .tick.tool-n{background:transparent;border:0;font-family:var(--font-display);
+    font-size:15px;font-weight:800;color:var(--muted)}
+  .opt-block.tool.on .tick.tool-n{background:transparent;border:0;color:var(--pink)}
+  .tool-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .tool-h h4{margin:0;font-size:20px;letter-spacing:-.4px}
+  .badge{font-family:var(--font-display);font-size:10.5px;font-weight:800;letter-spacing:1px;
+    text-transform:uppercase;color:#fff;background:var(--navy);border-radius:var(--r-pill);
+    padding:5px 10px}
+  .badge.ai{background:var(--pink)}
+
+  /* results */
+  .restable{border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;
+    margin-bottom:34px;background:#fff}
+  .rt-head,.rt-row{display:grid;grid-template-columns:110px 1.3fr 1.5fr 130px 120px;gap:14px}
+  .rt-head{padding:13px 20px;background:var(--panel);border-bottom:1px solid var(--line);
+    font-family:var(--font-display);font-size:10.5px;font-weight:800;letter-spacing:1.2px;
+    text-transform:uppercase;color:var(--muted)}
+  .rt-row{align-items:center;padding:15px 20px;border-top:1px solid var(--line);font-size:14.5px}
+  .rt-row:first-child{border-top:0}
+  .rt-row .mk{font-size:15.5px;font-weight:800;color:var(--ink)}
+  .rt-row .ow{color:var(--quiet)}
+  .rt-row .ty,.rt-row .st{color:var(--slate)}
+  .co{font-size:13px;color:var(--quiet);margin-top:3px}
+  .co .dead{color:var(--risk-high);font-weight:700}
+
+  .opinion{border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:26px;
+    background:#fff}
+  .op-top{padding:28px 30px;display:grid;grid-template-columns:190px 1fr;gap:28px;
+    align-items:center}
+  .op-master{display:flex;flex-direction:column;align-items:center}
+  .op-say h2{font-size:26px;margin:0 0 10px}
+  .op-say p{font-size:16px;line-height:1.62;color:var(--slate);margin:0 0 10px}
+  .op-say p:last-child{margin-bottom:0}
+  .op-say p.op-caveat{font-size:14.5px;color:var(--muted)}
+  .op-dials{border-top:1px solid var(--line);background:var(--panel-soft);padding:26px 30px;
+    display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+  .subdial{display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center}
+  .subdial .nm{font-size:15.5px;font-weight:800;color:var(--navy)}
+  .subdial .sb{font-size:13.5px;line-height:1.5;color:var(--quiet);max-width:190px}
+
+  .nexts{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;margin-bottom:34px;
+    align-items:stretch}
+  .nx{border:1px solid var(--line);border-radius:var(--r-xl);padding:26px 28px;background:#fff;
+    display:flex;flex-direction:column}
+  .nx.lead-card{border:2px solid var(--pink);background:var(--pink-tint)}
+  .nx h4{font-size:23px;letter-spacing:-.5px;margin:0 0 8px}
+  .nx p{font-size:15.5px;line-height:1.6;color:var(--slate);margin:0 0 10px}
+  .nx .offer{border:1.5px dashed var(--pink-line);border-radius:var(--r-md);padding:15px 17px;
+    font-size:15px;line-height:1.6;color:var(--navy);background:#fff;margin:0 0 20px}
+  .nx .btn{margin-top:auto}
+
+  .report{background:var(--panel);border:1px solid var(--line);border-radius:18px;
+    padding:28px 30px;display:grid;grid-template-columns:1fr 150px;gap:26px;align-items:start;
+    margin-top:26px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+  @media(max-width:880px){
+    .card.s1{grid-template-columns:1fr} .s1-owl{display:none}
+    .cls-grid{grid-template-columns:1fr}
+    .op-dials{grid-template-columns:repeat(2,1fr)}
+    .nexts{grid-template-columns:1fr}
+    .report{grid-template-columns:1fr} .report img{display:none}
+    .rt-head{display:none}
+    .rt-row{grid-template-columns:1fr;gap:4px}
+    .rt-row .ow,.rt-row .ty,.rt-row .st{font-size:13.5px}
+  }
+  @media(max-width:640px){
+    .card.s1{padding:30px 18px 34px} .card.s1 h1{font-size:27px}
+    .op-top{grid-template-columns:1fr;justify-items:center;text-align:center}
+    .cols{grid-template-columns:1fr}
+  }</style>
 </head>
 <body>
 <div class="wrap">
   <div class="brand">
-    <div class="logo">TH</div>
-    <div><h1>The Trademark Helpline</h1><small>Search · Register · Protect</small></div>
+    <img src="/brand/logo.svg" alt="The Trademark Helpline" class="site-logo">
   </div>
 
   <div class="steps" id="stepper"></div>
 
   <!-- STEP 1 -->
-  <section class="card" data-screen="search">
-    <h2>Free Trademark Search</h2>
-    <p class="lead">Check the UK trademark register for your name in seconds. Free, instant, no obligation.</p>
-    <div class="search-row">
-      <input id="name" type="text" placeholder="Type your trademark or brand name (e.g. McDonald's or Big Mac) here" autocomplete="off">
-      <button class="btn primary" onclick="go('marks')">Search</button>
+  <section class="card s1" data-screen="search">
+    <div>
+      <div class="eyebrow">Free trademark search</div>
+      <h1>What&rsquo;s the name you want to protect?</h1>
+      <p class="lead">Pop in your brand name and we&rsquo;ll check it against the UK register
+        straight away. No sign up, and nothing to pay.</p>
+      <input id="name" class="hero-in" type="text" autocomplete="off"
+             placeholder="Type your Trademark Name and click Search">
+      <p class="sub" style="margin-top:14px">Just the name for now. We&rsquo;ll ask about
+        logos and taglines next.</p>
+      <div style="margin-top:26px">
+        <button class="btn primary" onclick="go('marks')">Search</button>
+      </div>
     </div>
+    <img src="/brand/knowledge-centre-owl.png" alt="" class="ill s1-owl">
   </section>
 
   <!-- STEP 2 -->
   <section class="card hidden" data-screen="marks">
-    <h2>What shall we search?</h2>
-    <p class="lead">Your name is included. Add a logo or tagline to note them for your Brand Audit.</p>
+    <h1>What shall we search?</h1>
+    <p class="lead">Your name is in. Add a logo or tagline and we&rsquo;ll note them for
+      your Brand Audit &mdash; taglines are searched as words, logos are not.</p>
 
-    <div class="tick on" id="tick-name">
-      <div class="box locked">✓</div>
-      <div style="flex:1">
-        <div class="t">Name <span class="eg">— e.g. “McDonald’s”</span></div>
-        <div class="eg">Your name: <b id="name-echo"></b></div>
+    <div class="opt-list">
+
+      <!-- Name. Editable, and never assumed to be a word mark: people type a
+           tagline into the search box, realise what it is, and want to move it.
+           If this is left empty and a tagline is given, the tagline becomes the
+           thing we search. -->
+      <div class="opt-block on" id="tick-name">
+        <div class="opt-row" style="cursor:default;align-items:start">
+          <span class="tick">&#10003;</span>
+          <img src="/brand/eg-name.png" alt="McDonald's wordmark" class="eg">
+          <div>
+            <h4>Name <span>&mdash; for example &ldquo;McDonald&rsquo;s&rdquo;</span></h4>
+            <p class="sub" style="margin:4px 0 10px">The word itself, however it&rsquo;s written.
+              Not sure it&rsquo;s a name? Move it to Tagline below.</p>
+            <input id="word-mark" type="text" class="name-in" autocomplete="off"
+                   oninput="syncWordMark()" placeholder="Your name">
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div class="tick" id="tick-logo" onclick="toggleTick('logo')">
-      <div class="box">✓</div>
-      <div style="flex:1">
-        <div class="t">Logo <span class="eg">— e.g. the Golden Arches</span></div>
-        <div class="sub">
-          <input type="file" id="logo-file" accept="image/*" onclick="event.stopPropagation()">
-          <label class="fld" style="font-weight:600;margin-top:10px" onclick="event.stopPropagation()">
-            <input type="checkbox" id="logo-later" style="width:auto;margin-right:8px">Add this later
-          </label>
-          <div class="muted-note">Logos are analysed in a Brand Audit, not the free word search.</div>
+      <div class="opt-block" id="tick-logo">
+        <button type="button" class="opt-row" onclick="toggleTick('logo')">
+          <span class="tick">&#10003;</span>
+          <img src="/brand/eg-logo.png" alt="Golden Arches logo" class="eg">
+          <span>
+            <h4>Logo <span>&mdash; for example the Golden Arches</span></h4>
+            <span class="sub">Recorded for your Brand Audit. Image comparison isn&rsquo;t
+              part of the free word search.</span>
+          </span>
+        </button>
+        <div class="opt-drawer hidden" id="logo-drawer">
+          <div class="drop" id="logo-drop">
+            <input type="file" id="logo-file" accept="image/*">
+            <div style="flex:1;min-width:240px">
+              <b>Drop your logo in, or choose a file</b>
+              <p class="sub" style="margin-top:4px">PNG, JPG or SVG. We only store it against
+                your enquiry.</p>
+            </div>
+          </div>
+          <button type="button" class="skip" onclick="logoLater(true)">Haven&rsquo;t got it to
+            hand &mdash; I&rsquo;ll send it later</button>
+          <div class="later hidden" id="logo-later-panel">
+            <span style="flex:1;min-width:240px">No problem &mdash; we&rsquo;ve noted that a logo
+              is coming and we&rsquo;ll ask for it when we pick this up.</span>
+            <button type="button" class="btn ghost sm" onclick="logoLater(false)">Upload it now
+              instead</button>
+          </div>
+          <input type="checkbox" id="logo-later" class="hidden">
+        </div>
+      </div>
+
+      <div class="opt-block" id="tick-tag">
+        <button type="button" class="opt-row" onclick="toggleTick('tag')">
+          <span class="tick">&#10003;</span>
+          <img src="/brand/eg-tagline.png" alt="I'm lovin' it tagline" class="eg">
+          <span>
+            <h4>Tagline <span>&mdash; for example &ldquo;I&rsquo;m Lovin&rsquo; It&rsquo;&rdquo;</span></h4>
+            <span class="sub">Searched as words, same as a name. How it&rsquo;s used and styled
+              is a Brand Audit question.</span>
+          </span>
+        </button>
+        <div class="opt-drawer hidden" id="tag-drawer">
+          <input id="tagline" type="text" style="max-width:460px"
+                 placeholder="Add your tagline here">
         </div>
       </div>
     </div>
 
-    <div class="tick" id="tick-tag" onclick="toggleTick('tag')">
-      <div class="box">✓</div>
-      <div style="flex:1">
-        <div class="t">Tagline <span class="eg">— e.g. “I’m Lovin’ It”</span></div>
-        <div class="sub"><textarea id="tagline" placeholder="Add tagline here" onclick="event.stopPropagation()"></textarea></div>
-      </div>
-    </div>
-
     <div class="actions">
-      <button class="link" onclick="history.back()">← Back</button>
+      <button class="link" onclick="history.back()">&larr; Back</button>
       <button class="btn primary" onclick="go('jurisdiction')">Continue</button>
     </div>
   </section>
 
-  <!-- STEP 3 -->
+  <!-- STEP 4 — classes -->
   <section class="card hidden" data-screen="classes">
-    <h2>Classes &amp; Terms <span style="font-size:14px;font-weight:500;color:var(--muted)">(optional)</span></h2>
-    <p class="lead">Narrowing to your classes sharpens the results — but it’s optional. Leave it open and we’ll search every class.</p>
-    <div class="cols">
+    <h1>What do you sell?</h1>
+    <p class="lead">Trade marks are registered against classes of goods and services. Pick the
+      ones you actually trade in &mdash; your registration only protects what you list.</p>
+
+    <div class="cls-grid">
       <div>
-        <input class="cls-search" type="text" id="cls-search" placeholder="Search classes…" oninput="renderClassList()">
+        <input class="cls-search" type="search" id="cls-search"
+               placeholder="Search classes&hellip;" oninput="renderClassList()">
         <div class="listbox" id="cls-list"></div>
       </div>
       <div>
-        <div class="group-title">Your classes</div>
-        <div class="basket" id="cls-basket"><span class="muted-note">None selected — we’ll search all classes.</span></div>
+        <div class="eyebrow">Your classes</div>
+        <div class="basket" id="cls-basket"></div>
+        <div class="panel-navy" style="margin-top:18px">
+          <img src="/brand/apple.png" alt="" style="width:60px;height:auto;flex:0 0 auto">
+          <div>
+            <div class="eyebrow">Worth knowing</div>
+            <p>Picking more classes isn&rsquo;t automatically better &mdash; each one costs, and
+              a class you don&rsquo;t trade in can be challenged. Pick what you sell today plus
+              what&rsquo;s genuinely next.</p>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- help picking classes -->
-    <div id="help-toggle" style="margin-top:18px;text-align:center">
-      <button class="btn ghost" onclick="toggleHelp(true)">🧭 I want some help picking classes</button>
+    <div class="help-head">
+      <img src="/brand/owl-branch.png" alt="" class="ill" style="width:120px">
+      <div style="min-width:280px;flex:1">
+        <h2>Want some help picking your classes?</h2>
+        <p class="sub" style="font-size:15.5px">Try any of our four handy tools. Each one opens
+          right here &mdash; you won&rsquo;t lose your place.</p>
+      </div>
     </div>
 
-    <div id="help-panel" class="reveal hidden">
-      <h3 style="font-size:16px;margin:0 0 4px">How would you like help?</h3>
-      <p class="muted-note" style="margin:0 0 12px">Pick the route that fits what you have. The more precise the input, the better the classes.</p>
+    <div class="opt-list" id="help-panel" style="max-width:none;margin-top:22px">
 
-      <div class="help-opt" data-opt="5" onclick="openHelp('5')">
-        <div class="ho-h"><b>Use an existing trademark</b> <span class="tag best">Most accurate</span></div>
-        <div class="ho-s">A direct competitor’s mark, or one of your own covering the same goods &amp; services. We borrow its classes &amp; terms.</div>
-        <div class="ho-body" id="ho-5"></div>
+      <div class="opt-block tool" data-opt="5">
+        <button type="button" class="opt-row no-tile" onclick="openHelp('5')">
+          <span class="tick tool-n">1</span>
+          <span>
+            <span class="tool-h"><h4>Use an existing trademark</h4>
+              <span class="badge">Most accurate</span></span>
+            <span class="sub">A competitor&rsquo;s mark, or one of your own covering the same
+              goods and services. We borrow its classes and terms.</span>
+          </span>
+        </button>
+        <div class="opt-drawer" id="ho-5"></div>
       </div>
 
-      <div class="help-opt" data-opt="3" onclick="openHelp('3')">
-        <div class="ho-h"><b>Your company</b> <span class="tag free">Free</span> <span class="tag">Companies House</span></div>
-        <div class="ho-s">Find your company — we read its SIC codes and map them to classes. Nothing to type but your name.</div>
-        <div class="ho-body" id="ho-3"></div>
+      <div class="opt-block tool" data-opt="3">
+        <button type="button" class="opt-row no-tile" onclick="openHelp('3')">
+          <span class="tick tool-n">2</span>
+          <span>
+            <span class="tool-h"><h4>Your company</h4>
+              <span class="badge">Companies House</span></span>
+            <span class="sub">Find your company and we&rsquo;ll read its SIC codes and map them
+              to classes. Nothing to type but your name.</span>
+          </span>
+        </button>
+        <div class="opt-drawer" id="ho-3"></div>
       </div>
 
-      <div class="help-opt gated" data-opt="1" onclick="openHelp('1')">
-        <div class="ho-h"><b>Describe your business</b> <span class="tag ai">AI · email needed</span></div>
-        <div class="ho-s">Tell us what your business does — the more detail, the more accurate.</div>
-        <div class="ho-body" id="ho-1"></div>
+      <div class="opt-block tool" data-opt="1">
+        <button type="button" class="opt-row no-tile" onclick="openHelp('1')">
+          <span class="tick tool-n">3</span>
+          <span>
+            <span class="tool-h"><h4>Describe your business</h4>
+              <span class="badge ai">AI</span></span>
+            <span class="sub">A few questions about what you do. The more detail you give,
+              the more accurate the answer.</span>
+          </span>
+        </button>
+        <div class="opt-drawer" id="ho-1"></div>
       </div>
 
-      <div class="help-opt gated" data-opt="2" onclick="openHelp('2')">
-        <div class="ho-h"><b>Your website URL</b> <span class="tag ai">AI · email needed</span></div>
-        <div class="ho-s">Only use this if your site has a genuine breakdown of the goods
-          &amp; services you offer. If it’s just a landing page, use
-          <b>Describe your business</b> instead — you’ll get a better answer.</div>
-        <div class="ho-body" id="ho-2"></div>
+      <div class="opt-block tool" data-opt="2">
+        <button type="button" class="opt-row no-tile" onclick="openHelp('2')">
+          <span class="tick tool-n">4</span>
+          <span>
+            <span class="tool-h"><h4>Your website</h4>
+              <span class="badge ai">AI</span></span>
+            <span class="sub">Only if your site has a real breakdown of what you offer. If
+              it&rsquo;s a landing page, use <b>Describe your business</b> &mdash; you&rsquo;ll
+              get a better answer.</span>
+          </span>
+        </button>
+        <div class="opt-drawer" id="ho-2"></div>
       </div>
-
-
-      <div style="text-align:center;margin-top:8px"><button class="link" onclick="toggleHelp(false)">Hide</button></div>
     </div>
 
     <div class="actions">
-      <button class="link" onclick="history.back()">← Back</button>
-      <div class="err hidden" id="cls-gate"></div>
-      <button class="btn primary" onclick="beginSearch()">Begin Free Search</button>
+      <button class="link" onclick="history.back()">&larr; Back</button>
+      <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+        <span class="sub" id="cls-count"></span>
+        <button class="btn primary" onclick="beginSearch()">Begin free search</button>
+      </div>
     </div>
+    <div class="err hidden" id="cls-gate"></div>
   </section>
 
-  <!-- STEP 4 — combined jurisdictions -->
+  <!-- STEP 3 — jurisdictions -->
   <section class="card hidden" data-screen="jurisdiction">
-    <h2>Where do you trade?</h2>
-    <p class="lead">Our free search covers the UK IPO. Telling us where you trade lets us flag what falls outside it — honestly.</p>
+    <h1>Where do you trade?</h1>
+    <p class="lead">Our free search covers the UK register. Telling us where you trade lets
+      us be straight with you about what falls outside it.</p>
 
     <div class="juris-block">
-      <h3 style="font-size:16px;margin:0 0 10px">Where do you trade <u>today</u>?</h3>
+      <div class="jhead">
+        <img src="/brand/bus.png" alt="" style="height:62px;width:auto">
+        <h3>Where do you trade today?</h3>
+      </div>
       <div class="seg">
         <div class="opt on" id="now-uk" onclick="setMode('now','uk')">UK only</div>
         <div class="opt" id="now-select" onclick="setMode('now','select')">Select countries</div>
       </div>
       <div id="pick-now"></div>
       <div id="now-continue" style="margin-top:14px">
-        <button class="btn ghost" onclick="revealPlan()">Continue →</button>
+        <button class="btn ghost" onclick="revealPlan()">Continue</button>
       </div>
     </div>
 
     <div class="reveal hidden juris-block" id="plan-block">
-      <h3 style="font-size:16px;margin:0 0 10px">Where do you <u>plan</u> to trade?</h3>
-      <div class="seg" id="plan-seg">
-        <div class="opt on" data-plan="none" onclick="setPlanMode('none')">No other countries</div>
-        <div class="opt" data-plan="uk" onclick="setPlanMode('uk')">UK only</div>
-        <div class="opt" data-plan="select" onclick="setPlanMode('select')">Select countries</div>
+      <div class="jhead">
+        <img src="/brand/owl-globe.png" alt="" style="height:70px;width:auto">
+        <h3>And where do you plan to trade next?</h3>
+      </div>
+      <!-- "No plans" is the default and is navy rather than pink: it is a
+           perfectly good answer, not a lesser one. Choosing "further afield"
+           opens the list with today's countries already ticked for context —
+           planCodes() subtracts them, so only what you ADD counts as a plan. -->
+      <div class="pills" id="plan-seg" style="gap:12px">
+        <button type="button" class="pill navy lg on" data-plan="none"
+                onclick="setPlanMode('none')">No plans beyond where I am now</button>
+        <button type="button" class="pill lg" data-plan="select"
+                onclick="setPlanMode('select')">I&rsquo;m looking further afield</button>
       </div>
       <div id="pick-plan" class="hidden"></div>
+
+      <div class="panel eu-note">
+        <img src="/brand/europe.png" alt="" style="height:52px;width:auto">
+        <div style="min-width:260px;flex:1">
+          <b>One filing can cover the whole EU.</b>
+          <p class="sub" style="margin-top:4px">If several EU countries matter to you, an EU
+            trade mark is usually cheaper than filing in each one. We&rsquo;ll tell you if
+            that applies.</p>
+        </div>
+      </div>
+
       <div class="actions">
-        <button class="link" onclick="history.back()">← Back</button>
-        <button class="btn primary" onclick="go('classes')">Continue →</button>
+        <button class="link" onclick="history.back()">&larr; Back</button>
+        <button class="btn primary" onclick="go('classes')">Continue</button>
       </div>
     </div>
   </section>
 
   <!-- RESULTS -->
   <section class="card hidden" data-screen="results">
-    <h2 id="res-head">Search Results</h2>
+    <h1 id="res-head">Here&rsquo;s what&rsquo;s on the register</h1>
     <p class="lead" id="res-sub"></p>
-    <div class="disc hidden" id="res-stale">Your classes or jurisdictions have changed since this search ran &mdash;
-      go back and press &ldquo;Begin Free Search&rdquo; again to refresh these results.</div>
+    <div class="disc hidden" id="res-stale">Your classes or jurisdictions have changed since
+      this search ran &mdash; go back and press &ldquo;Begin free search&rdquo; again to
+      refresh these results.</div>
+
     <div class="summary" id="res-summary"></div>
     <div class="riskbar" id="res-bar"></div>
-    <h3 style="margin:22px 0 4px" id="res-toptitle">Top 5 registered / active</h3>
-    <table class="res"><thead><tr>
-      <th>Risk</th><th>Type</th><th>Mark</th><th>Status</th>
-    </tr></thead><tbody id="res-rows"></tbody></table>
+    <p class="sub" id="res-barnote" style="margin:0 0 32px"></p>
+
+    <h2 style="font-size:22px">The five closest live marks</h2>
+    <div class="restable">
+      <div class="rt-head">
+        <span>Risk</span><span>Mark</span><span>Owner</span><span>Type</span><span>Status</span>
+      </div>
+      <div id="res-rows"></div>
+    </div>
 
     <!-- OPINION — the viability read, ported from the Industry Report's
          Tailored Report. Rendered from what the engine sent; never
          recalculated here, so screen, email and CRM can't disagree. -->
     <div class="opinion" id="res-opinion">
-      <h3 class="op-head">Our view</h3>
       <div class="op-top">
         <div class="op-master">
-          <div class="dial dial-master" id="op-dial"><span class="val" id="op-val">—</span><span class="cap">viable</span></div>
+          <div class="dial dial-master" id="op-dial"><span class="val" id="op-val">&mdash;</span><span class="cap">chance</span></div>
+          <p class="sub" id="op-cap" style="text-align:center;font-size:13.5px;margin-top:10px"></p>
         </div>
         <div class="op-say">
-          <h4 id="op-headline"></h4>
+          <div class="eyebrow">Our view</div>
+          <h2 id="op-headline"></h2>
           <div id="op-body"></div>
         </div>
       </div>
@@ -450,30 +553,37 @@
     <div id="res-disclaimers"></div>
 
     <!-- RECOMMENDED NEXT STEPS — order adapts to what the search found -->
-    <h3 class="next-head">Recommended next steps</h3>
+    <h2 style="font-size:24px;margin-top:34px">Recommended next steps</h2>
     <div class="nexts" id="res-nexts"></div>
 
     <!-- soft lead capture — third option, never a gate -->
     <div class="report" id="report-form">
-      <h3>Or have the full results emailed to you</h3>
-      <p class="sub">See ownership, company status and goods &amp; services for every result — sent straight to your inbox.</p>
-      <div class="cols">
-        <div><label class="fld">First name</label><input id="r-first" type="text"></div>
-        <div><label class="fld">Last name</label><input id="r-last" type="text"></div>
+      <div>
+        <h2 style="font-size:24px">Want the full list emailed to you?</h2>
+        <p class="sub" style="font-size:15.5px;max-width:520px;margin-bottom:18px">We&rsquo;ll
+          send every result we found, with the owner, company status and the goods and services
+          each one covers.</p>
+        <div class="cols">
+          <div><label class="fld">First name</label><input id="r-first" type="text"></div>
+          <div><label class="fld">Last name</label><input id="r-last" type="text"></div>
+        </div>
+        <div class="cols">
+          <div><label class="fld">Email</label><input id="r-email" type="email" placeholder="you@business.com"></div>
+          <div><label class="fld">Phone</label><input id="r-phone" type="tel"></div>
+        </div>
+        <label class="fld">Business name <span class="opt">(optional)</span></label>
+        <input id="r-biz" type="text">
+        <div class="err hidden" id="r-err"></div>
+        <button class="btn primary block" style="margin-top:18px" onclick="sendReport()">Send my report</button>
+        <p class="sub" style="font-size:13.5px;margin-top:14px">We&rsquo;ll only use these
+          details to send your report and talk to you about your brand.</p>
       </div>
-      <div class="cols">
-        <div><label class="fld">Email</label><input id="r-email" type="email" placeholder="you@business.com"></div>
-        <div><label class="fld">Phone</label><input id="r-phone" type="tel"></div>
-      </div>
-      <label class="fld">Business name <span class="opt">(optional)</span></label>
-      <input id="r-biz" type="text">
-      <div class="err hidden" id="r-err"></div>
-      <button class="btn primary block" style="margin-top:16px" onclick="sendReport()">Send my report</button>
+      <img src="/brand/news-bird.png" alt="" class="ill" style="width:100%;max-width:150px">
     </div>
 
     <div class="actions">
-      <button class="link" onclick="history.back()">← Back</button>
-      <button class="link" onclick="resetAll()">↺ Start a new search</button>
+      <button class="link" onclick="history.back()">&larr; Back to classes</button>
+      <button class="link pink" onclick="resetAll()">Start a new search</button>
     </div>
   </section>
 
@@ -682,17 +792,22 @@ function logEvent(type,screen,payload,includeSnapshot){
 function renderStepper(cur){
   const map={results:'results',portal:'results',done:'results'};
   const base=map[cur]||cur;const idx=STEP_ORDER.indexOf(base);
+  // Named steps, not a counter: a 4px rounded rule over an uppercase label.
+  // done = navy, current = pink, future = --line-soft with a muted label.
   document.getElementById('stepper').innerHTML=STEP_ORDER.map((s,i)=>{
-    const cls=i<idx?'done':(i===idx?'active':'');return `<div class="s ${cls}">${i+1}. ${STEP_LABELS[s]}</div>`;}).join('');
+    const cls=i<idx?'done':(i===idx?'now':'');
+    return `<div class="${cls}"><i></i><b>${i+1}. ${STEP_LABELS[s]}</b></div>`;}).join('');
 }
 /* ---- class-help panel (routes 2a–2e) ---- */
+/* The four tools are always on the page now — they used to hide behind an
+   "I want some help" button, which meant the people most likely to need them
+   never saw them. toggleHelp is kept so older callers don't break. */
 function toggleHelp(show){
-  document.getElementById('help-panel').classList.toggle('hidden',!show);
-  document.getElementById('help-toggle').classList.toggle('hidden',show);
-  if(show) document.getElementById('help-panel').scrollIntoView({behavior:'smooth'});
+  const el=document.getElementById('help-panel');
+  if(show&&el) el.scrollIntoView({behavior:'smooth'});
 }
 function openHelp(opt){
-  document.querySelectorAll('.help-opt').forEach(o=>o.classList.toggle('open',o.dataset.opt===opt));
+  document.querySelectorAll('.opt-block.tool').forEach(o=>o.classList.toggle('on',o.dataset.opt===opt));
   const body=document.getElementById('ho-'+opt);
   if(body.dataset.built){return;} body.dataset.built='1';
   if(opt==='5') body.innerHTML=`
@@ -1326,7 +1441,12 @@ async function lookupApi(action,params){
 
 function go(id){
   if(id==='marks'){state.name=document.getElementById('name').value.trim();
-    if(!state.name){shake('name');return;} document.getElementById('name-echo').textContent=state.name;
+    if(!state.name){shake('name');return;}
+    // Carry it into the editable field on step 2 rather than echoing it as
+    // text: from here on the visitor can change it, or empty it and let the
+    // tagline be the thing we search.
+    document.getElementById('word-mark').value=state.name;
+    document.getElementById('tick-name').classList.add('on');
     // The first real decision — this is what mints the session (see
     // ensureSession()). Everything before this point was a blank visit.
     logEvent('name_submitted','marks',{name:state.name},true);
@@ -1339,24 +1459,63 @@ function shake(elId){const el=document.getElementById(elId);el.style.borderColor
   setTimeout(()=>el.style.borderColor='',900);}
 
 /* step 2 */
-function toggleTick(k){const el=document.getElementById(k==='logo'?'tick-logo':'tick-tag');el.classList.toggle('on');
-  if(k==='logo')state.logo=el.classList.contains('on');
-  if(k==='tag'&&!el.classList.contains('on'))document.getElementById('tagline').value='';
-  logEvent('field_commit','marks',{field:k,on:el.classList.contains('on')},true);}
+// The file input lives inside a drawer that is re-shown rather than rebuilt,
+// so a delegated listener is steadier than binding on render.
+document.addEventListener('change',function(e){
+  if(e.target && e.target.id==='logo-file'){
+    state.logo=!!(e.target.files && e.target.files.length);
+    if(state.logo) logoLater(false);
+    logEvent('field_commit','marks',{field:'logo_file',on:state.logo},true);
+  }
+});
+function toggleTick(k){
+  const el=document.getElementById(k==='logo'?'tick-logo':'tick-tag');
+  el.classList.toggle('on');
+  const on=el.classList.contains('on');
+  const drawer=document.getElementById(k==='logo'?'logo-drawer':'tag-drawer');
+  if(drawer) drawer.classList.toggle('hidden',!on);
+  if(k==='logo'){ state.logo=on; if(!on) logoLater(false); }
+  if(k==='tag'&&!on) document.getElementById('tagline').value='';
+  logEvent('field_commit','marks',{field:k,on:on},true);}
+
+/* The name field on step 2 is editable so a tagline typed into the search box
+   can be moved where it belongs. Whatever stays in this box is the brand name;
+   empty it and give a tagline and the engine searches the tagline instead. */
+function syncWordMark(){
+  const v=(document.getElementById('word-mark').value||'').trim();
+  state.name=v;
+  document.getElementById('tick-name').classList.toggle('on',!!v);}
+
+function logoLater(later){
+  state.logoLater=!!later;
+  const box=document.getElementById('logo-later');
+  if(box) box.checked=!!later;
+  const drop=document.getElementById('logo-drop');
+  const panel=document.getElementById('logo-later-panel');
+  if(drop) drop.classList.toggle('hidden',!!later);
+  if(panel) panel.classList.toggle('hidden',!later);
+  logEvent('field_commit','marks',{field:'logo_later',on:!!later},true);}
 
 /* step 3 */
 function renderClassList(){const q=(document.getElementById('cls-search').value||'').toLowerCase();
   const rows=Object.entries(NICE).filter(([n,l])=>!q||l.toLowerCase().includes(q)||('class '+n).includes(q))
-    .map(([n,l])=>`<div class="row" onclick="addClass(${n})"><span class="n">${n}</span><span>${l}</span></div>`).join('');
-  document.getElementById('cls-list').innerHTML=rows||'<div class="row"><span>No match</span></div>';}
+    .map(([n,l])=>{const on=state.classes.includes(+n);
+      return `<button type="button" class="row${on?' on':''}" onclick="${on?'removeClass':'addClass'}(${n})">`+
+        `<span class="n">${n}</span><span>${l}</span><span class="g">${on?'\u2713':'+'}</span></button>`;}).join('');
+  document.getElementById('cls-list').innerHTML=rows||
+    '<div style="padding:18px 16px;font-size:15px;color:var(--quiet)">Nothing matched that.</div>';}
 function addClass(n){n=+n;if(!state.classes.includes(n))state.classes.push(n);state.classes.sort((a,b)=>a-b);clearClassGate();renderBasket();
   logEvent('class_added','classes',{nice_class:n},true);}
 function removeClass(n){n=+n;state.classes=state.classes.filter(x=>x!==n);renderBasket();
   logEvent('class_removed','classes',{nice_class:n},true);}
 function renderBasket(){const b=document.getElementById('cls-basket');
   b.innerHTML=state.classes.length?state.classes.map(n=>
-    `<span class="chip"><b>${n}</b> ${NICE[n]} <span class="x" onclick="removeClass(${n})">×</span></span>`).join('')
-    :'<span class="muted-note">None selected — we’ll search all classes.</span>';}
+    `<span class="chip">Class ${n} \u00b7 ${NICE[n]} <span class="x" onclick="removeClass(${n})">\u00d7</span></span>`).join('')
+    :'<span class="sub">Nothing picked yet. Search on the left, or try one of the four tools below.</span>';
+  const c=document.getElementById('cls-count');
+  if(c) c.textContent=state.classes.length
+    ? state.classes.length+(state.classes.length===1?' class picked':' classes picked') : '';
+  renderClassList();}
 
 /* step 4 combined */
 function buildPicker(which){
@@ -1384,7 +1543,7 @@ function revealPlan(){document.getElementById('plan-block').classList.remove('hi
   document.getElementById('now-continue').classList.add('hidden');
   document.getElementById('plan-block').scrollIntoView({behavior:'smooth'});}
 function setPlanMode(mode){state.plan.mode=mode;state.plan.codes=[];
-  document.querySelectorAll('#plan-seg .opt').forEach(o=>o.classList.toggle('on',o.dataset.plan===mode));
+  document.querySelectorAll('#plan-seg .pill').forEach(o=>o.classList.toggle('on',o.dataset.plan===mode));
   logEvent('jurisdiction_set','jurisdiction',{which:'plan',mode:mode},true);
   const p=document.getElementById('pick-plan');
   if(mode==='select'){p.classList.remove('hidden');buildPicker('plan');}else p.classList.add('hidden');}
@@ -1480,20 +1639,31 @@ function discJur(p){const nonUk=[...(p.trading_now||[]),...(p.planning_to_trade|
 
 function renderResults(r){const s=r.summary;
   document.getElementById('res-sub').textContent=`We searched the ${r.searched_office} register for “${r.query.word_marks[0]}”.`;
-  document.getElementById('res-summary').innerHTML=[['Total flagged',s.total_flagged,''],['Displayed',s.displayed,''],
+  document.getElementById('res-summary').innerHTML=[['Flagged',s.total_flagged,''],['Shown here',s.displayed,''],
     ['High risk',s.high,'high'],['Medium risk',s.medium,'med'],['Low risk',s.low,'low']]
     .map(([k,v,cx])=>`<div class="stat ${cx}"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
   const tot=Math.max(1,s.high+s.medium+s.low);
+  document.getElementById('res-bar').style.display=s.total_flagged?'flex':'none';
   document.getElementById('res-bar').innerHTML=
     `<i style="width:${s.high/tot*100}%;background:var(--r-high)"></i>`+
     `<i style="width:${s.medium/tot*100}%;background:var(--r-med)"></i>`+
     `<i style="width:${s.low/tot*100}%;background:var(--r-low)"></i>`;
   const rows=r.top_results.map(x=>{let co='';
-    if(x.company){const d=x.company.is_dissolved?`<span class="dead">${x.company.status}</span>`:x.company.status;
-      co=`<div class="co">${d}${x.company.locality?' · '+x.company.locality:''}${x.company.sic_codes&&x.company.sic_codes.length?' · SIC '+x.company.sic_codes.join(', '):''}</div>`;}
-    return `<tr><td><span class="band ${x.risk.replace(' Risk','')}">${x.risk.replace(' Risk','')}</span></td>
-      <td>${x.type}</td><td><b>${x.mark}</b>${co}</td><td>${x.status}</td></tr>`;}).join('');
-  document.getElementById('res-rows').innerHTML=rows;
+    if(x.company){const d=x.company.is_dissolved?`<span class="dead">${esc(x.company.status)}</span>`:esc(x.company.status);
+      co=`<div class="co">${d}${x.company.locality?' \u00b7 '+esc(x.company.locality):''}</div>`;}
+    const cls=(x.classes&&x.classes.length)?' \u00b7 Cl '+x.classes.join(', '):'';
+    return `<div class="rt-row">
+      <span><span class="band ${esc(x.risk).replace(' Risk','')}">${esc(x.risk).replace(' Risk','')}</span></span>
+      <span class="mk">${esc(x.mark)}</span>
+      <span class="ow">${esc(x.company_name||x.owner_name||'\u2014')}${co}</span>
+      <span class="ty">${esc(x.type)}${cls}</span>
+      <span class="st">${esc(x.status)}</span></div>`;}).join('');
+  document.getElementById('res-rows').innerHTML=rows||
+    '<div style="padding:18px 20px;font-size:15px;color:var(--quiet)">Nothing live on the register looked close enough to list.</div>';
+  const bn=document.getElementById('res-barnote');
+  if(bn) bn.textContent=s.total_flagged
+    ? `${s.high} high, ${s.medium} medium and ${s.low} low risk across everything we flagged.`
+    : 'Nothing on the register conflicted with what you searched.';
   document.getElementById('res-disclaimers').innerHTML=r.disclaimers.map(d=>`<div class="disc">${d}</div>`).join('');
   renderOpinion(r);
   renderNexts(r);
@@ -1524,18 +1694,20 @@ function renderOpinion(r){
   d.style.setProperty('--dc',v.colour||OP_COLOUR(v.score));
   document.getElementById('op-val').textContent=v.score+'%';
   document.getElementById('op-headline').textContent=v.headline||'';
+  const cap=document.getElementById('op-cap');
+  if(cap) cap.textContent='How this name looks as a trade mark, on what we can measure.';
   // The last paragraph is always the "this is not legal advice, book an
   // appointment" line — styled quieter so it reads as a footnote and not as
   // a retraction of everything above it.
   const body=(v.body||[]);
   document.getElementById('op-body').innerHTML=body.map((p,i)=>
     `<p${i===body.length-1?' class="op-caveat"':''}>${esc(p)}</p>`).join('');
-  document.getElementById('op-dials').innerHTML=(v.dials||[]).map(x=>{
-    // A negative dial is scored as HEADROOM (100 = clear), so the same
-    // green-is-good colour rule applies to it — no inversion needed.
-    return `<div class="subdial">
-      <div class="dial" style="--v:${x.value};--dc:${OP_COLOUR(x.value)}"><span class="val">${x.value}</span></div>
-      <div class="nm">${esc(x.label)}</div><div class="sb">${esc(x.sub)}</div></div>`;}).join('');
+  document.getElementById('op-dials').innerHTML=(v.dials||[]).map(x=>
+    // Each dial carries its own colour, read off its own value — a strength
+    // scoring 95 stays green even on a result we've banded crowded.
+    `<div class="subdial">
+      <div class="dial dial-sub" style="--v:${x.value};--dc:${x.colour||OP_COLOUR(x.value)}"><span class="val">${x.value}</span></div>
+      <div class="nm">${esc(x.label)}</div><div class="sb">${esc(x.sub)}</div></div>`).join('');
 }
 
 /* ── recommended next steps ──────────────────────────────────────────────
@@ -1561,14 +1733,14 @@ function renderNexts(r){
     'team will check the detail with you before anything is filed.';
   if(!a.label) a.label='Request a Brand Audit — £99';
   const lead=(c.lead==='application')?'application':'audit';
-  const audit=`<div class="nx${lead==='audit'?' lead':''}">
+  const audit=`<div class="nx${lead==='audit'?' lead-card':''}">
     ${lead==='audit'?'<div class="eyebrow">'+esc(a.eyebrow||'Our recommended next step')+'</div>':''}
     <h4>Brand Audit</h4>
     <p>${esc(a.blurb||'')}</p>
     ${a.offer?`<div class="offer">${esc(a.offer)}</div>`:''}
     <button class="btn ${lead==='audit'?'primary':'ghost'} block" id="brand-audit-cta"
       onclick="goToBrandAudit()">${esc(a.label||'Request a Brand Audit')}</button></div>`;
-  const apply=`<div class="nx${lead==='application'?' lead':''}">
+  const apply=`<div class="nx${lead==='application'?' lead-card':''}">
     ${lead==='application'?'<div class="eyebrow">Our recommended next step</div>':''}
     <h4>Proceed to application</h4>
     <p>${esc(ap.blurb||'')}</p>
@@ -1682,8 +1854,9 @@ window.addEventListener('popstate',function(e){
     if(!name){ renderScreen('search'); return; }
     state.name = name;
     document.getElementById('name').value = name;
-    const echo = document.getElementById('name-echo');
-    if(echo) echo.textContent = name;
+    const wm = document.getElementById('word-mark');
+    if(wm) wm.value = name;
+    document.getElementById('tick-name').classList.add('on');
     const target = wanted === 'marks' ? 'marks' : (wanted || 'marks');
     renderScreen(target);
     history.replaceState({screen:target},'','#'+target);
@@ -1700,6 +1873,21 @@ window.addEventListener('popstate',function(e){
   } else {
     open(CONFIG.RESUME_NAME);
   }
+})();
+/* The step-1 placeholder types itself out, as on the homepage. Skipped for
+   anyone who has asked for reduced motion, and it never touches the field
+   once the visitor starts typing. */
+(function typePlaceholder(){
+  const el=document.getElementById('name');
+  if(!el || el.value) return;
+  const full='Type your Trademark Name and click Search';
+  if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches){
+    el.placeholder=full; return; }
+  let i=0; el.placeholder='';
+  const t=setInterval(function(){
+    if(el.value || i>=full.length){ clearInterval(t); if(!el.value) el.placeholder=full; return; }
+    el.placeholder=full.slice(0,++i);
+  },55);
 })();
 document.getElementById('modeflag').textContent =
   location.protocol==='file:' ? '● NOT CONNECTED — open via the Launch Free Search app, not the file'
