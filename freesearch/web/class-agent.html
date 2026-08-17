@@ -26,13 +26,10 @@
   Staff-facing, so it shows the counts and bands openly rather than hiding
   them — the person filing needs to judge, not be reassured.
 -->
+  <!-- Shared design layer. Loads BEFORE this page's own <style>, so
+       anything below overrides it — page-specific rules stay local. -->
+  <link rel="stylesheet" href="/braudit.css">
 <style>
-  :root{
-    --pink:#E51652; --pink-dark:#c01044; --navy:#2D455A;
-    --ink:#1f2a33; --muted:#6b7a86; --line:#e3e8ec; --bg:#f5f7f9; --white:#fff;
-    --radius:14px; --shadow:0 6px 24px rgba(45,69,90,.10);
-    --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
-  }
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);padding:26px}
   .wrap{max-width:860px;margin:0 auto}
