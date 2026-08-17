@@ -291,18 +291,38 @@ def verdict(summary: dict, *, name: str, years: float | None = None,
         'body': _body(tier, name=name, high=high, medium=medium, low=low,
                       total=total, scores=v['scores'], capped=capped),
         'lead': lead,
+        # Each dial carries its OWN colour, derived from its own value.
+        #
+        # Only the master takes the tier colour, because only the master is
+        # the verdict. A sub-dial has to be read on its own merits: a name can
+        # score 95 for distinctiveness on a result we have banded crowded, and
+        # painting that dial red would say something untrue about the wording.
+        # Sending colour per dial removes the guess — a renderer reaching for
+        # the top-level `colour` for all four would tint every strength the
+        # tier colour and misreport three of them.
         'dials': [
-            {'key': 'uniqueness', 'label': 'Uniqueness',
-             'sub': 'How alone your name is on the register',
-             'value': v['scores']['uniqueness'], 'kind': 'strength'},
-            {'key': 'distinctiveness', 'label': 'Distinctiveness',
-             'sub': 'How protectable the wording is',
-             'value': v['scores']['distinctiveness'], 'kind': 'strength'},
-            {'key': 'proof_of_use', 'label': 'Proof of use',
-             'sub': 'Time in genuine use',
-             'value': v['scores']['proof_of_use'], 'kind': 'strength'},
-            {'key': 'conflicts', 'label': 'Conflicts',
-             'sub': 'Headroom — how little the similar marks bite',
-             'value': v['scores']['conflicts'], 'kind': 'negative'},
+            _dial('uniqueness', 'Uniqueness',
+                  'How alone your name is on the register', v['scores']),
+            _dial('distinctiveness', 'Distinctiveness',
+                  'How protectable the wording is', v['scores']),
+            _dial('proof_of_use', 'Proof of use',
+                  'Time in genuine use', v['scores']),
+            _dial('conflicts', 'Conflicts',
+                  'Headroom — how little the similar marks bite', v['scores'],
+                  kind='negative'),
         ],
     }
+
+
+def _value_colour(v: int) -> str:
+    """Green / amber / red read off the value itself — the sub-dial rule."""
+    return '#2E7D32' if v >= 70 else ('#E69500' if v >= 45 else '#C0392B')
+
+
+def _dial(key: str, label: str, sub: str, scores: dict,
+          kind: str = 'strength') -> dict:
+    # `conflicts` is scored as HEADROOM (100 = clear), so the same
+    # green-is-good rule applies to it and no inversion is needed.
+    val = scores[key]
+    return {'key': key, 'label': label, 'sub': sub, 'value': val,
+            'kind': kind, 'colour': _value_colour(val)}
