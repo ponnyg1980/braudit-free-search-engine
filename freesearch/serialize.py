@@ -26,10 +26,22 @@ INFO_DISCLAIMER = (
     'These results are provided for information purposes only and do not '
     'constitute trademark advice.'
 )
-LOGO_TAGLINE_DISCLAIMER = (
-    'Logo and tagline searches are carried out as part of a Brand Audit, not '
-    'this free UK word search.'
+# Reworded 17 Aug 2026. The old text said "Logo and tagline searches are
+# carried out as part of a Brand Audit, not this free UK word search" — which
+# was untrue of taglines: service.py has always searched the tagline as one of
+# its phrases. Only the LOGO is genuinely out of scope here, because we do not
+# do image comparison on the free tier. Saying otherwise both undersold the
+# free search and misdescribed what we had actually done for the visitor.
+LOGO_DISCLAIMER = (
+    'Your logo has been recorded but not searched — image comparison is part '
+    'of a Brand Audit, not this free UK word search.'
 )
+TAGLINE_NOTE = (
+    'Your tagline was searched as words. A tagline can also be challenged on '
+    'how it is used and styled, which is part of a Brand Audit.'
+)
+# Old name kept so nothing importing it breaks mid-deploy.
+LOGO_TAGLINE_DISCLAIMER = LOGO_DISCLAIMER
 
 
 def _band_counts(records: list[MarkRecord]) -> dict:
@@ -121,8 +133,10 @@ def serialize_result(result: FreeSearchResult, *, gated: bool = False,
 
     disclaimers = [INFO_DISCLAIMER]
     req = result.request
-    if req.image_bytes or req.tagline:
-        disclaimers.append(LOGO_TAGLINE_DISCLAIMER)
+    if req.image_bytes:
+        disclaimers.append(LOGO_DISCLAIMER)
+    if req.tagline:
+        disclaimers.append(TAGLINE_NOTE)
     disclaimers.append(result.disclaimer())  # UK-only + jurisdiction gap
 
     band = _band_counts(conflicts)
