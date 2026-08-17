@@ -380,6 +380,7 @@
 
     <div class="actions">
       <button class="link" onclick="history.back()">← Back</button>
+      <div class="err hidden" id="cls-gate"></div>
       <button class="btn primary" onclick="beginSearch()">Begin Free Search</button>
     </div>
   </section>
@@ -1121,7 +1122,10 @@ function showClassPicker(route,title,items,meta){
   document.getElementById('pick-cancel').onclick=()=>{ box.innerHTML=''; box.classList.add('hidden'); };
   upd();
 }
+function clearClassGate(){const e=document.getElementById('cls-gate');
+  if(e) e.classList.add('hidden');}
 function applyPickedClasses(){
+  clearClassGate();
   const route=_pick.route;
   const box=document.getElementById(route==='5'?'ho5-res':'ho3-res');
   const chosen=[...box.querySelectorAll('.pickrow input:checked')].map(cb=>+cb.dataset.n);
@@ -1231,6 +1235,7 @@ async function ho3Apply(){
   // Add the top-tier classes to the basket (a/b; the client can trim).
   const toAdd=classes.filter(c=>c.tier==='a'||c.tier==='b').map(c=>c.nice_class);
   state.classes=[...new Set([...state.classes,...toAdd])].sort((a,b)=>a-b);
+  clearClassGate();
   // sic_engine.to_basket() (controller.py) already returns terms per class —
   // captured, not shown, same as the other two routes.
   state.classSource={route:'3',value:raw,mapped:all,method:data.method,term_basket:data.basket};
@@ -1344,7 +1349,7 @@ function renderClassList(){const q=(document.getElementById('cls-search').value|
   const rows=Object.entries(NICE).filter(([n,l])=>!q||l.toLowerCase().includes(q)||('class '+n).includes(q))
     .map(([n,l])=>`<div class="row" onclick="addClass(${n})"><span class="n">${n}</span><span>${l}</span></div>`).join('');
   document.getElementById('cls-list').innerHTML=rows||'<div class="row"><span>No match</span></div>';}
-function addClass(n){n=+n;if(!state.classes.includes(n))state.classes.push(n);state.classes.sort((a,b)=>a-b);renderBasket();
+function addClass(n){n=+n;if(!state.classes.includes(n))state.classes.push(n);state.classes.sort((a,b)=>a-b);clearClassGate();renderBasket();
   logEvent('class_added','classes',{nice_class:n},true);}
 function removeClass(n){n=+n;state.classes=state.classes.filter(x=>x!==n);renderBasket();
   logEvent('class_removed','classes',{nice_class:n},true);}
@@ -1385,7 +1390,23 @@ function setPlanMode(mode){state.plan.mode=mode;state.plan.codes=[];
   if(mode==='select'){p.classList.remove('hidden');buildPicker('plan');}else p.classList.add('hidden');}
 
 function nowCodes(){return state.now.mode==='uk'?['GB']:state.now.codes;}
-function planCodes(){if(state.plan.mode==='none')return[];if(state.plan.mode==='uk')return['GB'];return state.plan.codes;}
+/* planning_to_trade is EXPANSION ONLY — where they want to go BEYOND where
+   they already trade (Jonathan, 17 Aug: "FR as we will already have GB in the
+   current"). So anything also present in trading_now is subtracted here.
+
+   That is why the step-3 picker can safely open with today's countries
+   pre-ticked: the ticks are context, showing them where they already are, and
+   only what they add on top counts as a plan. Tick nothing new and the plan is
+   empty, which is exactly "no plans beyond where I am now".
+
+   Kept in one function so the payload, the disclaimer and the Zoho record can
+   never disagree about what "planning to trade" means. */
+function planCodes(){
+  if(state.plan.mode==='none') return [];
+  const today=new Set(nowCodes());
+  const raw=state.plan.mode==='uk'?['GB']:state.plan.codes;
+  return raw.filter(c=>!today.has(c));
+}
 
 function buildPayload(){return {name:state.name,
   tagline:document.getElementById('tagline').value.trim()||null,
@@ -1397,6 +1418,22 @@ function buildPayload(){return {name:state.name,
 let _searching=false;
 async function beginSearch(){
   if(_searching) return;              // a second press must not fire a second search
+  // At least one class (Jonathan, 17 Aug). Class overlap is what turns a
+  // lookalike name into a real conflict, so a classless search is genuinely
+  // worse informed — and the four tools that pick classes for you are on this
+  // same screen, so this is a nudge rather than a dead end.
+  if(!state.classes.length){
+    const b=document.getElementById('cls-basket');
+    const e=document.getElementById('cls-gate');
+    if(e){ e.textContent='Please add at least one class before searching — '+
+      'use the tools below if you are not sure which apply.';
+      e.classList.remove('hidden'); }
+    if(b){ b.scrollIntoView({behavior:'smooth',block:'center'});
+      b.style.transition='box-shadow .3s'; b.style.boxShadow='0 0 0 3px rgba(229,22,82,.35)';
+      setTimeout(()=>{b.style.boxShadow='';},1400); }
+    logEvent('search_blocked_no_class','classes',{},false);
+    return;
+  }
   _searching=true;
   const payload=buildPayload();
   overlayOn('Checking the UK trademark register\u2026','This usually takes a few seconds.');
