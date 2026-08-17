@@ -116,6 +116,67 @@ _EMBED_JS = """(function(){
 })();"""
 
 
+# ── static assets ────────────────────────────────────────────────────────
+# Added 17 Aug 2026. Until now the engine served only the pages in _PAGES and
+# embed.js — there was no route for a stylesheet or an image, which is why the
+# six widgets each carried a private copy of the CSS and why brand/*.png could
+# not load anywhere.
+#
+# Only these three directories, and only these extensions. This is a public,
+# unauthenticated host, so the path is treated as hostile:
+#
+#   * the resolved real path must sit INSIDE the served directory, checked
+#     with os.path.commonpath after realpath — that defeats ../ traversal,
+#     encoded traversal, and a symlink pointing out of the tree, which a
+#     simple '..' not in path check does not
+#   * unknown extensions are refused rather than served as octet-stream, so a
+#     stray .py or .env in web/ can never be downloaded
+_ASSET_DIRS = {'/braudit.css': ('', 'braudit.css'),
+               '/brand/': ('brand', None),
+               '/fonts/': ('fonts', None)}
+_ASSET_TYPES = {
+    '.css': 'text/css; charset=utf-8',
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp',
+    '.ico': 'image/x-icon',
+    '.woff2': 'font/woff2', '.woff': 'font/woff',
+}
+
+
+def _static(path: str):
+    """Return (bytes|None, content_type) for a static asset path, else None.
+
+    None  -> not a static route at all, let the caller carry on routing.
+    (None, ct) -> it IS a static route but the file isn't there: a real 404.
+    """
+    if path == '/braudit.css':
+        rel = 'braudit.css'
+    elif path.startswith('/brand/') or path.startswith('/fonts/'):
+        rel = path.lstrip('/')
+    else:
+        return None
+
+    ext = os.path.splitext(rel)[1].lower()
+    ctype = _ASSET_TYPES.get(ext)
+    if not ctype:
+        return (None, 'text/plain')          # unknown type -> 404, never served
+
+    full = os.path.realpath(os.path.join(_WEB, rel))
+    root = os.path.realpath(_WEB)
+    # commonpath raises ValueError on different drives/roots; treat as outside.
+    try:
+        inside = os.path.commonpath([full, root]) == root
+    except ValueError:
+        inside = False
+    if not inside or not os.path.isfile(full):
+        return (None, ctype)
+    try:
+        with open(full, 'rb') as f:
+            return (f.read(), ctype)
+    except OSError:
+        return (None, ctype)
+
+
 def _allowed_origin(origin: str) -> str:
     """CORS allow-list from env. ALLOWED_ORIGINS unset -> '*' (dev only);
     set it to a comma-separated list in production (TMH, portal, partners)."""
@@ -184,6 +245,14 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if path == '/embed.js':
             self._send_raw(_EMBED_JS.encode(), 'application/javascript')
+            return
+        asset = _static(parsed.path)
+        if asset is not None:
+            body, ctype = asset
+            if body is None:
+                self._send({'ok': False, 'error': 'not found'}, 404)
+            else:
+                self._send_raw(body, ctype)
             return
         if path == '/healthz':
             self._send({'ok': True})
