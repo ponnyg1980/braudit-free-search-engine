@@ -200,6 +200,13 @@ def serialize_result(result: FreeSearchResult, *, gated: bool = False,
                 'blurb': 'Ready to go? Start your application and one of our '
                          'team will check the detail with you before anything '
                          'is filed.',
+                # Second line so the card holds its own beside the audit card,
+                # which carries a price panel. An emphasised card that is
+                # visibly emptier than the one next to it reads as the weaker
+                # option, which is the opposite of what leading with it means.
+                'note': 'We check the classes and wording, file it with the '
+                        'UK IPO, and watch it through to registration. If we '
+                        'spot a problem before we file, we tell you first.',
             },
             'download_report': {
                 'label': 'Email me the full results',
