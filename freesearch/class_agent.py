@@ -32,6 +32,11 @@ belongs in the caller, not here.
 """
 from __future__ import annotations
 
+from concurrent import futures
+
+# How many stage-2 class calls may be in flight at once.
+MAX_PARALLEL = 6
+
 import csv
 import json
 import os
@@ -360,17 +365,40 @@ def suggest(text: str, *, provides: str | None = None, cfg: dict | None = None,
                 'verified': True, 'dropped': 0,
                 'message': "We couldn't work this out from that description."}
 
-    out, dropped = [], 0
-    for c in classes:
-        pool = vocab.get(c, [])[:candidates_per_class]
+    # Stage 2 runs ONE model call per class, and those calls are independent —
+    # each picks terms from its own class's pool and knows nothing about the
+    # others. Run sequentially that is 1 + N round trips: measured at 10.8s
+    # for a four-class business, which is far too long to sit in front of.
+    # In parallel the wall time is stage 1 plus the slowest single class.
+    #
+    # Same pattern, and the same reasoning, as _fill_details in lookup.py.
+    # Capped at MAX_PARALLEL so a nine-class description doesn't open nine
+    # sockets at the model at once.
+    pools = {c: vocab.get(c, [])[:candidates_per_class] for c in classes}
+
+    def _one(c):
         try:
-            picked = _stage2(text, c, pool, cfg)
+            return c, _stage2(text, c, pools[c], cfg)
         except AgentError:
-            picked = []            # one class failing must not lose the rest
+            return c, []           # one class failing must not lose the rest
+
+    picked_by_class = {}
+    if len(classes) > 1:
+        with futures.ThreadPoolExecutor(
+                max_workers=min(len(classes), MAX_PARALLEL)) as ex:
+            for c, picked in ex.map(_one, classes):
+                picked_by_class[c] = picked
+    else:
+        for c in classes:
+            picked_by_class[c] = _one(c)[1]
+
+    out, dropped = [], 0
+    for c in classes:                      # rebuild in stage-1's order
+        picked = picked_by_class.get(c, [])
         # The guarantee. Even though _stage2 returns objects taken FROM the
         # pool, re-check identity against the vocabulary before it leaves —
         # cheap, and it means no future refactor can quietly open a hole.
-        allowed = {p['term'] for p in pool}
+        allowed = {p['term'] for p in pools[c]}
         clean = [p for p in picked if p['term'] in allowed]
         dropped += len(picked) - len(clean)
         out.append({'n': c, 'label': class_label(c), 'why': why.get(c, ''),
