@@ -88,6 +88,9 @@
   .back{color:var(--pink);font-weight:700;cursor:pointer;font-size:13px;background:none;border:0;padding:0;margin-bottom:8px}
   .mode-flag{position:fixed;bottom:10px;right:12px;font-size:11px;color:var(--muted);background:#fff;
     border:1px solid var(--line);border-radius:8px;padding:4px 8px}
+  .didyou{padding:10px 13px;margin-bottom:6px;border-radius:10px;
+    background:var(--pink-tint);border:1px solid var(--pink-line);
+    font-size:13.5px;color:var(--navy);font-weight:600}
 </style>
 </head>
 <body>
@@ -198,10 +201,14 @@ function TMHSearchBar(cfg){
   function renderList(data){
     const rows=(data&&data.results)||[];
     curRows=rows;
-    if(!rows.length){ list.innerHTML='<div class="empty">No matches. Try a different spelling or the exact number.</div>'; show(list); return; }
+    if(!rows.length){ list.innerHTML='<div class="empty">Nothing matched. Check the spelling, or try a shorter part of the name.</div>'; show(list); return; }
+    // Say when the engine had to loosen the spelling to find anything, rather
+    // than quietly showing marks other than the ones asked for.
+    const hint=(data&&data.suggested)
+      ? '<div class="didyou">No exact match \u2014 did you mean one of these?</div>' : '';
     if(state.mode==='trademark'){
       curKind='mark';
-      list.innerHTML='<div class="row mark head"><div>Number</div><div>Mark</div><div>Status</div><div>Applicant</div></div>'+
+      list.innerHTML=hint+'<div class="row mark head"><div>Number</div><div>Mark</div><div>Status</div><div>Applicant</div></div>'+
         rows.map((r,i)=>`<div class="row mark" data-i="${i}">
           <div class="num">${r.number}</div><div class="nm">${r.name||'—'}</div>
           <div><span class="status ${STATUS_CLASS(r.status)}">${r.status||'—'}</span></div>
