@@ -570,7 +570,7 @@
     <div class="opinion" id="res-opinion">
       <div class="op-top">
         <div class="op-master">
-          <div class="dial dial-master" id="op-dial"><span class="val" id="op-val">&mdash;</span><span class="cap">chance</span></div>
+          <div class="dial dial-master" id="op-dial"><span class="val" id="op-val">&mdash;</span><span class="cap">viable</span></div>
           <p class="sub" id="op-cap" style="text-align:center;font-size:13.5px;margin-top:10px"></p>
         </div>
         <div class="op-say">
@@ -2007,8 +2007,31 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,
   c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function renderOpinion(r){
   const box=document.getElementById('res-opinion'), v=r.viability;
-  if(!v||typeof v.score!=='number'){ box.classList.add('hidden'); return; }
+  if(!v){ box.classList.add('hidden'); return; }
   box.classList.remove('hidden');
+  const body=(v.body||[]);
+  // D12 — an identical live mark. No number, no dials: the ring is replaced
+  // by the word REVIEW, because a percentage next to "there is already an
+  // identical registration" is worse than saying nothing at all.
+  if(v.show_score===false || typeof v.score!=='number'){
+    const d0=document.getElementById('op-dial');
+    d0.style.setProperty('--v',100);
+    d0.style.setProperty('--dc',v.colour||'#C0392B');
+    document.getElementById('op-val').textContent='!';
+    const cap0=document.getElementById('op-cap');
+    if(cap0) cap0.textContent='';
+    const capEl=box.querySelector('.dial-master .cap');
+    if(capEl) capEl.textContent='review';
+    document.getElementById('op-headline').textContent=v.headline||'';
+    document.getElementById('op-body').innerHTML=body.map((p,i)=>
+      `<p${i===body.length-1?' class="op-caveat"':''}>${esc(p)}</p>`).join('');
+    document.getElementById('op-dials').innerHTML='';
+    document.getElementById('op-dials').classList.add('hidden');
+    return;
+  }
+  document.getElementById('op-dials').classList.remove('hidden');
+  const capEl=box.querySelector('.dial-master .cap');
+  if(capEl) capEl.textContent='viable';
   const d=document.getElementById('op-dial');
   d.style.setProperty('--v',v.score);
   // Tier colour, NOT the score's own colour. A name can score 76 and still be
@@ -2023,7 +2046,6 @@ function renderOpinion(r){
   // The last paragraph is always the "this is not legal advice, book an
   // appointment" line — styled quieter so it reads as a footnote and not as
   // a retraction of everything above it.
-  const body=(v.body||[]);
   document.getElementById('op-body').innerHTML=body.map((p,i)=>
     `<p${i===body.length-1?' class="op-caveat"':''}>${esc(p)}</p>`).join('');
   document.getElementById('op-dials').innerHTML=(v.dials||[]).map(x=>
