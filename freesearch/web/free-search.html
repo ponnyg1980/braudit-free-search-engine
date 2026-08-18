@@ -2170,10 +2170,26 @@ function finish(withAccount){
   pushScreen('done');
 }
 
-function resetAll(){state={name:'',logo:false,logoLater:false,tagline:'',classes:[],
+function resetAll(){
+  // Log the restart BEFORE the session is discarded, or it is written against
+  // nothing. Someone who searches four names in a visit used to look identical
+  // to someone who searched once and left — and repeat searching is one of the
+  // stronger buying signals we have. Carries what they were looking at when
+  // they went again, so a restart after a bad result is distinguishable from a
+  // restart after a good one.
+  const prev=state.lastResult||null, v=(prev&&prev.viability)||{};
+  if(state.sessionId){
+    logEvent('search_restarted','results',{
+      previous_name:state.name||'',
+      previous_score:(typeof v.score==='number')?v.score:null,
+      previous_tier:v.tier||'',
+      previous_flagged:(prev&&prev.summary&&prev.summary.total_flagged)||0,
+      searched:!!prev},false);
+  }
+  state={name:'',logo:false,logoLater:false,tagline:'',classes:[],
   now:{mode:'uk',codes:[]},plan:{mode:'none',codes:[]},lastResult:null,lead:null,
   emailForAI:null,classSource:null,resultsComputedFrom:null,portalRequested:false,
-  sessionId:null};  // a new search is a genuinely new journey, not a continuation
+  sessionId:null,businessWebsite:'',channels:null};  // a new search is a genuinely new journey, not a continuation
   ['name','tagline','r-first','r-last','r-email','r-phone','r-biz'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('tick-logo').classList.remove('on');document.getElementById('tick-tag').classList.remove('on');
   document.getElementById('plan-block').classList.add('hidden');
