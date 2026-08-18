@@ -165,7 +165,44 @@ _HEADLINES = {
     'good':    'This looks promising',
     'mixed':   'This is worth a closer look before you file',
     'crowded': 'This one needs advice before you file',
+    'review':  'There is already an identical trade mark on the register',
 }
+
+
+def _norm(t: str) -> str:
+    """Casefold and strip everything that isn't a letter or digit.
+
+    'CARLSBERG', 'Carlsberg' and 'Carlsberg.' are the same mark for this
+    purpose. 'CARLSBERG BRITVIC' is not.
+    """
+    return re.sub(r'[^a-z0-9]+', '', (t or '').lower())
+
+
+def identical_live(name: str, marks) -> dict | None:
+    """The first LIVE mark whose text is identical to what was searched.
+
+    Scoring decisions D3 and D12. A live identical mark is conflict 9 /
+    rights 9 — the strongest finding the model has — and because the client
+    has not filed anything, any live identical registration is necessarily
+    senior to them. D12 is explicit that this is "not a weaker opportunity,
+    it is a different situation": the output is "Review — client may be at
+    risk", NOT a risk band and NOT a score.
+
+    That is why this returns before any arithmetic happens. A composite that
+    scored CARLSBERG at 79% against a registered CARLSBERG was not a tuning
+    problem — averaging cannot express "this specific door is shut".
+    """
+    want = _norm(name)
+    if not want:
+        return None
+    for m in marks or []:
+        if not isinstance(m, dict):
+            continue
+        if (m.get('status') or '').strip().lower() not in ('registered', 'pending'):
+            continue
+        if _norm(m.get('mark') or m.get('mark_text')) == want:
+            return m
+    return None
 
 
 def _tier(master_score: int, high: int) -> tuple[str, bool]:
@@ -271,7 +308,7 @@ def _body(tier: str, *, name: str, high: int, medium: int, low: int,
 
 
 def verdict(summary: dict, *, name: str, years: float | None = None,
-            sector_terms=()) -> dict:
+            sector_terms=(), marks=()) -> dict:
     """The whole opinion block, ready to render.
 
     `summary` is the free-search summary dict (total_flagged / high / medium /
@@ -282,6 +319,39 @@ def verdict(summary: dict, *, name: str, years: float | None = None,
     medium = int(summary.get('medium') or 0)
     low = int(summary.get('low') or 0)
     total = int(summary.get('total_flagged') or 0)
+
+    # D12 first, before anything is scored. An identical live mark is not a
+    # point on a scale — it is a different question, and answering it with a
+    # percentage is worse than saying nothing.
+    same = identical_live(name, marks)
+    if same:
+        owner = (same.get('company_name') or same.get('owner_name') or '').strip()
+        who = f' It is held by {owner}.' if owner else ''
+        return {
+            'score': None, 'show_score': False, 'scores': {},
+            'tier': 'review', 'colour': DIAL_POOR, 'capped_by_conflict': True,
+            'headline': _HEADLINES['review'],
+            'body': [
+                f'"{name}" is already registered on the UK register, spelled '
+                f'exactly as you have searched it.{who}',
+                'That is not a score we can put a number on. An application '
+                'for the same name is likely to be refused or opposed, and '
+                'using it could put you at risk from the existing owner '
+                'rather than the other way round.',
+                'There can still be routes — a different specification, a '
+                'genuinely different market, a mark that is vulnerable for '
+                'non-use, or an agreement with the owner. Those are questions '
+                'for a person, not a search.',
+                'This is a word search of the UK register, not a legal '
+                'opinion — please book an appointment and one of our advisers '
+                'will go through it with you.',
+            ],
+            'lead': 'audit',
+            'dials': [],
+            'review_mark': {'mark': same.get('mark') or same.get('mark_text') or '',
+                            'status': same.get('status') or '',
+                            'owner': owner},
+        }
 
     v = compute(name=name, n_similar=total, high=high, medium=medium,
                 low=low, years=years, sector_terms=sector_terms)
@@ -296,6 +366,7 @@ def verdict(summary: dict, *, name: str, years: float | None = None,
 
     return {
         'score': v['master'],
+        'show_score': True,
         'scores': v['scores'],
         'tier': tier,
         'colour': _TIER_COLOUR[tier],
