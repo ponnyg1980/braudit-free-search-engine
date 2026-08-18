@@ -91,6 +91,13 @@
   @keyframes tmh-hexpulse{0%,80%,100%{transform:scale(.55);opacity:.25}40%{transform:scale(1);opacity:1}}
   @media (prefers-reduced-motion:reduce){.tmh-loader i{animation:none;opacity:.6;transform:none}}
   .busy{display:flex;flex-direction:column;align-items:center;gap:11px;padding:26px 0;color:var(--muted);font-size:13.5px}
+  .qchecks{display:grid;gap:8px;margin-top:4px}
+  .qchecks label{display:flex;align-items:flex-start;gap:10px;font-size:15px;
+    line-height:1.45;color:var(--ink);cursor:pointer;padding:9px 12px;
+    border:1.5px solid var(--line);border-radius:var(--r-sm,10px);background:#fff;
+    transition:border-color .15s ease,background .15s ease}
+  .qchecks input{width:auto;flex:0 0 auto;margin:2px 0 0;accent-color:var(--pink)}
+  .qchecks label:has(input:checked){border-color:var(--pink);background:var(--pink-tint)}
 </style>
 </head>
 <body>
@@ -132,6 +139,40 @@
       <textarea id="services" placeholder="e.g. barista training, coffee subscriptions, wholesale supply"></textarea>
     </div>
 
+    <label class="fld" style="margin-top:14px">Where do they sell?</label>
+    <p class="note" style="margin:0 0 8px">Selling channel can be a class in its own
+      right — a shop reselling other brands needs retail services on top of whatever
+      it makes. This DOES feed the suggestion.</p>
+    <div class="qchecks" id="sell">
+      <label><input type="checkbox" value="premises"> A shop, office or premises customers visit</label>
+      <label><input type="checkbox" value="own_site"> Their own website</label>
+      <label><input type="checkbox" value="marketplace"> Online marketplaces (eBay, Amazon, Etsy, TikTok Shop)</label>
+      <label><input type="checkbox" value="enquiry"> By enquiry, then invoice</label>
+      <label><input type="checkbox" value="wholesale"> Wholesale or trade customers</label>
+    </div>
+
+    <div id="resale-wrap" class="hidden">
+      <label class="fld">Do they sell other brands’ products as well as their own?</label>
+      <p class="note" style="margin:0 0 8px">This is what decides retail services in 35.</p>
+      <div class="seg" id="resale">
+        <button type="button" data-r="own">Only their own</button>
+        <button type="button" data-r="others">Other brands too</button>
+        <button type="button" data-r="mostly_others">Mostly other brands</button>
+      </div>
+    </div>
+
+    <label class="fld" style="margin-top:14px">Where are they seen? <span class="opt">— optional</span></label>
+    <p class="note" style="margin:0 0 8px">Marketing channels. Captured for the audit and
+      for evidence of use — deliberately NOT sent to the agent, because class 35
+      advertising is for businesses that advertise for others.</p>
+    <div class="qchecks" id="seen">
+      <label><input type="checkbox" value="search"> Search engines</label>
+      <label><input type="checkbox" value="ai"> AI search (ChatGPT, Claude, Gemini)</label>
+      <label><input type="checkbox" value="social"> Social media</label>
+      <label><input type="checkbox" value="footfall"> Passing trade and word of mouth</label>
+      <label><input type="checkbox" value="traditional"> Traditional advertising</label>
+    </div>
+
     <label class="fld" style="margin-top:14px">Anything unique or not covered above? <span class="opt">— optional</span></label>
     <textarea id="unique" placeholder="Anything distinctive about how they trade"></textarea>
 
@@ -159,12 +200,7 @@
     <p class="note">Suggestions only — always review before filing.</p>
   </div>
 
-  <div id="busy" class="card hidden">
-    <div class="busy">
-      <span class="tmh-loader" role="status" aria-live="polite" aria-label="Loading"><i></i><i></i><i></i></span>
-      <span>Reading the description and checking the register…</span>
-    </div>
-  </div>
+  <div id="busy" class="card hidden"></div>
 
   <div id="res" class="hidden">
     <div class="card">
@@ -197,7 +233,8 @@ function fail(m){ const e=$('err'); e.textContent=m; e.classList.add('on'); }
    single most valuable input (Nice divides at exactly that line, 1-34 goods
    and 35-45 services), and the detail boxes underneath are what turn a vague
    answer into a usable specification. */
-let provides = '', age = '', dur = '';
+let provides = '', age = '', dur = '', resale = '';
+let lastChannels = null;   // captured for whoever consumes this next
 
 function seg(groupId, attr, cb){
   const g = $(groupId); if (!g) return;
@@ -253,6 +290,58 @@ $('read').onclick = async function(){
   }
 };
 
+/* ── the waiting carousel ───────────────────────────────────────────────
+   Same component as Free Search: copy from freesearch/nuggets.py, fetched
+   once, rotated in the browser so it runs exactly as long as the work takes
+   and loops if the model is slow. Staff waited ~5s on a bare spinner. */
+let NUG={dwell:3.4,ai_search:[],free_search:[]};
+(function loadNuggets(){
+  fetch(API+'/nuggets').then(r=>r.json())
+    .then(function(d){ if(d&&d.ok&&d.nuggets) NUG=d.nuggets; }).catch(function(){});
+})();
+const _nugT={}, _nugHost={};
+function esc(x){return String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function nugHtml(msg,cards,i){
+  const c=cards[i%cards.length]||{title:'',text:''};
+  const dots=cards.map((_,k)=>`<i class="${k===i%cards.length?'on':''}"></i>`).join('');
+  return `<div class="nug" role="status" aria-live="polite">
+    <span class="tmh-loader" aria-hidden="true"><i></i><i></i><i></i></span>
+    ${msg?`<div class="msg">${esc(msg)}</div>`:''}
+    <div class="bar"><i></i></div>
+    <div class="card"><div class="tag">Did you know</div>
+      <div class="t">${esc(c.title)}</div><div class="b">${esc(c.text)}</div></div>
+    <div class="dots">${dots}</div></div>`;
+}
+function nugStart(key,target,msg,cards){
+  if(!target) return;
+  cards=(cards&&cards.length)?cards:[{title:'Working\u2026',text:'Checking the register.'}];
+  let i=0; _nugHost[key]=target;
+  target.classList.remove('hidden');
+  target.innerHTML=nugHtml(msg,cards,i);
+  clearInterval(_nugT[key]);
+  _nugT[key]=setInterval(function(){ target.innerHTML=nugHtml(msg,cards,++i); },
+    (NUG.dwell||3.4)*1000);
+}
+function nugStop(key){
+  clearInterval(_nugT[key]); _nugT[key]=null;
+  const el=_nugHost[key]; if(el){ el.innerHTML=''; el.classList.add('hidden'); }
+  _nugHost[key]=null;
+}
+
+// The resale question only matters where goods change hands, so it appears
+// only then — and it is the answer, not the channel, that decides class 35.
+document.getElementById('sell').addEventListener('change', function(){
+  const on=[...this.querySelectorAll('input:checked')].map(c=>c.value);
+  const goods=['premises','own_site','marketplace','wholesale'].some(v=>on.includes(v));
+  document.getElementById('resale-wrap').classList.toggle('hidden',!goods);
+  if(!goods) resale='';
+});
+document.getElementById('resale').addEventListener('click', function(e){
+  const b=e.target.closest('button'); if(!b) return;
+  this.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+  resale=b.dataset.r;
+});
+
 async function run(){
   const text = ($('q').value || '').trim();
   $('err').classList.remove('on');
@@ -267,7 +356,29 @@ async function run(){
   if (u)  context.also = u;
   if (age === 'existing') context.note = 'Existing brand, in use ' +
     ({under1:'under a year','1to3':'1-3 years','3to5':'3-5 years','5plus':'5+ years'}[dur] || 'for some time');
-  $('go').disabled = true; $('busy').classList.remove('hidden'); $('res').classList.add('hidden');
+
+  // WHERE THEY SELL goes to the agent, phrased as trade fact — it is what
+  // surfaces retail services in 35 for a business that resells. WHERE THEY
+  // ARE SEEN does not: the vocabulary holds real 35 terms like "advertising
+  // and marketing services provided by means of social media", and a shop
+  // that merely posts on Instagram does not belong in 35.
+  const ticked = id => [...document.querySelectorAll('#'+id+' input:checked')].map(c=>c.value);
+  const sell = ticked('sell'), seen = ticked('seen');
+  if (sell.length){
+    const say={premises:'sells from a shop, office or premises customers visit',
+               own_site:'sells through its own website',
+               marketplace:'sells through online marketplaces',
+               enquiry:'sells by enquiry and invoice',
+               wholesale:'sells to wholesale or trade customers'};
+    context.how_it_sells = sell.map(k=>say[k]).filter(Boolean).join('; ') + '.';
+    if (resale==='others') context.resale = "Sells other brands' products as well as its own — retail services apply.";
+    else if (resale==='mostly_others') context.resale = "Mainly resells other brands' products — retail services apply.";
+    else if (resale==='own') context.resale = "Sells only its own products.";
+  }
+  lastChannels = {sells_via:sell, resale:resale||'', seen_via:seen};
+
+  $('go').disabled = true; $('res').classList.add('hidden');
+  nugStart('agent', $('busy'), 'Working out the classes\u2026', NUG.ai_search);
   let d;
   try {
     const r = await fetch(API + '/suggest-classes', {
@@ -279,7 +390,7 @@ async function run(){
   } catch (e) {
     d = { ok:false, message:'Could not reach the service.' };
   }
-  $('go').disabled = false; $('busy').classList.add('hidden');
+  $('go').disabled = false; nugStop('agent');
 
   if (!d.ok){ fail(d.message || d.error || 'Something went wrong.'); return; }
   if (!d.classes || !d.classes.length){
