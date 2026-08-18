@@ -188,6 +188,19 @@ JURISDICTIONS: list[tuple[str, str]] = [
     ('Samoa (WS)', 'WS'),
     ('Tonga (TO)', 'TO'),
     ('Vanuatu (VU)', 'VU'),
+
+    # --- Added 18 Aug 2026 ---
+    # Present on the TMH cost calculator but absent here, which meant neither
+    # the audit tool nor Free Search could offer them. Israel, Russia and
+    # Taiwan are the commercially significant ones; the rest are small
+    # territories the calculator prices individually.
+    ('Israel (IL)', 'IL'),
+    ('Russia (RU)', 'RU'),
+    ('Taiwan (TW)', 'TW'),
+    ('Tunisia (TN)', 'TN'),
+    ('Bonaire, Sint Eustatius and Saba (BQ)', 'BQ'),
+    ('Sint Maarten (SX)', 'SX'),
+    ('S\u00e3o Tom\u00e9 and Pr\u00edncipe (ST)', 'ST'),
 ]
 
 # Lookup tables built once at import time
