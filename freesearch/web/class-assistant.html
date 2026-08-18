@@ -72,6 +72,9 @@
 button.route{text-align:left;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;background:#fff;cursor:pointer;font-weight:600}
 button.route:hover{border-color:#94a3b8;background:#f8fafc}
 button.route small{display:block;font-weight:400;color:#64748b;margin-top:3px}
+  .didyou{padding:10px 13px;margin-bottom:6px;border-radius:10px;
+    background:var(--pink-tint);border:1px solid var(--pink-line);
+    font-size:13.5px;color:var(--navy);font-weight:600}
 </style>
 </head>
 <body>
@@ -303,7 +306,13 @@ function load(id,on){document.getElementById(id).classList.toggle('show',on);}
 async function tmSearch(){const q=(document.getElementById('tm-q').value||'').trim();if(q.length<2){show('tm-list',false);return;}
   const _n=seqNext('tm-list');load('tm-load',true);const r=await api('marks',{q});if(!seqOK('tm-list',_n))return;load('tm-load',false);
   const rows=(r&&r.results)||[];const L=document.getElementById('tm-list');
-  L.innerHTML=rows.slice(0,8).map((x,i)=>`<div class="r" data-i="${i}"><span class="rn">${x.number}</span><span><b>${x.name||'—'}</b> · ${x.status} · ${x.applicant||''}</span></div>`).join('')||'<div class="r">No matches</div>';
+  // The engine loosens the spelling when an exact search finds nothing, so say
+  // so — otherwise the list silently shows different marks than were typed,
+  // and "no trademarks" on a misspelt name reads as "this name is free".
+  const hint=(r&&r.suggested&&rows.length)
+    ? `<div class="didyou">No exact match for &ldquo;${q.replace(/[&<>"]/g,'')}&rdquo;. Did you mean one of these?</div>` : '';
+  L.innerHTML=hint+(rows.slice(0,8).map((x,i)=>`<div class="r" data-i="${i}"><span class="rn">${x.number}</span><span><b>${x.name||'—'}</b> · ${x.status} · ${x.applicant||''}</span></div>`).join('')
+    ||'<div class="r">Nothing matched. Check the spelling, or try a shorter part of the name.</div>');
   setRows('tm-list',rows);bindList('tm-list',tmPick);show('tm-list',true);}
 async function tmPick(m){const r=await api('basket',{number:m.number});const b=r&&r.basket;if(!b)return;
   renderBasket(`${m.name||m.number} — classes & terms`, b);}
