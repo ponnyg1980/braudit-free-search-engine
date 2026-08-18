@@ -27,9 +27,17 @@
   .tmh-busy .msg{font-size:14px;color:var(--muted)}
   /* Full-card overlay for the main search, which is the longest wait and a
      screen change — the visitor must not be able to press Begin twice. */
-  .tmh-overlay{position:fixed;inset:0;background:rgba(245,247,249,.92);z-index:9999;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+  /* Fully opaque backdrop. At .92 the page beneath showed through the
+     Did-you-know card and the two sets of text collided — legible enough in a
+     screenshot, unreadable in practice. The card itself is a solid panel for
+     the same reason: this is something we want people to actually read. */
+  .tmh-overlay{position:fixed;inset:0;background:var(--bg);z-index:9999;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;padding:20px}
   .tmh-overlay .msg{font-size:15px;color:var(--navy);font-weight:600}
+  .tmh-overlay .sub{font-size:14px;color:var(--muted)}
+  .tmh-overlay .nug{background:#fff;border:1px solid var(--line);
+    border-radius:var(--r-xl);box-shadow:var(--shadow);width:100%}
 
 
   /* ---- richer result rows + the class picker (10 Aug 2026) ---- */
