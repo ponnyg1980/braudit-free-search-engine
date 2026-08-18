@@ -160,6 +160,15 @@
   .pill.navy:not(.on){color:var(--quiet)}
   .eu-note{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px}
 
+  .qchecks{display:grid;gap:8px;margin-top:4px}
+  .qchecks label{display:flex;align-items:flex-start;gap:10px;font-size:15px;
+    line-height:1.45;color:var(--ink);cursor:pointer;padding:9px 12px;
+    border:1.5px solid var(--line);border-radius:var(--r-sm);background:#fff;
+    transition:border-color .15s ease,background .15s ease}
+  .qchecks label:hover{border-color:var(--field-line)}
+  .qchecks input{width:auto;flex:0 0 auto;margin:2px 0 0;accent-color:var(--pink)}
+  .qchecks label:has(input:checked){border-color:var(--pink);background:var(--pink-tint)}
+
   .didyou{padding:11px 14px;margin-bottom:6px;border-radius:var(--r-sm);
     background:var(--pink-tint);border:1px solid var(--pink-line);
     font-size:14px;color:var(--navy);font-weight:600}
@@ -730,7 +739,7 @@ const STEP_LABELS={search:'Name',marks:'Searches',jurisdiction:'Jurisdictions',c
 let state={name:'',logo:false,logoLater:false,tagline:'',classes:[],
   now:{mode:'uk',codes:[]},plan:{mode:'none',codes:[]},lastResult:null,lead:null,
   emailForAI:null,classSource:null,resultsComputedFrom:null,portalRequested:false,
-  sessionId:null,businessWebsite:''};  // minted on the first real decision — see ensureSession()
+  sessionId:null,businessWebsite:'',channels:null};  // minted on the first real decision — see ensureSession()
 
 /* ── Navigation ──────────────────────────────────────────────────────────
    Two layers, deliberately kept separate:
@@ -785,7 +794,11 @@ function currentSnapshot(){
     tagline:document.getElementById('tagline')?document.getElementById('tagline').value.trim():state.tagline,
     has_logo:state.logo&&!state.logoLater, classes:state.classes,
     trading_now:nowCodes(), planning_to_trade:planCodes(), class_source:state.classSource,
-    business_website:state.businessWebsite||''};
+    business_website:state.businessWebsite||'',
+    // Where they sell and where they're seen — on the session in their own
+    // right, not buried in class_source, so Zoho and the Brand Audit get them
+    // whether or not the visitor used the describe-your-business route.
+    channels:state.channels||null};
 }
 function ensureSession(){
   // Idempotent — call it any time; only the first call actually mints one.
@@ -940,6 +953,50 @@ function q1Html(){
   </div>
 
   <div class="q">
+    <p class="qt">Where do people buy from you?</p>
+    <p class="qh">Tick anything that applies now, or that you’re planning. Where you
+      sell can be a class in its own right — a shop that sells other brands’
+      products needs retail services, on top of whatever it makes.</p>
+    <div class="qchecks" id="q1-sell">
+      <label><input type="checkbox" value="premises"> A shop, office or premises people visit</label>
+      <label><input type="checkbox" value="own_site"> Your own website</label>
+      <label><input type="checkbox" value="marketplace"> Online marketplaces (eBay, Amazon, Etsy, TikTok Shop)</label>
+      <label><input type="checkbox" value="enquiry"> Through an enquiry, then we invoice</label>
+      <label><input type="checkbox" value="wholesale"> Wholesale or trade customers</label>
+      <label><input type="checkbox" value="other_sell"> Somewhere else</label>
+    </div>
+    <input type="text" id="q1-sell-other" class="hidden" style="margin-top:8px"
+           placeholder="Where else do people buy from you?">
+  </div>
+
+  <div class="q hidden" id="q1-resale-wrap">
+    <p class="qt">Do you sell other brands’ products as well as your own?</p>
+    <p class="qh">This is the one that decides whether you need retail services. Selling
+      only what you make usually doesn’t.</p>
+    <div class="qseg" id="q1-resale">
+      <button type="button" data-r="own">Only our own</button>
+      <button type="button" data-r="others">Other brands too</button>
+      <button type="button" data-r="mostly_others">Mostly other brands</button>
+    </div>
+  </div>
+
+  <div class="q">
+    <p class="qt">Where do people come across your brand? <span class="opt">— optional</span></p>
+    <p class="qh">This doesn’t change your classes — it tells us where to look if you
+      go on to a Brand Audit, and where your evidence of use lives.</p>
+    <div class="qchecks" id="q1-seen">
+      <label><input type="checkbox" value="search"> Search engines (Google, Bing)</label>
+      <label><input type="checkbox" value="ai"> AI search (ChatGPT, Claude, Gemini)</label>
+      <label><input type="checkbox" value="social"> Social media (Instagram, Facebook, LinkedIn, TikTok, X)</label>
+      <label><input type="checkbox" value="footfall"> Passing trade and word of mouth</label>
+      <label><input type="checkbox" value="traditional"> Traditional advertising (press, billboards, PR)</label>
+      <label><input type="checkbox" value="other_seen"> Somewhere else</label>
+    </div>
+    <input type="text" id="q1-seen-other" class="hidden" style="margin-top:8px"
+           placeholder="Where else do people come across you?">
+  </div>
+
+  <div class="q">
     <p class="qt">Anything unique we’ve missed? <span class="opt">— optional</span></p>
     <textarea id="q1-unique" placeholder="Anything that sets you apart, or that the questions above don’t cover"></textarea>
   </div>
@@ -999,6 +1056,27 @@ function q1Wire(){
   const dur=document.getElementById('q1-dur');
   if(dur) dur.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return;
     q1Seg('q1-dur','d',b.dataset.d,'dur'); });
+
+  // Selling channels. Ticking a channel where GOODS change hands opens the
+  // resale question, because that — not the channel — is what decides whether
+  // retail services in class 35 belong on the specification.
+  const sell=document.getElementById('q1-sell');
+  if(sell) sell.addEventListener('change',function(){
+    const on=[...sell.querySelectorAll('input:checked')].map(c=>c.value);
+    document.getElementById('q1-sell-other').classList.toggle('hidden',!on.includes('other_sell'));
+    const sellsGoods=['premises','own_site','marketplace','wholesale'].some(v=>on.includes(v));
+    document.getElementById('q1-resale-wrap').classList.toggle('hidden',!sellsGoods);
+    if(!sellsGoods) Q1.resale='';
+  });
+  const resale=document.getElementById('q1-resale');
+  if(resale) resale.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return;
+    resale.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+    Q1.resale=b.dataset.r; });
+  const seen=document.getElementById('q1-seen');
+  if(seen) seen.addEventListener('change',function(){
+    const on=[...seen.querySelectorAll('input:checked')].map(c=>c.value);
+    document.getElementById('q1-seen-other').classList.toggle('hidden',!on.includes('other_seen'));
+  });
   const web=document.getElementById('q1-web');
   if(web) web.addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return;
     q1Seg('q1-web','w',b.dataset.w,'web');
@@ -1015,6 +1093,10 @@ function q1Submit(){
   if(Q1.web==='yes' && site && !/^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([\/#?].*)?$/i.test(site)){
     out.textContent='That doesn’t look like a website address — e.g. yourbusiness.co.uk'; return; }
 
+  const ticked=id=>[...document.querySelectorAll('#'+id+' input:checked')].map(c=>c.value);
+  const sell=ticked('q1-sell'), seen=ticked('q1-seen');
+  const sellOther=v('q1-sell-other'), seenOther=v('q1-seen-other');
+
   // A composed sentence, because the enrichment relay and the AI class
   // suggestion both read class_source.value as free text. The structured
   // answers ride alongside; this keeps every existing consumer working.
@@ -1022,20 +1104,55 @@ function q1Submit(){
   if(goods) parts.push('Goods/products: '+goods);
   if(services) parts.push('Services: '+services);
   if(uniq) parts.push('Also: '+uniq);
+
+  // WHERE THEY SELL goes into the sentence, phrased as trade fact.
+  //
+  // This is what stops a phone shop being classed as 9 and 38 while missing
+  // 35: "we sell mobile phones and contracts" doesn't say whether they make
+  // them or resell them, and only the second needs retail services.
+  //
+  // WHERE THEY ARE SEEN deliberately does NOT go in. The verified vocabulary
+  // holds real class 35 terms like "advertising and marketing services
+  // provided by means of social media", so a bakery that ticks Instagram
+  // would hand the model a legitimate route to a wrong class. Class 35
+  // advertising is for businesses that advertise for OTHERS. Those answers
+  // are still captured below — they scope the Brand Audit and tell us where
+  // evidence of use lives — they just never reach the agent.
+  if(sell.length){
+    const say={premises:'sells from a shop, office or premises customers visit',
+               own_site:'sells through its own website',
+               marketplace:'sells through online marketplaces',
+               enquiry:'sells by enquiry and invoice',
+               wholesale:'sells to wholesale or trade customers'};
+    const bits=sell.map(k=>say[k]).filter(Boolean);
+    if(sellOther) bits.push('also sells via '+sellOther);
+    if(bits.length) parts.push('How it sells: '+bits.join('; ')+'.');
+    if(Q1.resale==='others') parts.push('Sells other brands\u2019 products as well as its own \u2014 retail services apply.');
+    else if(Q1.resale==='mostly_others') parts.push('Mainly resells other brands\u2019 products \u2014 retail services apply.');
+    else if(Q1.resale==='own') parts.push('Sells only its own products, not other brands\u2019.');
+  }
+
   if(Q1.age==='existing') parts.push('Existing brand, in use '+(DUR_LABEL[Q1.dur]||'for some time')+'.');
   else if(Q1.age==='new') parts.push('New brand, not yet in use.');
 
   state.classSource={route:'1', value:parts.join(' — '), email:state.emailForAI,
     answers:{pitch:pitch, provides:Q1.mode||'', goods:goods, services:services,
              unique:uniq, brand_age:Q1.age||'', in_use_for:Q1.dur||'',
-             website:(Q1.web==='yes'?site:'')}};
+             website:(Q1.web==='yes'?site:''),
+             // Captured for the audit scope, the risk conversation and Zoho —
+             // carried on the session either way, agent or no agent.
+             sells_via:sell, sells_via_other:sellOther, resale:Q1.resale||'',
+             seen_via:seen, seen_via_other:seenOther}};
+  state.channels={sells_via:sell, sells_via_other:sellOther, resale:Q1.resale||'',
+                  seen_via:seen, seen_via_other:seenOther};
   runClassAgent(parts.join(' — '), Q1.mode||null, out);
   // A website given here is the visitor's own site, so it belongs on the
   // session proper, not buried in class_source — otherwise it never reaches
   // the resolver or Zoho. currentSnapshot() sends it as business_website.
   if(Q1.web==='yes' && site) state.businessWebsite=site;
   logEvent('class_source_applied','classes',
-    {route:'1',provides:Q1.mode||'',brand_age:Q1.age||'',has_website:Q1.web==='yes'},true);
+    {route:'1',provides:Q1.mode||'',brand_age:Q1.age||'',has_website:Q1.web==='yes',
+     sells_via:sell,resale:Q1.resale||'',seen_via:seen},true);
 }
 
 /* ── The agent ───────────────────────────────────────────────────────────
