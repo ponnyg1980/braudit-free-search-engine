@@ -160,12 +160,28 @@ def compute(*, name: str, n_similar: int, high: int, medium: int, low: int,
 # thinking their brand is finished. Every tier ends by pointing at a human,
 # per the scoring rules — "if in any doubt, book an appointment".
 
+# WHAT THE NUMBER MEASURES — and why the label had to change.
+#
+# It scores the NAME: how alone it is on the register, how protectable the
+# wording is, how long it has been used, dragged down by conflict pressure.
+# It has never been a probability of getting a registration.
+#
+# Labelled "chance" (from the design comp) or "viable" (from the Industry
+# Report), a strong brand that belongs to somebody else read as a promise —
+# CARLSBERG scoring 79% "chance" against a registered CARLSBERG is the tool
+# contradicting itself in public. Labelled BRAND STRENGTH the same 79 is
+# simply true: it is a strong name, and it is taken. The number stays, the
+# claim it makes shrinks to one it can support.
+SCORE_LABEL = 'brand strength'
+SCORE_CAPTION = ('How strong the name looks in its own right \u2014 not '
+                 'whether this exact word mark is available.')
+
 _HEADLINES = {
     'strong':  'This looks like a strong candidate',
     'good':    'This looks promising',
     'mixed':   'This is worth a closer look before you file',
     'crowded': 'This one needs advice before you file',
-    'review':  'There is already an identical trade mark on the register',
+    'review':  'That word mark is already taken \u2014 but the brand may not be',
 }
 
 
@@ -248,15 +264,46 @@ DIAL_POOR = '#C0392B'
 
 
 _TIER_COLOUR = {'strong': DIAL_GOOD, 'good': DIAL_GOOD,
-                'mixed': DIAL_MID, 'crowded': DIAL_POOR}
+                'mixed': DIAL_MID, 'crowded': DIAL_POOR,
+                # Amber, not red. The name is strong; the route is blocked.
+                # Red would say the brand is worthless, which is not what an
+                # exact match means.
+                'review': DIAL_MID}
 
 
 def _body(tier: str, *, name: str, high: int, medium: int, low: int,
-          total: int, scores: dict, capped: bool = False) -> list[str]:
+          total: int, scores: dict, capped: bool = False,
+          identical: dict | None = None) -> list[str]:
     """Plain-English paragraphs. Each one names the actual evidence, so the
     verdict reads as a reading of THEIR result rather than a stock message."""
     out = []
     n = name or 'your name'
+
+    # Exact match takes the whole commentary. Jonathan, 18 Aug: say the word
+    # mark does not look likely, say the brand may still have somewhere to go,
+    # and ask them to call before deciding anything.
+    if identical:
+        owner = (identical.get('company_name')
+                 or identical.get('owner_name') or '').strip()
+        who = f', held by {owner}' if owner else ''
+        out.append(f'{n} is already on the register as a word mark{who}, '
+                   f'spelled exactly as you have searched it. On that basis a '
+                   f'word-mark application for the same name does not look '
+                   f'likely to succeed.')
+        out.append('That is not the end of it. A brand is more than its word '
+                   'mark, and there may well be other elements worth '
+                   'protecting \u2014 a logo, a tagline, a stylised version of '
+                   'the name, or a specification that does not overlap with '
+                   'theirs. Marks that are vulnerable for non-use are another '
+                   'route we look at.')
+        out.append('The score above measures the name on its own merits, and '
+                   'on that it does well \u2014 it is a strong name. It is '
+                   'simply one that somebody else got to first.')
+        out.append('Please call us to discuss before you make any decisions. '
+                   'This is a word search of the UK register, not a legal '
+                   'opinion, and this is exactly the situation where five '
+                   'minutes with an adviser saves a great deal.')
+        return out
 
     if total == 0:
         out.append(f'We found nothing on the UK register that conflicts with '
@@ -324,45 +371,27 @@ def verdict(summary: dict, *, name: str, years: float | None = None,
     # point on a scale — it is a different question, and answering it with a
     # percentage is worse than saying nothing.
     same = identical_live(name, marks)
-    if same:
-        owner = (same.get('company_name') or same.get('owner_name') or '').strip()
-        who = f' It is held by {owner}.' if owner else ''
-        return {
-            'score': None, 'show_score': False, 'scores': {},
-            'tier': 'review', 'colour': DIAL_POOR, 'capped_by_conflict': True,
-            'headline': _HEADLINES['review'],
-            'body': [
-                f'"{name}" is already registered on the UK register, spelled '
-                f'exactly as you have searched it.{who}',
-                'That is not a score we can put a number on. An application '
-                'for the same name is likely to be refused or opposed, and '
-                'using it could put you at risk from the existing owner '
-                'rather than the other way round.',
-                'There can still be routes — a different specification, a '
-                'genuinely different market, a mark that is vulnerable for '
-                'non-use, or an agreement with the owner. Those are questions '
-                'for a person, not a search.',
-                'This is a word search of the UK register, not a legal '
-                'opinion — please book an appointment and one of our advisers '
-                'will go through it with you.',
-            ],
-            'lead': 'audit',
-            'dials': [],
-            'review_mark': {'mark': same.get('mark') or same.get('mark_text') or '',
-                            'status': same.get('status') or '',
-                            'owner': owner},
-        }
 
     v = compute(name=name, n_similar=total, high=high, medium=medium,
                 low=low, years=years, sector_terms=sector_terms)
     tier, capped = _tier(v['master'], high)
+    # An identical live mark takes over the verdict but NOT the number.
+    # Jonathan, 18 Aug: the word mark may be gone while the brand still has
+    # somewhere to go — a logo, a tagline, a different specification — so
+    # withholding the score reads as the tool failing rather than answering.
+    # What the number MEANS had to change for that to be honest: it scores the
+    # name on its own merits, which is why a strong brand owned by somebody
+    # else still scores well. See SCORE_CAPTION.
+    if same:
+        tier, capped = 'review', True
+
 
     # Which next step leads. Jonathan, 11 Aug: "most people proceed to
     # application rather than request an audit" — so on a clean result we get
     # out of their way and lead with the application. Where the register is
     # genuinely messy, the audit leads, because that is the honest answer and
     # it is also the one that saves them an application fee.
-    lead = 'audit' if tier in ('mixed', 'crowded') else 'application'
+    lead = 'audit' if tier in ('mixed', 'crowded', 'review') else 'application'
 
     return {
         'score': v['master'],
@@ -373,7 +402,14 @@ def verdict(summary: dict, *, name: str, years: float | None = None,
         'capped_by_conflict': capped,
         'headline': _HEADLINES[tier],
         'body': _body(tier, name=name, high=high, medium=medium, low=low,
-                      total=total, scores=v['scores'], capped=capped),
+                      total=total, scores=v['scores'], capped=capped,
+                      identical=same),
+        'caption': SCORE_CAPTION,
+        'review_mark': ({'mark': same.get('mark') or same.get('mark_text') or '',
+                         'status': same.get('status') or '',
+                         'owner': (same.get('company_name')
+                                   or same.get('owner_name') or '').strip()}
+                        if same else None),
         'lead': lead,
         # Each dial carries its OWN colour, derived from its own value.
         #
