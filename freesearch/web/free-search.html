@@ -206,6 +206,8 @@
   .basket{border:1px solid var(--line);border-radius:var(--r-md);padding:18px;
     min-height:110px;display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;
     background:var(--panel)}
+  .go-here{margin-top:18px}
+  .go-here .sub{text-align:center;margin-top:8px;font-size:13.5px}
   .help-head{display:flex;gap:20px;flex-wrap:wrap;align-items:center;
     margin-top:30px;padding-top:30px;border-top:1px solid var(--line)}
   .opt-block.tool .opt-row{align-items:start}
@@ -410,6 +412,15 @@
               a class you don&rsquo;t trade in can be challenged. Pick what you sell today plus
               what&rsquo;s genuinely next.</p>
           </div>
+        </div>
+        <!-- Second search button, next to the basket rather than below the four
+             tools. Once a class is picked this is where the eye already is, and
+             the footer button can be a long scroll away past all four tools.
+             Hidden until there is something to search, so it never sits there
+             as a button that refuses to work. -->
+        <div class="go-here hidden" id="cls-go-top">
+          <button class="btn primary block" onclick="beginSearch()">Begin free search</button>
+          <p class="sub" id="cls-count-top"></p>
         </div>
       </div>
     </div>
@@ -1773,8 +1784,14 @@ function renderClassList(){const q=(document.getElementById('cls-search').value|
     .map(([n,l])=>{const on=state.classes.includes(+n);
       return `<button type="button" class="row${on?' on':''}" onclick="${on?'removeClass':'addClass'}(${n})">`+
         `<span class="n">${n}</span><span>${l}</span><span class="g">${on?'\u2713':'+'}</span></button>`;}).join('');
-  document.getElementById('cls-list').innerHTML=rows||
-    '<div style="padding:18px 16px;font-size:15px;color:var(--quiet)">Nothing matched that.</div>';}
+  // Preserve the scroll position. innerHTML replaces every row, which resets
+  // the box to the top — so picking class 30 bounced you back up to class 1
+  // and you had to find your place again.
+  const box=document.getElementById('cls-list');
+  const keep=box.scrollTop;
+  box.innerHTML=rows||
+    '<div style="padding:18px 16px;font-size:15px;color:var(--quiet)">Nothing matched that.</div>';
+  box.scrollTop=keep;}
 function addClass(n){n=+n;if(!state.classes.includes(n))state.classes.push(n);state.classes.sort((a,b)=>a-b);clearClassGate();renderBasket();
   logEvent('class_added','classes',{nice_class:n},true);}
 function removeClass(n){n=+n;state.classes=state.classes.filter(x=>x!==n);renderBasket();
@@ -1783,9 +1800,12 @@ function renderBasket(){const b=document.getElementById('cls-basket');
   b.innerHTML=state.classes.length?state.classes.map(n=>
     `<span class="chip">Class ${n} \u00b7 ${NICE[n]} <span class="x" onclick="removeClass(${n})">\u00d7</span></span>`).join('')
     :'<span class="sub">Nothing picked yet. Search on the left, or try one of the four tools below.</span>';
-  const c=document.getElementById('cls-count');
-  if(c) c.textContent=state.classes.length
-    ? state.classes.length+(state.classes.length===1?' class picked':' classes picked') : '';
+  const n=state.classes.length;
+  const label=n?(n+(n===1?' class picked':' classes picked')):'';
+  ['cls-count','cls-count-top'].forEach(function(id){
+    const c=document.getElementById(id); if(c) c.textContent=label; });
+  const go=document.getElementById('cls-go-top');
+  if(go) go.classList.toggle('hidden',!n);
   renderClassList();}
 
 /* step 4 combined */
