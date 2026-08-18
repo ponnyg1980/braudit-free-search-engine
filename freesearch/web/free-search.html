@@ -570,7 +570,7 @@
     <div class="opinion" id="res-opinion">
       <div class="op-top">
         <div class="op-master">
-          <div class="dial dial-master" id="op-dial"><span class="val" id="op-val">&mdash;</span><span class="cap">viable</span></div>
+          <div class="dial dial-master" id="op-dial"><span class="val" id="op-val">&mdash;</span><span class="cap">brand strength</span></div>
           <p class="sub" id="op-cap" style="text-align:center;font-size:13.5px;margin-top:10px"></p>
         </div>
         <div class="op-say">
@@ -2010,28 +2010,7 @@ function renderOpinion(r){
   if(!v){ box.classList.add('hidden'); return; }
   box.classList.remove('hidden');
   const body=(v.body||[]);
-  // D12 — an identical live mark. No number, no dials: the ring is replaced
-  // by the word REVIEW, because a percentage next to "there is already an
-  // identical registration" is worse than saying nothing at all.
-  if(v.show_score===false || typeof v.score!=='number'){
-    const d0=document.getElementById('op-dial');
-    d0.style.setProperty('--v',100);
-    d0.style.setProperty('--dc',v.colour||'#C0392B');
-    document.getElementById('op-val').textContent='!';
-    const cap0=document.getElementById('op-cap');
-    if(cap0) cap0.textContent='';
-    const capEl=box.querySelector('.dial-master .cap');
-    if(capEl) capEl.textContent='review';
-    document.getElementById('op-headline').textContent=v.headline||'';
-    document.getElementById('op-body').innerHTML=body.map((p,i)=>
-      `<p${i===body.length-1?' class="op-caveat"':''}>${esc(p)}</p>`).join('');
-    document.getElementById('op-dials').innerHTML='';
-    document.getElementById('op-dials').classList.add('hidden');
-    return;
-  }
   document.getElementById('op-dials').classList.remove('hidden');
-  const capEl=box.querySelector('.dial-master .cap');
-  if(capEl) capEl.textContent='viable';
   const d=document.getElementById('op-dial');
   d.style.setProperty('--v',v.score);
   // Tier colour, NOT the score's own colour. A name can score 76 and still be
@@ -2041,8 +2020,11 @@ function renderOpinion(r){
   d.style.setProperty('--dc',v.colour||OP_COLOUR(v.score));
   document.getElementById('op-val').textContent=v.score+'%';
   document.getElementById('op-headline').textContent=v.headline||'';
+  // What the number measures, in the engine's words. It scores the NAME, not
+  // whether this exact word mark is free — which is why a strong brand owned
+  // by somebody else still scores well without the page contradicting itself.
   const cap=document.getElementById('op-cap');
-  if(cap) cap.textContent='How this name looks as a trade mark, on what we can measure.';
+  if(cap) cap.textContent=v.caption||'How strong the name looks in its own right.';
   // The last paragraph is always the "this is not legal advice, book an
   // appointment" line — styled quieter so it reads as a footnote and not as
   // a retraction of everything above it.
