@@ -257,6 +257,10 @@ class _Handler(BaseHTTPRequestHandler):
         if path == '/healthz':
             self._send({'ok': True})
             return
+        if path == '/nuggets':
+            from .nuggets import payload as _nug
+            self._send({'ok': True, 'nuggets': _nug()})
+            return
         if path == '/jurisdictions':
             out = handle_jurisdictions()
             self._send(out, out.get('status', 200))
