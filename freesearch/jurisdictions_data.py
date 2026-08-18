@@ -49,10 +49,18 @@ POPULAR: list[dict] = [
     {'code': 'SA', 'label': 'Saudi Arabia', 'covers': None},
 ]
 
-# "Other Regions" — regional registers spanning multiple countries.
+# "Other Regions" — regional registers spanning multiple COUNTRIES.
+#
+# WIPO / Madrid was removed on 18 Aug 2026. It is a filing ROUTE, not a
+# territory: nobody trades in Madrid. Leaving it in a "where do you trade"
+# answer corrupted planning_to_trade, which feeds the results disclaimer and
+# the Zoho record — a lead reading "plans to trade in WIPO" tells a
+# salesperson nothing. It now surfaces as a prompt once several territories
+# are picked (see MADRID_NOTE), which is the moment it is actually useful.
+#
+# Benelux, ARIPO and OAPI stay, because those genuinely ARE groups of
+# territories rather than routes.
 REGIONS: list[dict] = [
-    {'code': 'WO', 'label': 'WIPO / Madrid (international)',
-     'covers': 'international registration route'},
     {'code': 'BX', 'label': 'Benelux (BOIP)', 'covers': ['BE', 'NL', 'LU']},
     {'code': 'ARIPO', 'label': 'ARIPO (English-speaking Africa)',
      'covers': 'multiple African states'},
@@ -83,6 +91,18 @@ def all_countries() -> list[dict]:
     return out
 
 
+# Shown once someone has picked enough separate territories for the Madrid
+# route to be worth mentioning. Same idea as the EU note: offer the
+# information at the moment it helps, rather than as an option in a list of
+# places.
+MADRID_THRESHOLD = 3
+MADRID_NOTE = (
+    'Picking several countries? The Madrid System can cover them in a single '
+    'international application instead of one filing per country. We will '
+    'tell you if that works out cheaper for the territories you have chosen.'
+)
+
+
 def picker_payload() -> dict:
     """Everything the Step 4 / Step 5 picker needs, in one JSON blob."""
     return {
@@ -91,6 +111,7 @@ def picker_payload() -> dict:
         'regions': REGIONS,
         'all_countries': all_countries(),
         'eu_members': EU_MEMBERS,
+        'madrid': {'threshold': MADRID_THRESHOLD, 'note': MADRID_NOTE},
     }
 
 
