@@ -42,6 +42,7 @@ POPULAR: list[dict] = [
     {'code': 'GB', 'label': 'United Kingdom', 'covers': None},
     {'code': 'EU', 'label': 'European Union (EUIPO)', 'covers': EU_MEMBERS},
     {'code': 'US', 'label': 'United States', 'covers': 'all 50 states'},
+    {'code': 'CA', 'label': 'Canada', 'covers': None},
     {'code': 'AU', 'label': 'Australia', 'covers': None},
     {'code': 'NZ', 'label': 'New Zealand', 'covers': None},
     {'code': 'AE', 'label': 'Dubai / UAE', 'covers': None},
