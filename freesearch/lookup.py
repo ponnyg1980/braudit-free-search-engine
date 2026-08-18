@@ -164,17 +164,87 @@ def search_marks(client, query: str, *, limit: int = 10) -> dict:
         if detail:
             results.append(_mark_row(detail))
     else:
-        try:
-            body = client.search_trademarks(text=query, limit=max(limit, 25))
-        except Exception:
-            body = {}
-        items = (body or {}).get('items', [])
-        rows = [_mark_row(it) for it in items]
-        rows.sort(key=lambda r: _sim(query, r['name']), reverse=True)
-        results = rows[:limit]
+        rows = _search_by_text(client, query, limit)
+        suggested = False
+        matched_on = ''
+        if not rows:
+            # NOTHING MATCHED — try again, loosely.
+            #
+            # The register search is a PREFIX match, verified against the live
+            # API: "Guinnes" finds GUINNESS (it is a prefix), "Guiness" finds
+            # nothing (it diverges at the fifth letter). So the single most
+            # common miss — a dropped or doubled letter in the middle of a
+            # familiar name — returns a flat "no trademarks", which reads as
+            # "this name is free" when it is anything but.
+            #
+            # The retry costs nothing on the happy path: it only runs when the
+            # first search already came back empty, so a search that works is
+            # exactly as fast as it was before.
+            for variant in _relaxations(query):
+                rows = _search_by_text(client, variant, limit, fetch=40)
+                if rows:
+                    suggested, matched_on = True, variant
+                    break
+            if rows:
+                # Rank against what they actually TYPED, not the relaxed
+                # variant, and keep only close matches. Shortening "Guiness"
+                # to "Guin" also returns GUINEA and Guinep; scored against the
+                # original those sit near 0.77 while GUINNESS scores 0.93, so
+                # the threshold keeps the answer and drops the noise. Without
+                # it this would trade one bad outcome for another — a wall of
+                # near-random names.
+                rows = [r for r in rows if _sim(query, r['name']) >= SUGGEST_MIN]
+                rows = rows[:SUGGEST_MAX]
+        results = rows[:SUGGEST_MAX if suggested else limit]
         _fill_details(client, results)
+        if suggested:
+            return {'mode': 'trademark', 'query': query, 'results': results,
+                    'suggested': True, 'matched_on': matched_on}
 
     return {'mode': 'trademark', 'query': query, 'results': results}
+
+
+# How close a relaxed hit has to be to what was typed, and how many we show.
+# 0.72 was chosen against live data: GUINNESS scores 0.93 against "Guiness"
+# while GUINEA and Guinep — which the same relaxed query returns — score 0.77.
+# Raising it much past 0.8 starts dropping genuine two-letter typos.
+SUGGEST_MIN = 0.72
+SUGGEST_MAX = 6
+
+
+def _search_by_text(client, text: str, limit: int, *, fetch: int = 25) -> list:
+    """One text search, ranked by closeness. Returns [] on any failure."""
+    try:
+        body = client.search_trademarks(text=text, limit=max(limit, fetch))
+    except Exception:
+        body = {}
+    rows = [_mark_row(it) for it in (body or {}).get('items', [])]
+    rows.sort(key=lambda r: _sim(text, r['name']), reverse=True)
+    return rows
+
+
+def _relaxations(query: str) -> list[str]:
+    """Cheaper spellings to retry, best first. At most two extra calls.
+
+    1. Without spaces — the search is prefix-based, so "Guin ness" and
+       "cor search" match nothing even though the mark is one word.
+    2. A shortened prefix — this is what catches the dropped/doubled letter,
+       because the start of a name is nearly always typed correctly and the
+       mistake is further in. Trimming three characters off "Guiness" gives
+       "Guin", which reaches GUINNESS.
+
+    Deliberately NOT a list of generated misspellings: that would be a dozen
+    round trips to guess at something the prefix already solves in one.
+    """
+    out = []
+    squashed = ''.join(query.split())
+    if squashed and squashed != query:
+        out.append(squashed)
+    stem = squashed or query
+    cut = max(4, len(stem) - 3)
+    if cut < len(stem):
+        out.append(stem[:cut])
+    return out
 
 
 def _fill_details(client, rows: list[dict]) -> None:
