@@ -1188,6 +1188,7 @@ function runClassAgent(text, provides, outEl){
       res.innerHTML='<div class="r"><span>'+
         ((d&&d.message)||'We couldn\u2019t work that out — please pick your classes below.')+
         '</span></div>';
+      res.classList.remove('hidden');   // nugStop hid it on the way out
       return;
     }
     // Flatten to the picker's shape. Terms ride along on class_source so the
@@ -1200,6 +1201,7 @@ function runClassAgent(text, provides, outEl){
   }).catch(async function(){
     nugStop('ho1'); await busyOff('ho1');
     res.innerHTML='<div class="r"><span>Suggestions are unavailable — please pick your classes below.</span></div>';
+    res.classList.remove('hidden');     // nugStop hid it on the way out
   });
 }
 function aiGate(opt){
@@ -1390,9 +1392,20 @@ async function ho5PickOwner(o){
    Pre-ticked so the common case is still one click. */
 function classLabel(n){ return NICE[+n]||''; }
 let _pick={route:null,items:[],meta:null};
+/* Which container a route's results belong in.
+   Until 18 Aug this was `route==='5' ? 'ho5-res' : 'ho3-res'`, so the
+   describe-your-business route (1) tried to render into the COMPANY tool's
+   container — which only exists once that other tool has been opened. Use
+   route 1 on its own and the lookup returned null, showClassPicker bailed at
+   the guard below, and the visitor got no picker at all. The waiting carousel
+   is what made it obvious: a frozen card reads as broken where three pulsing
+   hexagons read as "still working". */
+function pickHost(route){
+  return document.getElementById('ho'+route+'-res');
+}
 function showClassPicker(route,title,items,meta){
   _pick={route:route,items:items,meta:meta};
-  const box=document.getElementById(route==='5'?'ho5-res':'ho3-res');
+  const box=pickHost(route);
   if(!box) return;
   box.classList.remove('hidden');
   box.innerHTML=`<div class="pickbox">
@@ -1418,7 +1431,7 @@ function clearClassGate(){const e=document.getElementById('cls-gate');
 function applyPickedClasses(){
   clearClassGate();
   const route=_pick.route;
-  const box=document.getElementById(route==='5'?'ho5-res':'ho3-res');
+  const box=pickHost(route);
   const chosen=[...box.querySelectorAll('.pickrow input:checked')].map(cb=>+cb.dataset.n);
   if(!chosen.length) return;
   state.classes=[...new Set([...state.classes,...chosen])].sort((a,b)=>a-b);
@@ -1570,7 +1583,7 @@ let NUG={dwell:3.4,ai_search:[],free_search:[
     .catch(function(){});
 })();
 
-const _nugT={};
+const _nugT={}, _nugHost={};
 function nugHtml(msg,cards,i){
   const c=cards[i%cards.length]||{title:'',text:''};
   const dots=cards.map((_,k)=>`<i class="${k===i%cards.length?'on':''}"></i>`).join('');
@@ -1587,6 +1600,7 @@ function nugHtml(msg,cards,i){
 function nugStart(key,target,msg,cards){
   if(!target||!cards||!cards.length) return;
   let i=0;
+  _nugHost[key]=target;
   target.classList.remove('hidden');
   target.innerHTML=nugHtml(msg,cards,i);
   clearInterval(_nugT[key]);
@@ -1595,7 +1609,16 @@ function nugStart(key,target,msg,cards){
     target.innerHTML=nugHtml(msg,cards,++i);
   }, (NUG.dwell||3.4)*1000);
 }
-function nugStop(key){ clearInterval(_nugT[key]); _nugT[key]=null; }
+function nugStop(key){
+  clearInterval(_nugT[key]); _nugT[key]=null;
+  // Clear the host too. The carousel owns what it drew, and every caller that
+  // wants something else in its place writes over this immediately; the one
+  // that doesn't (the class agent, whose picker renders elsewhere) would
+  // otherwise leave a static card on screen looking frozen.
+  const el=_nugHost[key];
+  if(el){ el.innerHTML=''; el.classList.add('hidden'); }
+  _nugHost[key]=null;
+}
 
 function busyOn(key,target,msg){
   if(_busy[key]) clearTimeout(_busy[key]);
