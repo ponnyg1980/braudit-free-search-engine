@@ -160,6 +160,14 @@
   .pill.navy:not(.on){color:var(--quiet)}
   .eu-note{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px}
 
+  /* step 3 picker — reuses the step-4 grid so the two screens feel the same */
+  .quick{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+  .pill.sm{padding:8px 14px;font-size:13.5px}
+  .listbox .row span:first-child:empty{display:none}
+  .madrid{margin-top:14px;border-style:dashed;border-color:var(--pink-line);
+    background:#fff}
+  .madrid .sub{font-size:14px}
+
   /* step 4 */
   .cls-grid{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
   .cls-search{margin-bottom:12px}
@@ -1521,22 +1529,81 @@ function renderBasket(){const b=document.getElementById('cls-basket');
   renderClassList();}
 
 /* step 4 combined */
+/* ── the territory picker ────────────────────────────────────────────────
+   Rebuilt 18 Aug 2026. It used to render all 152 countries as a single wall
+   of chips, which is why the list felt incomplete — you could not find your
+   country, so you assumed it was missing. It wasn't; it was unscannable.
+
+   Now it mirrors the class picker one screen later: searchable list on the
+   left, what you have chosen as removable chips on the right. One pattern to
+   learn instead of two, and what you've picked is always visible in one
+   place rather than scattered through a long list.
+
+   Popular and the regional registers sit above the list as quick-adds. They
+   are the same underlying codes, so a country added either way shows once in
+   the basket — which is what fixes the UK / US / Australia / Singapore /
+   Saudi Arabia appearing in two places. */
 function buildPicker(which){
   const host=document.getElementById(which==='now'?'pick-now':'pick-plan');
-  host.innerHTML=state[which].mode==='select'?pickerBody(which):'';
+  if(state[which].mode!=='select'){ host.innerHTML=''; return; }
+  if(!host.dataset.built){
+    host.dataset.built='1';
+    host.innerHTML=`<div class="cls-grid" style="margin-top:14px">
+      <div>
+        <input class="cls-search" type="search" id="jq-${which}"
+               placeholder="Search countries and regions&hellip;"
+               oninput="renderJList('${which}')">
+        <div class="quick" id="jquick-${which}"></div>
+        <div class="listbox" id="jlist-${which}"></div>
+      </div>
+      <div>
+        <div class="eyebrow">${which==='now'?'Where you trade today':'Where you\u2019re heading next'}</div>
+        <div class="basket" id="jbasket-${which}"></div>
+        <div class="panel madrid hidden" id="jmadrid-${which}"></div>
+      </div>
+    </div>`;
+  }
+  renderJQuick(which); renderJList(which); renderJBasket(which);
 }
-function pickerBody(which){const sel=state[which].codes;
-  const chip=(c)=>`<div class="c ${sel.includes(c.code)?'on':''}" onclick="tog('${which}','${c.code}')">${c.label}${c.covers?` <small>(${c.covers})</small>`:''}</div>`;
-  return `<div class="group-title">Popular</div><div class="pop">${PICKER.popular.map(chip).join('')}</div>
-   <div class="group-title">Other regions</div><div class="pop">${PICKER.regions.map(chip).join('')}</div>
-   <div class="group-title">All countries</div>
-   <input type="text" placeholder="Search countries…" oninput="filterAZ('${which}',this.value)" style="margin:6px 0">
-   <div class="pop" id="az-${which}">${PICKER.all_countries.map(chip).join('')}</div>`;}
-function filterAZ(which,q){q=(q||'').toLowerCase();const sel=state[which].codes;
-  document.getElementById('az-'+which).innerHTML=PICKER.all_countries.filter(c=>c.label.toLowerCase().includes(q))
-    .map(c=>`<div class="c ${sel.includes(c.code)?'on':''}" onclick="tog('${which}','${c.code}')">${c.label}</div>`).join('');}
-function tog(which,code){const arr=state[which].codes;const i=arr.indexOf(code);
-  if(i>=0)arr.splice(i,1);else arr.push(code);buildPicker(which);
+function jAll(){ return [...PICKER.popular, ...PICKER.regions, ...PICKER.all_countries]; }
+function jLabel(code){
+  const hit=jAll().find(c=>c.code===code);
+  return hit?hit.label:code;
+}
+function renderJQuick(which){
+  const sel=state[which].codes;
+  const btn=c=>`<button type="button" class="pill sm${sel.includes(c.code)?' on':''}"
+    onclick="tog('${which}','${c.code}')">${c.label}</button>`;
+  document.getElementById('jquick-'+which).innerHTML=
+    [...PICKER.popular,...PICKER.regions].map(btn).join('');
+}
+function renderJList(which){
+  const q=((document.getElementById('jq-'+which)||{}).value||'').toLowerCase();
+  const sel=state[which].codes;
+  const rows=PICKER.all_countries
+    .filter(c=>!q||c.label.toLowerCase().includes(q))
+    .map(c=>{const on=sel.includes(c.code);
+      return `<button type="button" class="row${on?' on':''}" onclick="tog('${which}','${c.code}')">
+        <span></span><span>${c.label}</span><span class="g">${on?'\u2713':'+'}</span></button>`;}).join('');
+  document.getElementById('jlist-'+which).innerHTML=rows||
+    '<div style="padding:18px 16px;font-size:15px;color:var(--quiet)">Nothing matched that.</div>';
+}
+function renderJBasket(which){
+  const sel=state[which].codes;
+  document.getElementById('jbasket-'+which).innerHTML=sel.length
+    ? sel.map(c=>`<span class="chip">${jLabel(c)} <span class="x" onclick="tog('${which}','${c}')">\u00d7</span></span>`).join('')
+    : `<span class="sub">Nothing picked yet. Search on the left, or use the shortcuts.</span>`;
+  // The Madrid prompt, offered at the point it becomes useful rather than as
+  // a fake country in the list. WIPO is a filing route, not a place.
+  const m=document.getElementById('jmadrid-'+which);
+  const cfg=(PICKER.madrid||{});
+  const show=cfg.note && sel.filter(c=>c!=='EU').length>=(cfg.threshold||3);
+  if(m){ m.classList.toggle('hidden',!show); if(show) m.innerHTML=`<p class="sub">${esc(cfg.note)}</p>`; }
+}
+function tog(which,code){
+  const arr=state[which].codes; const i=arr.indexOf(code);
+  if(i>=0)arr.splice(i,1); else arr.push(code);
+  renderJQuick(which); renderJList(which); renderJBasket(which);
   logEvent('jurisdiction_set','jurisdiction',{which:which,codes:arr.slice()},true);}
 function setMode(which,mode){state[which].mode=mode;if(mode!=='select')state[which].codes=[];
   document.getElementById('now-uk').classList.toggle('on',mode==='uk');
@@ -1545,7 +1612,14 @@ function setMode(which,mode){state[which].mode=mode;if(mode!=='select')state[whi
 function revealPlan(){document.getElementById('plan-block').classList.remove('hidden');
   document.getElementById('now-continue').classList.add('hidden');
   document.getElementById('plan-block').scrollIntoView({behavior:'smooth'});}
-function setPlanMode(mode){state.plan.mode=mode;state.plan.codes=[];
+function setPlanMode(mode){
+  state.plan.mode=mode;
+  // Carry the countries through. Opening "further afield" with today's
+  // territories already ticked is the whole point of the question — you are
+  // saying where you are going NEXT, and you can only say that against where
+  // you already are. planCodes() subtracts them again, so ticking nothing
+  // extra still means "no plans beyond where I am now".
+  state.plan.codes = mode==='select' ? nowCodes().slice() : [];
   document.querySelectorAll('#plan-seg .pill').forEach(o=>o.classList.toggle('on',o.dataset.plan===mode));
   logEvent('jurisdiction_set','jurisdiction',{which:'plan',mode:mode},true);
   const p=document.getElementById('pick-plan');
