@@ -404,6 +404,43 @@ function renderClassList(){const q=(document.getElementById('bf-cls-search').val
    is what an application actually needs. Classes alone are not enough. */
 function engineBase(){ return (CONFIG.API_BASE||'').replace(/\/$/,''); }
 
+/* ── the waiting carousel ───────────────────────────────────────────────
+   Same component as Free Search and the staff tool: copy from
+   freesearch/nuggets.py, fetched once, rotated in the browser so it runs for
+   exactly as long as the work takes and loops if the model is slow. */
+let NUG={dwell:3.4,ai_search:[],free_search:[]};
+(function loadNuggets(){
+  fetch(engineBase()+'/nuggets').then(r=>r.json())
+    .then(function(d){ if(d&&d.ok&&d.nuggets) NUG=d.nuggets; }).catch(function(){});
+})();
+const _nugT={}, _nugHost={};
+function nugEsc(x){return String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function nugHtml(msg,cards,i){
+  const c=cards[i%cards.length]||{title:'',text:''};
+  const dots=cards.map((_,k)=>`<i class="${k===i%cards.length?'on':''}"></i>`).join('');
+  return `<div class="nug" role="status" aria-live="polite">
+    <span class="tmh-loader" aria-hidden="true"><i></i><i></i><i></i></span>
+    ${msg?`<div class="msg">${nugEsc(msg)}</div>`:''}
+    <div class="bar"><i></i></div>
+    <div class="card"><div class="tag">Did you know</div>
+      <div class="t">${nugEsc(c.title)}</div><div class="b">${nugEsc(c.text)}</div></div>
+    <div class="dots">${dots}</div></div>`;
+}
+function nugStart(key,target,msg,cards){
+  if(!target) return;
+  cards=(cards&&cards.length)?cards:[{title:'Working\u2026',text:'Checking the register.'}];
+  let i=0; _nugHost[key]=target;
+  target.classList.remove('hidden');
+  target.innerHTML=nugHtml(msg,cards,i);
+  clearInterval(_nugT[key]);
+  _nugT[key]=setInterval(function(){ target.innerHTML=nugHtml(msg,cards,++i); },
+    (NUG.dwell||3.4)*1000);
+}
+function nugStop(key){
+  clearInterval(_nugT[key]); _nugT[key]=null;
+  _nugHost[key]=null;
+}
+
 async function suggestForBrand(){
   const desc=(document.getElementById('bf-desc').value||'').trim();
   const site=(document.getElementById('bf-website').value||'').trim();
@@ -412,11 +449,11 @@ async function suggestForBrand(){
   const btn=document.getElementById('bf-ai');
 
   if(desc.length<10 && !site){
-    out.innerHTML='<p class="muted-note">Add a short description above (or your website) and try again.</p>';
+    nugStop('bf'); out.innerHTML='<p class="muted-note">Add a short description above (or your website) and try again.</p>';
     return;
   }
   btn.disabled=true;
-  out.innerHTML='<div class="ai-busy"><span class="tmh-loader" role="status" aria-live="polite" aria-label="Loading"><i></i><i></i><i></i></span><span>Working out the classes…</span></div>';
+  nugStart('bf', out, 'Working out the classes\u2026', NUG.ai_search);
 
   let text=desc;
   // No description but a website? Read the site first — same two-step the
@@ -435,12 +472,12 @@ async function suggestForBrand(){
         onBrandFieldChange();
       } else {
         btn.disabled=false;
-        out.innerHTML='<p class="muted-note">'+((d&&d.message)||'We couldn’t read that website.')+' Please describe the brand above instead.</p>';
+        nugStop('bf'); out.innerHTML='<p class="muted-note">'+((d&&d.message)||'We couldn’t read that website.')+' Please describe the brand above instead.</p>';
         return;
       }
     }catch(e){
       btn.disabled=false;
-      out.innerHTML='<p class="muted-note">We couldn’t reach that website. Please describe the brand above instead.</p>';
+      nugStop('bf'); out.innerHTML='<p class="muted-note">We couldn’t reach that website. Please describe the brand above instead.</p>';
       return;
     }
   }
@@ -452,13 +489,14 @@ async function suggestForBrand(){
     const d=await r.json();
     btn.disabled=false;
     if(!d || !d.ok || !(d.classes||[]).length){
-      out.innerHTML='<p class="muted-note">'+((d&&d.message)||'We couldn’t work that out — please pick classes manually.')+'</p>';
+      nugStop('bf'); out.innerHTML='<p class="muted-note">'+((d&&d.message)||'We couldn’t work that out — please pick classes manually.')+'</p>';
       return;
     }
+    nugStop('bf');
     renderBrandSuggestions(d, out);
   }catch(e){
     btn.disabled=false;
-    out.innerHTML='<p class="muted-note">Suggestions are unavailable — please pick classes manually.</p>';
+    nugStop('bf'); out.innerHTML='<p class="muted-note">Suggestions are unavailable — please pick classes manually.</p>';
   }
 }
 
@@ -500,7 +538,7 @@ function applyBrandSuggestions(){
     if(!state.brandForm.terms.includes(t)) state.brandForm.terms.push(t);
   });
   renderBrandClassBasket(); renderTermBasket(); onBrandFieldChange();
-  out.innerHTML='<p class="muted-note">✓ Added '+classes.length+' class'+
+  nugStop('bf'); out.innerHTML='<p class="muted-note">✓ Added '+classes.length+' class'+
     (classes.length===1?'':'es')+' and '+terms.length+' term'+(terms.length===1?'':'s')+'.</p>';
 }
 function renderBrandClassBasket(){const b=document.getElementById('bf-cls-basket');
