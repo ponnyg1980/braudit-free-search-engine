@@ -1168,12 +1168,14 @@ function runClassAgent(text, provides, outEl){
   const res=document.getElementById('ho1-res') || (function(){
     const d=document.createElement('div'); d.className='hres'; d.id='ho1-res';
     outEl.parentNode.insertBefore(d, outEl); return d; })();
-  busyOn('ho1', res, 'Working out your classes\u2026');
+  // The longest wait in the wizard (~5s) and the point the visitor has just
+  // typed the most — so it gets the six cards, looping if the model is slow.
+  nugStart('ho1', res, 'Working out your classes\u2026', NUG.ai_search);
   fetch((CONFIG.API_BASE||'').replace(/\/$/,'')+'/suggest-classes',{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({text:text, provides:provides||undefined})
   }).then(r=>r.json()).then(async function(d){
-    await busyOff('ho1');
+    nugStop('ho1'); await busyOff('ho1');
     if(!d || !d.ok || !(d.classes||[]).length){
       res.innerHTML='<div class="r"><span>'+
         ((d&&d.message)||'We couldn\u2019t work that out — please pick your classes below.')+
@@ -1188,7 +1190,7 @@ function runClassAgent(text, provides, outEl){
     showClassPicker('1','What we think you need', items,
       {value:text, label:'described business', agent_terms:terms, model:d.model});
   }).catch(async function(){
-    await busyOff('ho1');
+    nugStop('ho1'); await busyOff('ho1');
     res.innerHTML='<div class="r"><span>Suggestions are unavailable — please pick your classes below.</span></div>';
   });
 }
@@ -1545,6 +1547,48 @@ const _busy={}, _shownAt={};
 const BUSY_DELAY=500;   // show nothing below this — a flash reads as broken
 const BUSY_MIN=450;     // ...but once shown, stay up at least this long
 
+/* ── the waiting carousel ────────────────────────────────────────────────
+   Copy lives in freesearch/nuggets.py and is fetched once. The two cards for
+   the register search are inlined as a fallback so a waiting screen never
+   arrives empty if that fetch failed. */
+let NUG={dwell:3.4,ai_search:[],free_search:[
+  {title:'The first five years are the strongest',
+   text:'For the first five years you can enforce your rights without having to prove you\u2019ve used the mark.'},
+  {title:'We\u2019ve done this a few times',
+   text:'We\u2019ve registered over 4,000 trademarks since 2008. Last year our application success rate was 98%.'}]};
+(function loadNuggets(){
+  fetch((CONFIG.API_BASE||'').replace(/\/$/,'')+'/nuggets').then(r=>r.json())
+    .then(function(d){ if(d&&d.ok&&d.nuggets&&(d.nuggets.ai_search||[]).length) NUG=d.nuggets; })
+    .catch(function(){});
+})();
+
+const _nugT={};
+function nugHtml(msg,cards,i){
+  const c=cards[i%cards.length]||{title:'',text:''};
+  const dots=cards.map((_,k)=>`<i class="${k===i%cards.length?'on':''}"></i>`).join('');
+  return `<div class="nug" role="status" aria-live="polite">
+    <span class="tmh-loader" aria-hidden="true"><i></i><i></i><i></i></span>
+    ${msg?`<div class="msg">${esc(msg)}</div>`:''}
+    <div class="bar"><i></i></div>
+    <div class="card" key="${i}"><div class="tag">Did you know</div>
+      <div class="t">${esc(c.title)}</div><div class="b">${esc(c.text)}</div></div>
+    <div class="dots">${dots}</div></div>`;
+}
+/* Rotates until stopped. Loops deliberately — a slow response should keep
+   showing cards rather than freeze on the last one. */
+function nugStart(key,target,msg,cards){
+  if(!target||!cards||!cards.length) return;
+  let i=0;
+  target.classList.remove('hidden');
+  target.innerHTML=nugHtml(msg,cards,i);
+  clearInterval(_nugT[key]);
+  _nugT[key]=setInterval(function(){
+    if(!document.body.contains(target)){ clearInterval(_nugT[key]); return; }
+    target.innerHTML=nugHtml(msg,cards,++i);
+  }, (NUG.dwell||3.4)*1000);
+}
+function nugStop(key){ clearInterval(_nugT[key]); _nugT[key]=null; }
+
 function busyOn(key,target,msg){
   if(_busy[key]) clearTimeout(_busy[key]);
   _shownAt[key]=0;
@@ -1577,21 +1621,38 @@ function busyOff(key){
 /* The main search is a screen change and the longest wait, so it gets a
    blocking overlay — which also stops a second press of "Begin Free Search"
    firing a duplicate search and a duplicate search_run event. */
+/* The register search. Deliberately held for long enough to show both cards
+   even when the engine answers faster (Jonathan, 18 Aug): an instant result
+   on a search this consequential reads as though nothing much happened. The
+   floor is OVERLAY_MIN and it is a single number — turn it down to 0 and the
+   overlay simply closes as soon as the answer lands. */
+const OVERLAY_MIN=7000;
+let _ovShown=0;
 function overlayOn(msg,sub){
   overlayOff();
   _busy._ov=setTimeout(function(){
     _busy._ov=null;
+    _ovShown=Date.now();
     const d=document.createElement('div');
     d.className='tmh-overlay'; d.id='tmh-overlay';
-    d.innerHTML='<span class="tmh-loader" role="status" aria-live="polite" aria-label="Loading">'+
-      '<i></i><i></i><i></i></span><div class="msg">'+msg+'</div>'+
-      (sub?'<div class="sub">'+sub+'</div>':'');
     document.body.appendChild(d);
+    const host=document.createElement('div');
+    d.appendChild(host);
+    nugStart('_ov', host, msg, NUG.free_search);
+    if(sub){ const x=document.createElement('div'); x.className='sub';
+      x.textContent=sub; d.appendChild(x); }
   },500);
 }
+/* Returns a promise so the caller can await the floor. */
 function overlayOff(){
   if(_busy._ov){clearTimeout(_busy._ov);} _busy._ov=null;
-  const d=document.getElementById('tmh-overlay'); if(d) d.remove();
+  const shown=_ovShown;
+  const close=function(){ nugStop('_ov'); _ovShown=0;
+    const d=document.getElementById('tmh-overlay'); if(d) d.remove(); };
+  if(!shown){ close(); return Promise.resolve(); }
+  const left=OVERLAY_MIN-(Date.now()-shown);
+  if(left<=0){ close(); return Promise.resolve(); }
+  return new Promise(function(r){ setTimeout(function(){ close(); r(); }, left); });
 }
 
 async function lookupApi(action,params){
@@ -1830,7 +1891,7 @@ async function beginSearch(){
   overlayOn('Checking the UK trademark register\u2026','This usually takes a few seconds.');
   let out;
   try{ out=await callSearch(payload); }
-  finally{ overlayOff(); _searching=false; }
+  finally{ await overlayOff(); _searching=false; }
   if(!out.ok){alert('Search error: '+(out.error||'unknown'));return;}
   state.lastResult=out.result;renderResults(out.result);
   state.resultsComputedFrom=snapshotInputs(); // for the staleness check on later back/forward
