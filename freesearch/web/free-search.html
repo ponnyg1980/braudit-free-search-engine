@@ -680,12 +680,23 @@ const NICE={1:'Chemicals',2:'Paints & Coatings',3:'Cosmetics & Cleaning',4:'Oils
  43:'Food & Drink Services',44:'Medical & Beauty Services',45:'Legal & Security Services'};
 
 /* Jurisdiction picker (mirrors jurisdictions_data.picker_payload) */
-const PICKER={
+/* The jurisdiction picker data.
+   This is a FALLBACK ONLY — 20 countries so the page still works if the
+   engine is unreachable. The real list (159 territories) is fetched from
+   GET /jurisdictions on load and replaces this wholesale.
+
+   Until 18 Aug 2026 the fetch did not exist, so the wizard silently ran on
+   these 20 forever. That is the actual reason countries looked "missing":
+   the back end had them all along, the browser was never asking. Whoever
+   edits this next — do not add countries here. Add them to the canonical
+   list in deploy-v2-hotfix/jurisdictions.py, which both this and the audit
+   tool read. */
+let PICKER={
   popular:[{code:'GB',label:'United Kingdom'},{code:'EU',label:'European Union',covers:'27 countries'},
     {code:'US',label:'United States',covers:'all 50 states'},{code:'AU',label:'Australia'},
     {code:'NZ',label:'New Zealand'},{code:'AE',label:'Dubai / UAE'},{code:'SG',label:'Singapore'},
     {code:'SA',label:'Saudi Arabia'}],
-  regions:[{code:'WO',label:'WIPO / Madrid (international)'},{code:'BX',label:'Benelux'},
+  regions:[{code:'BX',label:'Benelux'},
     {code:'ARIPO',label:'ARIPO (Africa)'},{code:'OAPI',label:'OAPI (Africa)'}],
   all_countries:[{code:'AF',label:'Afghanistan'},{code:'AR',label:'Argentina'},{code:'BR',label:'Brazil'},
     {code:'CA',label:'Canada'},{code:'CN',label:'China'},{code:'FR',label:'France'},{code:'DE',label:'Germany'},
@@ -693,6 +704,21 @@ const PICKER={
     {code:'MX',label:'Mexico'},{code:'NL',label:'Netherlands'},{code:'ZA',label:'South Africa'},
     {code:'KR',label:'South Korea'},{code:'ES',label:'Spain'},{code:'SE',label:'Sweden'},
     {code:'CH',label:'Switzerland'},{code:'TR',label:'Turkey'},{code:'US',label:'United States'}]};
+
+/* Pull the real list. Fire-and-forget: if it fails the fallback above stands
+   and the wizard still works, just with fewer countries. Any picker already
+   on screen is repainted once the real data lands. */
+(function loadPicker(){
+  const base=(CONFIG.API_BASE||'').replace(/\/$/,'');
+  fetch(base+'/jurisdictions').then(r=>r.json()).then(function(d){
+    if(!d || !d.ok || !d.picker || !(d.picker.all_countries||[]).length) return;
+    PICKER=d.picker;
+    ['now','plan'].forEach(function(w){
+      const host=document.getElementById(w==='now'?'pick-now':'pick-plan');
+      if(host && host.dataset.built){ renderJQuick(w); renderJList(w); renderJBasket(w); }
+    });
+  }).catch(function(){});
+})();
 
 const STEP_ORDER=['search','marks','jurisdiction','classes','results'];
 const STEP_LABELS={search:'Name',marks:'Searches',jurisdiction:'Jurisdictions',classes:'Classes',results:'Results'};
