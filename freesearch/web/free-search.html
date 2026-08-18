@@ -160,6 +160,10 @@
   .pill.navy:not(.on){color:var(--quiet)}
   .eu-note{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px}
 
+  .didyou{padding:11px 14px;margin-bottom:6px;border-radius:var(--r-sm);
+    background:var(--pink-tint);border:1px solid var(--pink-line);
+    font-size:14px;color:var(--navy);font-weight:600}
+
   /* step 3 picker — reuses the step-4 grid so the two screens feel the same */
   .quick{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
   .pill.sm{padding:8px 14px;font-size:13.5px}
@@ -1201,7 +1205,14 @@ function ho5Search(){
       if(seq!==ho5seq) return;
       const rows=(data&&data.results)||[];
       ho5rows=rows; ho5kind='mark';
-      res.innerHTML=rows.slice(0,6).map(markRowHtml).join('')||'<div class="r">No matches</div>';
+      // When the engine had to loosen the spelling to find anything, say so
+      // rather than quietly showing different marks than the ones asked for.
+      // "No trademarks" on a misspelt famous name reads as "this name is
+      // free", which is the single most misleading thing this box can say.
+      const hint=(data&&data.suggested&&rows.length)
+        ? `<div class="didyou">No exact match for &ldquo;${esc(q)}&rdquo;. Did you mean one of these?</div>` : '';
+      res.innerHTML=hint+(rows.slice(0,6).map(markRowHtml).join('')
+        || `<div class="r">Nothing on the register matched &ldquo;${esc(q)}&rdquo;. Check the spelling, or try a shorter part of the name.</div>`);
     }
     res.classList.remove('hidden');
   },300);
