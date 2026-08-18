@@ -155,8 +155,15 @@ def serialize_result(result: FreeSearchResult, *, gated: bool = False,
     # emailed report, the Zoho record and the screen can never disagree about
     # what we told the visitor — the front end renders this, it does not
     # recalculate it.
+    # Pass the ACTIVE marks, not just the counts. D12 turns on whether a live
+    # mark is identical to what was searched, and a count of "1 High" cannot
+    # tell the difference between a lookalike and the same word.
     opinion = vb.verdict(summary, name=req.word_marks[0] if req.word_marks else '',
-                         years=brand_years, sector_terms=sector_terms)
+                         years=brand_years, sector_terms=sector_terms,
+                         marks=[{'mark': r.mark_text, 'status': r.status,
+                                 'owner_name': r.owner_name,
+                                 'company_name': r.company.name if r.company else ''}
+                                for r in active])
 
     return {
         'tenant_id': req.tenant_id,
