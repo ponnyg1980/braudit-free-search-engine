@@ -193,6 +193,11 @@ def search_marks(client, query: str, *, limit: int = 10) -> dict:
                 # the threshold keeps the answer and drops the noise. Without
                 # it this would trade one bad outcome for another — a wall of
                 # near-random names.
+                # Re-rank against the ORIGINAL spelling. _search_by_text
+                # sorted on the relaxed variant, which puts GUINEA above
+                # GUINNESS for a "Guin" retry — right answer to the wrong
+                # question. What matters is closeness to what was typed.
+                rows.sort(key=lambda r: _sim(query, r['name']), reverse=True)
                 rows = [r for r in rows if _sim(query, r['name']) >= SUGGEST_MIN]
                 rows = rows[:SUGGEST_MAX]
         results = rows[:SUGGEST_MAX if suggested else limit]
@@ -205,10 +210,16 @@ def search_marks(client, query: str, *, limit: int = 10) -> dict:
 
 
 # How close a relaxed hit has to be to what was typed, and how many we show.
-# 0.72 was chosen against live data: GUINNESS scores 0.93 against "Guiness"
-# while GUINEA and Guinep — which the same relaxed query returns — score 0.77.
-# Raising it much past 0.8 starts dropping genuine two-letter typos.
-SUGGEST_MIN = 0.72
+#
+# 0.80 is measured, not guessed. Across a set of real misspellings —
+# Guiness/GUINNESS .93, Cadburys/CADBURY .93, Volkswagon/VOLKSWAGEN .90,
+# Heiniken/HEINEKEN .88, Nestle/NESTLE .83 — the weakest genuine correction
+# scores .83. The strongest piece of collateral the same relaxed queries drag
+# in — GUINEA and Guinep against "Guiness" — scores .77. So .80 sits in a
+# real gap: every intended correction survives and every unintended one goes.
+# Move it down and GUINEA comes back; move it up past .83 and accented or
+# possessive forms start disappearing.
+SUGGEST_MIN = 0.80
 SUGGEST_MAX = 6
 
 
