@@ -900,8 +900,20 @@ function aiGateHtml(opt){
   }
   return aiInputHtml(opt,ph);
 }
+/* The guided questions carry fixed element ids, and TWO routes render them —
+   "Describe your business" directly, and "Your website" after it has read the
+   site. Two copies in one document means getElementById returns whichever
+   comes first, so the website route would quietly drive the other route's
+   form. Only one copy may exist at a time; this drops the other. */
+function q1Claim(owner){
+  ['ho-1','ho-2'].forEach(function(id){
+    if(id===owner) return;
+    const el=document.getElementById(id);
+    if(el && el.querySelector('#q1-pitch')) el.innerHTML='';
+  });
+}
 function aiInputHtml(opt,ph){
-  if(opt==='1'){ setTimeout(q1Wire,0); return q1Html(); }
+  if(opt==='1'){ q1Claim('ho-1'); setTimeout(q1Wire,0); return q1Html(); }
   const multi = opt==='1';
   const label = {1:'Step 2 — describe your business in your own words:',
                  2:'Step 2 — your website address:'}[opt];
@@ -1235,6 +1247,7 @@ function readWebsite(){
     }
     state.businessWebsite=val;
     // Swap in the guided questions, pre-filled from the page.
+    q1Claim('ho-2');
     body.innerHTML='<div class="gate-note" style="margin-bottom:12px"><b>Here\u2019s what we read from your site.</b><br>'+
       'Please check it and correct anything that\u2019s wrong — then we\u2019ll work out your classes.</div>'+q1Html();
     q1Wire();
