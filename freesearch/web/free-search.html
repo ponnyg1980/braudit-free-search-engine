@@ -206,6 +206,12 @@
   .basket{border:1px solid var(--line);border-radius:var(--r-md);padding:18px;
     min-height:110px;display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;
     background:var(--panel)}
+  .gatebox{border:1.5px solid var(--pink);background:var(--pink-tint);
+    border-radius:var(--r-md);padding:16px 18px;text-align:left;font-weight:400;
+    color:var(--ink);font-size:15px;line-height:1.55}
+  .gatebox b{display:block;margin-bottom:8px;color:var(--navy);font-size:16px}
+  .gatebox ul{margin:0 0 14px;padding-left:20px}
+  .gatebox li{margin:3px 0}
   .go-here{margin-top:18px}
   .go-here .sub{text-align:center;margin-top:8px;font-size:13.5px}
   .help-head{display:flex;gap:20px;flex-wrap:wrap;align-items:center;
@@ -677,6 +683,19 @@ const CONFIG = (function(){
     //   screen = which step to open on ('marks' = step 2)
     //   q      = the name, as a fallback for when /session/start was
     //            unreachable and there is no session to read it from
+    // TWO bases, deliberately.
+    //
+    // SEARCH_BASE is the Supabase Edge Function — the ONLY route with the
+    // usage gate on it. API_BASE is the Render engine, which serves the
+    // widget itself plus classes, jurisdictions, lookups and the AI routes.
+    //
+    // Pointing everything at Supabase would 404: the Edge Function only
+    // implements /free-search and /free-search/account. Pointing the SEARCH
+    // at Render bypasses the gate entirely — which is the state today, and
+    // is why an anonymous visitor can currently run thirty searches.
+    //
+    // Empty SEARCH_BASE = same-origin = ungated. Set it at go-live.
+    SEARCH_BASE:q.get('searchbase')||'',
     RESUME_SESSION:q.get('s')||'', RESUME_SCREEN:q.get('screen')||'',
     RESUME_NAME:q.get('q')||'',
     // Where the new standalone Brand Audit page lives — point this at wherever
@@ -1970,7 +1989,13 @@ async function beginSearch(){
   let out;
   try{ out=await callSearch(payload); }
   finally{ await overlayOff(); _searching=false; }
-  if(!out.ok){alert('Search error: '+(out.error||'unknown'));return;}
+  if(!out.ok){
+    // The usage gate. Not an error — it is the moment the free tool asks for
+    // something back, so it gets a proper screen rather than an alert box.
+    if(out.error==='account_required'){ showAccountGate(out); return; }
+    alert('Search error: '+(out.error||'unknown'));
+    return;
+  }
   state.lastResult=out.result;renderResults(out.result);
   state.resultsComputedFrom=snapshotInputs(); // for the staleness check on later back/forward
   logEvent('search_run','results',{name:payload.name,classes:payload.classes,
@@ -1988,7 +2013,8 @@ async function beginSearch(){
   pushScreen('results');
 }
 async function callSearch(payload){
-  const base=(CONFIG.API_BASE||'').replace(/\/$/,'');
+  // The gated route. Falls back to API_BASE so local/dev still works.
+  const base=(CONFIG.SEARCH_BASE||CONFIG.API_BASE||'').replace(/\/$/,'');
   const headers={'Content-Type':'application/json'};
   if(state.jwt)headers['Authorization']='Bearer '+state.jwt;
   try{
@@ -2136,6 +2162,27 @@ function goToApply(){
         snapshot:{status:'apply_clicked'}})],{type:'application/json'})); }catch(e){}
   }
   window.open(CONFIG.APPLY_URL,'_blank','noopener');
+}
+
+/* The free-search allowance is used up. Show what they get for signing up
+   rather than what they have lost — the account IS the lead gate, moved
+   earlier and OTP-verified, so this screen is the conversion, not a wall. */
+function showAccountGate(out){
+  const su=out.signup||{};
+  const benefits=(su.benefits||['Unlimited free UK searches',
+    'Full conflict list with ownership detail','Access the Temmy Portal']);
+  const host=document.querySelector('[data-screen="classes"] .actions');
+  const box=document.getElementById('cls-gate');
+  if(box){
+    box.classList.remove('hidden');
+    box.innerHTML=`<div class="gatebox">
+      <b>${esc(out.message||'Create a free account to keep searching.')}</b>
+      <ul>${benefits.map(b=>`<li>${esc(b)}</li>`).join('')}</ul>
+      <button class="btn primary" onclick="createPortal()">Create my free account</button>
+    </div>`;
+    box.scrollIntoView({behavior:'smooth',block:'center'});
+  }
+  logEvent('account_gate_shown','classes',{},false);
 }
 
 /* soft lead capture -> portal offer */
