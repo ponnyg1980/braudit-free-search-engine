@@ -291,6 +291,114 @@ const ZOHO_RESALE: Record<string, string> = {
   mostly_others: "Mostly Other Brands",
 };
 
+// Full picker-code -> country-name map (mirrors jurisdictions_data.py /
+// deploy-v2-hotfix/jurisdictions.py). Backs the Trading Countries /
+// Planned Countries multiselects created 19 Aug — every value below exists
+// verbatim in both picklists, so nothing needs a Description overflow any
+// more (Jonathan's point 2/3, 19 Aug).
+const ZOHO_COUNTRY: Record<string, string> = {
+  AD: "Andorra", AE: "UAE", AF: "Afghanistan", AG: "Antigua and Barbuda",
+  AL: "Albania", AM: "Armenia", AO: "Angola", AR: "Argentina",
+  ARIPO: "ARIPO", AT: "Austria", AU: "Australia", AZ: "Azerbaijan",
+  BA: "Bosnia and Herzegovina", BB: "Barbados", BD: "Bangladesh", BE: "Belgium",
+  BG: "Bulgaria", BH: "Bahrain", BN: "Brunei", BO: "Bolivia",
+  BQ: "Bonaire, Sint Eustatius and Saba", BR: "Brazil", BS: "Bahamas", BT: "Bhutan",
+  BW: "Botswana", BX: "Benelux — BOIP", BY: "Belarus", BZ: "Belize",
+  CA: "Canada", CH: "Switzerland", CL: "Chile", CN: "China",
+  CO: "Colombia", CR: "Costa Rica", CU: "Cuba", CV: "Cabo Verde",
+  CW: "Curaçao", CY: "Cyprus", CZ: "Czech Republic", DE: "Germany",
+  DK: "Denmark", DM: "Dominica", DO: "Dominican Republic", DZ: "Algeria",
+  EC: "Ecuador", EE: "Estonia", EG: "Egypt", ES: "Spain",
+  ET: "Ethiopia", EU: "European Union", FI: "Finland", FJ: "Fiji",
+  FR: "France", GB: "United Kingdom", GD: "Grenada", GE: "Georgia",
+  GH: "Ghana", GM: "Gambia", GR: "Greece", GT: "Guatemala",
+  HK: "Hong Kong", HN: "Honduras", HR: "Croatia", HU: "Hungary",
+  ID: "Indonesia", IE: "Ireland", IL: "Israel", IN: "India",
+  IQ: "Iraq", IS: "Iceland", IT: "Italy", JM: "Jamaica",
+  JO: "Jordan", JP: "Japan", KE: "Kenya", KG: "Kyrgyzstan",
+  KH: "Cambodia", KN: "Saint Kitts and Nevis", KR: "South Korea", KW: "Kuwait",
+  KZ: "Kazakhstan", LA: "Lao PDR", LB: "Lebanon", LC: "Saint Lucia",
+  LI: "Liechtenstein", LK: "Sri Lanka", LR: "Liberia", LS: "Lesotho",
+  LT: "Lithuania", LU: "Luxembourg", LV: "Latvia", MA: "Morocco",
+  MC: "Monaco", MD: "Moldova", ME: "Montenegro", MG: "Madagascar",
+  MK: "North Macedonia", MM: "Myanmar", MN: "Mongolia", MT: "Malta",
+  MU: "Mauritius", MV: "Maldives", MW: "Malawi", MX: "Mexico",
+  MY: "Malaysia", MZ: "Mozambique", NA: "Namibia", NG: "Nigeria",
+  NI: "Nicaragua", NL: "Netherlands", NO: "Norway", NP: "Nepal",
+  OAPI: "OAPI", OM: "Oman", PA: "Panama", PE: "Peru",
+  PG: "Papua New Guinea", PH: "Philippines", PK: "Pakistan", PL: "Poland",
+  PT: "Portugal", PY: "Paraguay", QA: "Qatar", RO: "Romania",
+  RS: "Serbia", RU: "Russia", RW: "Rwanda", SA: "Saudi Arabia",
+  SE: "Sweden", SG: "Singapore", SI: "Slovenia", SK: "Slovakia",
+  SL: "Sierra Leone", SM: "San Marino", ST: "São Tomé and Príncipe", SV: "El Salvador",
+  SX: "Sint Maarten", SY: "Syria", SZ: "Eswatini", TH: "Thailand",
+  TJ: "Tajikistan", TM: "Turkmenistan", TN: "Tunisia", TO: "Tonga",
+  TR: "Turkey", TT: "Trinidad and Tobago", TW: "Taiwan", TZ: "Tanzania",
+  UA: "Ukraine", UG: "Uganda", US: "United States", UY: "Uruguay",
+  UZ: "Uzbekistan", VC: "Saint Vincent and the Grenadines", VE: "Venezuela", VN: "Vietnam",
+  VU: "Vanuatu", WO: "WIPO / Madrid", WS: "Samoa", XK: "Kosovo",
+  YE: "Yemen", ZA: "South Africa", ZM: "Zambia", ZW: "Zimbabwe",
+};
+
+// class_source.route -> the Free Search Class Route picklist (Jonathan's
+// point 5, 19 Aug). Route semantics per runEnrichment's mapping note:
+// 1 = free-text describe, 2 = visitor's own website, 3 = SIC/company pick,
+// 4 = website tool, 5 = trademark lookup. No route but classes present =
+// the visitor picked from the list themselves.
+const ZOHO_CLASS_ROUTE: Record<string, string> = {
+  "1": "AI Description of Business",
+  "2": "AI Website",
+  "3": "Company Search",
+  "4": "AI Website",
+  "5": "Trademark Search",
+};
+
+function countryNames(codes: unknown): string[] {
+  return (Array.isArray(codes) ? codes : [])
+    .map((c) => ZOHO_COUNTRY[String(c)] || String(c)).filter(Boolean);
+}
+
+// One row per picked class for the G S Scope modules (Jonathan's point 1,
+// 19 Aug: "that G S Scope Classes Terms Module is what will be used for
+// Deals & Trademark modules if they convert so needs to be captured").
+// Terms come from whichever class tool ran: agent_terms is route 1's
+// {class: [term strings]} map; term_basket.entries is routes 3/5's
+// [{nice_class, heading, class_label, terms: [{text, kept}]}] shape
+// (term_basket.py). Self-selected classes get a number-only row — Jonathan
+// chose "all picked classes" over tool-derived-only.
+function zohoScopeBlock(session: Record<string, unknown>) {
+  const classes = (Array.isArray(session.classes) ? session.classes : [])
+    .map(Number).filter((n) => n >= 1 && n <= 45);
+  if (!classes.length) return undefined;
+  const cs = (session.class_source ?? {}) as Record<string, unknown>;
+  const byClass: Record<number, string[]> = {};
+  const at = cs.agent_terms as Record<string, unknown> | undefined;
+  if (at && typeof at === "object") {
+    for (const [k, v] of Object.entries(at)) {
+      const n = Number(k);
+      if (n && Array.isArray(v)) byClass[n] = v.map(String).slice(0, 60);
+    }
+  }
+  const tb = cs.term_basket as Record<string, unknown> | undefined;
+  const entries = tb && Array.isArray(tb.entries) ? tb.entries : [];
+  for (const e of entries as Record<string, unknown>[]) {
+    const n = Number(e?.nice_class);
+    if (!n || byClass[n]) continue;
+    const terms = (Array.isArray(e?.terms) ? e.terms : [])
+      .map((t) => typeof t === "string" ? t
+        : String((t as Record<string, unknown>)?.text ??
+                 (t as Record<string, unknown>)?.term ?? ""))
+      .filter(Boolean);
+    if (terms.length) byClass[n] = terms.slice(0, 60);
+  }
+  return {
+    mark: session.name || "",
+    classes: classes.map((n) => ({
+      n, label: ZOHO_CLASS[n] || `Class ${n}`, terms: byClass[n] ?? [],
+    })),
+  };
+}
+
 function splitLocations(codes: unknown): { mapped: string[]; unmapped: string[] } {
   const mapped: string[] = [], unmapped: string[] = [];
   for (const c of Array.isArray(codes) ? codes : []) {
@@ -319,9 +427,15 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
     (session.business_name as string) ||
     `Free Search — ${session.name ?? "unknown"}`;
 
+  // Description of Activities (Leads' relabelled standard Description field)
+  // — Jonathan's point 2, 19 Aug: activities narrative only, never country
+  // codes. The overflow that used to live here is obsolete now the Trading/
+  // Planned Countries multiselects carry the full picker list.
+  const cs = (session.class_source ?? {}) as Record<string, unknown>;
+  const csRoute = String(cs.route ?? "");
   const descBits: string[] = [];
-  if (now.unmapped.length) descBits.push(`Trades (other): ${now.unmapped.join(", ")}`);
-  if (plan.unmapped.length) descBits.push(`Planned (other): ${plan.unmapped.join(", ")}`);
+  if (csRoute === "1" && cs.value) descBits.push(String(cs.value));
+  else if (csRoute === "3" && cs.value) descBits.push(`SIC: ${cs.value}`);
   const bnSource = ((lr.query ?? {}) as Record<string, unknown>).brand_name_source;
   if (bnSource === "tagline") descBits.push("Brand name came from the TAGLINE field.");
 
@@ -344,7 +458,26 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
     Number_Of_Classes: Array.isArray(session.classes) ? session.classes.length : 0,
     Locations: now.mapped,
     Locations_Planned: plan.mapped,
+    Trading_Countries: countryNames(session.trading_now),
+    Planned_Countries: countryNames(session.planning_to_trade),
     Free_Search_Score: typeof score === "number" ? score : undefined,
+    Free_Search_High: typeof summary.high === "number" ? summary.high : undefined,
+    Free_Search_Medium: typeof summary.medium === "number" ? summary.medium : undefined,
+    Free_Search_Low: typeof summary.low === "number" ? summary.low : undefined,
+    // The on-screen verdict, verbatim: "72% — headline" then the paragraphs.
+    // Field is a 2000-char textarea; the copy runs well under that.
+    Free_Search_Opinion: (() => {
+      const headline = typeof viability.headline === "string" ? viability.headline : "";
+      const body = (Array.isArray(viability.body) ? viability.body : [])
+        .filter((x) => typeof x === "string");
+      const head = typeof score === "number" && headline
+        ? `${score}% \u2014 ${headline}` : headline;
+      const text = [head, ...body].filter(Boolean).join("\n\n").slice(0, 1990);
+      return text || undefined;
+    })(),
+    Free_Search_Class_Route: ZOHO_CLASS_ROUTE[csRoute] ||
+      ((Array.isArray(session.classes) && session.classes.length)
+        ? "Self Selected" : undefined),
     Free_Search_Tier: ZOHO_TIER[String(viability.tier ?? "")] || undefined,
     Free_Search_Risk: overallRisk,
     Free_Search_Conflicts: typeof summary.total_flagged === "number"
@@ -528,6 +661,7 @@ serve(async (req) => {
           trading_now: session.trading_now, planning_to_trade: session.planning_to_trade,
           // Zoho-ready: Flow maps this object straight into the Leads upsert.
           zoho_fields: zohoLeadFields(session, session_id),
+          scope: zohoScopeBlock(session),
         }, { zohoLeadId: session.zoho_lead_id, isNewRecord: !session.zoho_lead_id }));
       }
 
@@ -573,6 +707,7 @@ serve(async (req) => {
               SIC: Array.isArray(engineResult.sic_codes)
                 ? engineResult.sic_codes.join(", ") : undefined,
             },
+            scope: zohoScopeBlock(session),
           }, { zohoLeadId: null, isNewRecord: true }));
         }
       }
@@ -810,6 +945,7 @@ serve(async (req) => {
           SIC: Array.isArray(engineResult.sic_codes)
             ? engineResult.sic_codes.join(", ") : undefined,
         },
+        scope: zohoScopeBlock(session),
       }, { zohoLeadId: null, isNewRecord: true }));
     }
 
