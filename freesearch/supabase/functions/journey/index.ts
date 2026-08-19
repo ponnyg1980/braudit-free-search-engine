@@ -370,6 +370,31 @@ function zohoScopeBlock(session: Record<string, unknown>) {
   const classes = (Array.isArray(session.classes) ? session.classes : [])
     .map(Number).filter((n) => n >= 1 && n <= 45);
   if (!classes.length) return undefined;
+  // Preferred source (19 Aug, Jonathan): the engine's application_scope —
+  // official UKIPO class headings plus terms selected ONLY from the
+  // registered-vocabulary corpus (spec_terms.py). The class tools' raw
+  // terms below remain as the fallback for sessions searched before the
+  // engine started emitting it.
+  const lr = (session.last_result ?? {}) as Record<string, unknown>;
+  const appScope = Array.isArray(lr.application_scope)
+    ? lr.application_scope as Record<string, unknown>[] : [];
+  if (appScope.length) {
+    const rows = appScope
+      .map((r) => ({ n: Number(r.n), heading: String(r.heading ?? ""),
+                     terms: (Array.isArray(r.terms) ? r.terms : []).map(String) }))
+      .filter((r) => r.n >= 1 && r.n <= 45);
+    if (rows.length) {
+      return {
+        mark: session.name || "",
+        classes: rows.map((r) => ({
+          n: r.n,
+          label: r.heading || ZOHO_CLASS[r.n] || `Class ${r.n}`,
+          terms: r.terms,
+          terms_text: r.terms.join("\n"),
+        })),
+      };
+    }
+  }
   const cs = (session.class_source ?? {}) as Record<string, unknown>;
   const byClass: Record<number, string[]> = {};
   const at = cs.agent_terms as Record<string, unknown> | undefined;
