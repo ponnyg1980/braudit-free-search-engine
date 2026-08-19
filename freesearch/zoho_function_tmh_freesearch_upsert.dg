@@ -156,15 +156,20 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 						{
 							nn = "0" + nn;
 						}
+						// terms_text arrives pre-joined with real newlines from the
+						// Edge Function (Deluge string literals cannot express \n).
 						termsTxt = "";
-						tl = c.get("terms");
-						if(tl != null)
+						if(c.get("terms_text") != null)
 						{
-							for each t in tl
+							termsTxt = c.get("terms_text").toString();
+						}
+						else if(c.get("terms") != null)
+						{
+							for each t in c.get("terms")
 							{
 								if(termsTxt != "")
 								{
-									termsTxt = termsTxt + "\n";
+									termsTxt = termsTxt + "; ";
 								}
 								termsTxt = termsTxt + t.toString();
 							}
