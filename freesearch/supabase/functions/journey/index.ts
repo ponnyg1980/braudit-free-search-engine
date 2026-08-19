@@ -395,6 +395,10 @@ function zohoScopeBlock(session: Record<string, unknown>) {
     mark: session.name || "",
     classes: classes.map((n) => ({
       n, label: ZOHO_CLASS[n] || `Class ${n}`, terms: byClass[n] ?? [],
+      // Pre-joined with REAL newlines: Deluge cannot unescape "\n" in its
+      // own string literals (the first E2E stored a literal backslash-n),
+      // but a newline inside JSON decodes correctly through toMap().
+      terms_text: (byClass[n] ?? []).join("\n"),
     })),
   };
 }
