@@ -160,12 +160,27 @@ function pick(src: Record<string, unknown>, allow: Set<string>) {
 // browser's own request must never hang or fail because a downstream system
 // (Cerebrum, Zoho) is slow or down.
 function fireAndForget(url: string, body: Record<string, unknown>) {
-  if (!url) return; // not configured yet — silently a no-op, same as the
-                     // free-search function's "not configured" branch
-  fetch(url, {
+  // Resolve the target at CALL time, not module load. The 19 Aug E2E test
+  // found pushes silently vanishing for two stacked reasons:
+  //   1. the module-level const was read before the secret existed, so a
+  //      warm isolate held "" for ever and the guard below no-opped every
+  //      push without a trace;
+  //   2. an un-awaited fetch dies when the isolate suspends — the runtime
+  //      returns the HTTP response and freezes the worker, and the packet
+  //      never leaves. EdgeRuntime.waitUntil() keeps the isolate alive
+  //      until the push actually lands.
+  const target = url || Deno.env.get("ZOHO_FLOW_URL") || "";
+  if (!target) return; // genuinely not configured — a deliberate no-op
+  const p = fetch(target, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  }).catch(() => {});
+  }).then((r) => {
+    if (!r.ok) console.error("zoho push failed:", r.status);
+  }).catch((e) => console.error("zoho push error:", (e as Error).message));
+  try {
+    // deno-lint-ignore no-explicit-any
+    (globalThis as any).EdgeRuntime?.waitUntil?.(p);
+  } catch (_) { /* best effort — p still runs if the isolate stays warm */ }
 }
 
 // Placeholder identity for a visitor who hasn't given an email yet — kept
