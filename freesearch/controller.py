@@ -211,6 +211,17 @@ def handle_free_search(payload: dict, client, *, gated: bool = False) -> dict:
     tag = _clean_mark(payload.get('tagline'), 'tagline') or None
     out['query']['brand_name'] = word or tag or ''
     out['query']['brand_name_source'] = 'word' if word else ('tagline' if tag else 'none')
+    # Application-grade class selections for the Zoho G S Scope capture
+    # (Jonathan, 19 Aug): official UKIPO headings + terms drawn ONLY from the
+    # registered-vocabulary corpus, with the route's own terms as context.
+    # Rides in the result so the front end snapshots it into last_result and
+    # the journey function forwards it without either needing the corpus.
+    try:
+        from . import spec_terms
+        out['application_scope'] = spec_terms.build_application_scope(
+            payload.get('classes'), payload.get('class_source'))
+    except Exception:  # a scope hiccup must never cost the search itself
+        out['application_scope'] = []
     return {'ok': True, 'status': 200, 'result': out}
 
 
