@@ -127,6 +127,11 @@ const SESSION_SNAPSHOT_FIELDS = new Set([
   "business_name", "business_website", "consent_marketing", "classes",
   "tagline", "has_logo", "trading_now", "planning_to_trade", "class_source",
   "last_result", "current_screen", "status",
+  // email_source: how we came by the address — 'ai_gate' | 'report_form' |
+  // 'resolver'. Consent differs by source and Cerebrum must be able to tell
+  // them apart; an address given to get class suggestions is not permission
+  // to market.
+  "email_source",
   // Added 18 Aug 2026 (migration 0005). The wizard had been sending this for
   // two days and it was being dropped here — the allow-list is the whole
   // point of this constant, so a new field is not captured until it is added.
