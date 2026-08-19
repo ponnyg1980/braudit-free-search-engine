@@ -758,7 +758,7 @@ const STEP_LABELS={search:'Name',marks:'Searches',jurisdiction:'Jurisdictions',c
 let state={name:'',logo:false,logoLater:false,tagline:'',classes:[],
   now:{mode:'uk',codes:[]},plan:{mode:'none',codes:[]},lastResult:null,lead:null,
   emailForAI:null,classSource:null,resultsComputedFrom:null,portalRequested:false,
-  sessionId:null,businessWebsite:'',channels:null};  // minted on the first real decision — see ensureSession()
+  sessionId:null,businessWebsite:'',channels:null,email:'',emailSource:''};  // minted on the first real decision — see ensureSession()
 
 /* ── Navigation ──────────────────────────────────────────────────────────
    Two layers, deliberately kept separate:
@@ -814,6 +814,8 @@ function currentSnapshot(){
     has_logo:state.logo&&!state.logoLater, classes:state.classes,
     trading_now:nowCodes(), planning_to_trade:planCodes(), class_source:state.classSource,
     business_website:state.businessWebsite||'',
+    // Whatever email we hold, and how we came by it.
+    email:state.email||'', email_source:state.emailSource||'',
     // Where they sell and where they're seen — on the session in their own
     // right, not buried in class_source, so Zoho and the Brand Audit get them
     // whether or not the visitor used the describe-your-business route.
@@ -1231,6 +1233,18 @@ function aiGate(opt){
   const e=(document.getElementById('ho'+opt+'-email').value||'').trim();
   if(!/.+@.+\..+/.test(e)){alert('Please enter a valid email.');return;}
   state.emailForAI=e;
+  // Put it on the SESSION, not just in class_source. Until now this email
+  // lived only inside class_source.email, so journey_sessions.email stayed
+  // null — which meant the Zoho push saw "no contact" and fell through to the
+  // resolver, manufacturing a "Search Result Only" lead for somebody who had
+  // just volunteered their address. A given email beats a found one every
+  // time, and Zoho dedupes on Email, so it has to be in the standard field.
+  //
+  // email_source travels with it because CONSENT DIFFERS: an address given to
+  // receive class suggestions is not permission to market. Cerebrum must be
+  // able to tell the three apart — ai_gate, report_form, resolver.
+  state.email=e; state.emailSource='ai_gate';
+  logEvent('email_captured','classes',{source:'ai_gate'},true);
   const body=document.getElementById('ho-'+opt);
   const ph={1:'Describe what your business does — the more detail the better',2:'https://your-website.com'}[opt];
   body.innerHTML=aiInputHtml(opt,ph);
@@ -2135,6 +2149,7 @@ function sendReport(){
     e.classList.remove('hidden');return;}
   document.getElementById('r-err').classList.add('hidden');
   const biz=document.getElementById('r-biz').value.trim()||null;
+  state.email=email; state.emailSource='report_form';   // stronger than ai_gate
   state.lead={first_name:first,last_name:last,email,phone,business_name:biz,
     trading_now:nowCodes(),planning_to_trade:planCodes(),tenant_id:CONFIG.TENANT_ID};
   // The lead moment — this is what Brand Audit will pre-fill its contact
@@ -2189,7 +2204,7 @@ function resetAll(){
   state={name:'',logo:false,logoLater:false,tagline:'',classes:[],
   now:{mode:'uk',codes:[]},plan:{mode:'none',codes:[]},lastResult:null,lead:null,
   emailForAI:null,classSource:null,resultsComputedFrom:null,portalRequested:false,
-  sessionId:null,businessWebsite:'',channels:null};  // a new search is a genuinely new journey, not a continuation
+  sessionId:null,businessWebsite:'',channels:null,email:'',emailSource:''};  // a new search is a genuinely new journey, not a continuation
   ['name','tagline','r-first','r-last','r-email','r-phone','r-biz'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('tick-logo').classList.remove('on');document.getElementById('tick-tag').classList.remove('on');
   document.getElementById('plan-block').classList.add('hidden');
