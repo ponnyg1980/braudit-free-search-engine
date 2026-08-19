@@ -351,7 +351,11 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
       ? summary.total_flagged : undefined,
     Free_Search_Session: sessionId,
     Free_Search_Tenant: session.tenant_id || "tmh",
-    Free_Search_Date: new Date().toISOString(),
+    // Zoho datetime fields silently reject ISO strings ending in 'Z' (and
+    // the rejection voids the ENTIRE update, not just this field — proven
+    // 19 Aug: a Z-suffixed date left the whole record untouched while
+    // '+00:00' applied cleanly). Zoho wants an explicit numeric offset.
+    Free_Search_Date: new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00"),
     Email_Source: ZOHO_EMAIL_SOURCE[String(session.email_source ?? "")] || undefined,
     Sells_Via: ((channels.sells_via as unknown[]) ?? [])
       .map((v) => ZOHO_SELLS[String(v)]).filter(Boolean),
