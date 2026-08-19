@@ -213,6 +213,145 @@ function zohoPayload(recordType: "lead" | "brand_audit",
   };
 }
 
+// ── Zoho-ready fields ───────────────────────────────────────────────────
+// The mapping decision (ZOHO_FIELD_MAPPING.md §6): transform HERE, so Zoho
+// Flow stays a thin pipe — webhook in, upsert on Email, callback out — with
+// no lookup tables buried in Flow's editor where nobody will find them.
+//
+// Everything in `zoho_fields` uses the module's ACTUAL stored values, pulled
+// from the live schema 18 Aug 2026 (218 fields). Two traps carried over from
+// that pull:
+//   * picklist writes take actual_value, not display_value — and Classes 31
+//     really is stored with a doubled bracket. If the CRM value is ever
+//     fixed, this table must follow.
+//   * Data_Source is a Zoho system field; never write it.
+const ZOHO_CLASS: Record<number, string> = {
+  1: "1 (Chemicals)", 2: "2 (Colourants)", 3: "3 (Toiletries)", 4: "4 (Fuels)",
+  5: "5 (Preparations)", 6: "6 (Metal)", 7: "7 (Machinery)", 8: "8 (Tools)",
+  9: "9 (Scientific Devices)", 10: "10 (Therapeutic Devices)",
+  11: "11 (Heating Components)", 12: "12 (Vehicles)",
+  13: "13 (Weapons & Explosives)", 14: "14 (Jewelery & Precious Minerals)",
+  15: "15 (Musical Instruments)", 16: "16 (Artistic Materials)",
+  17: "17 (Piping & Tubing)", 18: "18 (Accessories & Leather)",
+  19: "19 (Construction Materials)", 20: "20 (Decorative Fittings & Furniture)",
+  21: "21 (Household Utensils)", 22: "22 (Raw Fibres)", 23: "23 (Yarns & Threads)",
+  24: "24 (Textiles)", 25: "25 (Clothing)", 26: "26 (Accessories Components)",
+  27: "27 (Floor & Wall Coverings)", 28: "28 (Sports Equipment & Toys)",
+  29: "29 (Raw & Prepared Food)", 30: "30 (Convenience Food)",
+  31: "31 (Agriculture & Livestock))",   // sic — the live actual_value
+  32: "32 (Beer & Non-alcoholic Beverages)", 33: "33 (Alcoholic Beverages)",
+  34: "34 (Tobacco & Lighting Articles)", 35: "35 (Business Services)",
+  36: "36 (Financial Services)", 37: "37 (Building & Construction)",
+  38: "38 (Telecoms)", 39: "39 (Transport)",
+  40: "40 (Various Chemical Treatment & Energy Production)", 41: "41 (Education)",
+  42: "42 (IT)", 43: "43 (Hospitality)",
+  44: "44 (Animal, Environmental & Human Healthcare)",
+  45: "45 (Personal & Social, Legal & Security Services)",
+};
+// Locations holds 8 territories; the picker offers 159. Mapped codes go in
+// the picklist, the rest survive verbatim in the Description block below —
+// nothing is silently dropped.
+const ZOHO_LOCATION: Record<string, string> = {
+  GB: "UK", EU: "EU", US: "US", AE: "UAE", AU: "Australia", CA: "Canada",
+  NZ: "New Zealand", ZA: "South Africa",
+};
+const ZOHO_TIER: Record<string, string> = {
+  strong: "Strong", good: "Good", mixed: "Mixed", crowded: "Crowded",
+  review: "Review",
+};
+const ZOHO_EMAIL_SOURCE: Record<string, string> = {
+  ai_gate: "AI Gate", report_form: "Report Form", resolver: "Resolver",
+};
+const ZOHO_SELLS: Record<string, string> = {
+  premises: "Premises", own_site: "Own Website", marketplace: "Online Marketplace",
+  enquiry: "Enquiry & Invoice", wholesale: "Wholesale", other_sell: "Other",
+};
+const ZOHO_SEEN: Record<string, string> = {
+  search: "Search Engines", ai: "AI Search", social: "Social Media",
+  footfall: "Passing Trade", traditional: "Traditional Advertising",
+  other_seen: "Other",
+};
+const ZOHO_RESALE: Record<string, string> = {
+  own: "Only Own Brand", others: "Other Brands Too",
+  mostly_others: "Mostly Other Brands",
+};
+
+function splitLocations(codes: unknown): { mapped: string[]; unmapped: string[] } {
+  const mapped: string[] = [], unmapped: string[] = [];
+  for (const c of Array.isArray(codes) ? codes : []) {
+    const hit = ZOHO_LOCATION[String(c)];
+    if (hit) mapped.push(hit); else unmapped.push(String(c));
+  }
+  return { mapped, unmapped };
+}
+
+// The flattened commercial snapshot for a Lead, exactly per the developer
+// handover §7: brand, classes, territories, score/tier/risk/conflicts,
+// session reference, tenant — plus the channel answers and email provenance.
+// Undefined keys vanish in JSON.stringify, so absent data simply isn't sent.
+function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
+  const lr = (session.last_result ?? {}) as Record<string, unknown>;
+  const summary = (lr.summary ?? {}) as Record<string, unknown>;
+  const viability = (lr.viability ?? {}) as Record<string, unknown>;
+  const channels = (session.channels ?? {}) as Record<string, unknown>;
+  const now = splitLocations(session.trading_now);
+  const plan = splitLocations(session.planning_to_trade);
+
+  // Last_Name is system-mandatory on Leads. An AI-gate lead has an email but
+  // often no name yet; the searched mark is the most useful stand-in a rep
+  // can see, and the real name overwrites it when the report form is sent.
+  const lastName = (session.last_name as string) ||
+    (session.business_name as string) ||
+    `Free Search — ${session.name ?? "unknown"}`;
+
+  const descBits: string[] = [];
+  if (now.unmapped.length) descBits.push(`Trades (other): ${now.unmapped.join(", ")}`);
+  if (plan.unmapped.length) descBits.push(`Planned (other): ${plan.unmapped.join(", ")}`);
+  const bnSource = ((lr.query ?? {}) as Record<string, unknown>).brand_name_source;
+  if (bnSource === "tagline") descBits.push("Brand name came from the TAGLINE field.");
+
+  const overallRisk = typeof summary.overall_risk === "string"
+    ? (summary.overall_risk as string).replace(/ Risk$/, "") : undefined;
+  const score = (viability as { score?: unknown }).score;
+
+  return {
+    First_Name: session.first_name || undefined,
+    Last_Name: lastName,
+    Email: session.email || undefined,
+    Phone: session.phone || undefined,
+    Company: session.business_name || "\u2014",
+    Website: session.business_website || undefined,
+    Search_Term: session.name || undefined,
+    word_mark_text: session.name || undefined,
+    Searched_Tagline: session.tagline || undefined,
+    Classes: (Array.isArray(session.classes) ? session.classes : [])
+      .map((n) => ZOHO_CLASS[Number(n)]).filter(Boolean),
+    Number_Of_Classes: Array.isArray(session.classes) ? session.classes.length : 0,
+    Locations: now.mapped,
+    Locations_Planned: plan.mapped,
+    Free_Search_Score: typeof score === "number" ? score : undefined,
+    Free_Search_Tier: ZOHO_TIER[String(viability.tier ?? "")] || undefined,
+    Free_Search_Risk: overallRisk,
+    Free_Search_Conflicts: typeof summary.total_flagged === "number"
+      ? summary.total_flagged : undefined,
+    Free_Search_Session: sessionId,
+    Free_Search_Tenant: session.tenant_id || "tmh",
+    Free_Search_Date: new Date().toISOString(),
+    Email_Source: ZOHO_EMAIL_SOURCE[String(session.email_source ?? "")] || undefined,
+    Sells_Via: ((channels.sells_via as unknown[]) ?? [])
+      .map((v) => ZOHO_SELLS[String(v)]).filter(Boolean),
+    Seen_Via: ((channels.seen_via as unknown[]) ?? [])
+      .map((v) => ZOHO_SEEN[String(v)]).filter(Boolean),
+    Resale: ZOHO_RESALE[String(channels.resale ?? "")] || undefined,
+    Lead_Source: "Website - Search",
+    Lead_Source_Group: "Website Forms",
+    // actual_value, not the "Consent - Obtained" display label
+    Data_Processing_Basis: session.consent_marketing ? "Obtained"
+      : "Legitimate Interests",
+    Description: descBits.length ? descBits.join("\n") : undefined,
+  };
+}
+
 // Shared by the automatic search_run trigger (/session/event) and the
 // explicit /enrich route (kept for a manual re-run) — one place that talks
 // to the engine's resolver, stores the result, and logs the event, so the
@@ -347,7 +486,20 @@ serve(async (req) => {
       // zoho_lead_id carries forward if this visitor was already pushed
       // (e.g. found by the automatic resolver below on an earlier event) so
       // Flow updates that record instead of creating a second one.
-      if (body.event_type === "lead_captured" && session.email) {
+      // Two ways a session earns a Zoho record with a GIVEN address:
+      //   * lead_captured — the report form, full contact details; or
+      //   * a completed search where the AI gate already collected an email
+      //     (Jonathan, 18 Aug: "we also capture email when people use AI,
+      //     this should look for the email within Zoho before creating the
+      //     search item"). Flow's upsert on Email IS that look-up — an
+      //     existing lead is updated, never duplicated.
+      // Without the second trigger an AI-gate session was invisible: its
+      // email blocked the resolver fallback below (correctly — a given
+      // address beats a found one) but nothing else ever fired.
+      const givenContact =
+        (body.event_type === "lead_captured" && session.email) ||
+        (body.event_type === "search_run" && session.email && !session.zoho_lead_id);
+      if (givenContact) {
         fireAndForget(ZOHO_FLOW_URL, zohoPayload("lead", {
           session_id, tenant_id: session.tenant_id, search_term: session.name,
           classes: session.classes, class_source: session.class_source,
@@ -355,6 +507,8 @@ serve(async (req) => {
           email: session.email, phone: session.phone,
           business_name: session.business_name, business_website: session.business_website,
           trading_now: session.trading_now, planning_to_trade: session.planning_to_trade,
+          // Zoho-ready: Flow maps this object straight into the Leads upsert.
+          zoho_fields: zohoLeadFields(session, session_id),
         }, { zohoLeadId: session.zoho_lead_id, isNewRecord: !session.zoho_lead_id }));
       }
 
@@ -386,6 +540,20 @@ serve(async (req) => {
             resolution_step: engineResult.step,
             is_enriched_contact: true,
             lead_source_hint: "Search Result Only",
+            zoho_fields: {
+              ...zohoLeadFields(session, session_id),
+              // A found contact, not a given one: different source value (an
+              // existing picklist entry for exactly this shape), Email_Source
+              // Resolver, and the consent basis stays Legitimate Interests —
+              // contact_resolver.py is explicit this is not permission to market.
+              Lead_Source: "Search Result Only",
+              Email_Source: "Resolver",
+              Phone: engineResult.phone || undefined,
+              Website: engineResult.website || undefined,
+              Company_Number1: engineResult.company_number || undefined,
+              SIC: Array.isArray(engineResult.sic_codes)
+                ? engineResult.sic_codes.join(", ") : undefined,
+            },
           }, { zohoLeadId: null, isNewRecord: true }));
         }
       }
@@ -548,6 +716,12 @@ serve(async (req) => {
           website_url: b.website_url, business_description: b.business_description,
           competitor_name: b.competitor_name, competitor_website: b.competitor_website,
         })),
+        zoho_fields: {
+          ...zohoLeadFields(reqRow as Record<string, unknown>,
+                            String(reqRow.session_id ?? request_id)),
+          Lead_Source: "Request Brand Audit Website Form",
+          Email_Source: "Report Form",
+        },
       }, { zohoLeadId, isNewRecord: !zohoLeadId }));
     }
 
@@ -603,6 +777,20 @@ serve(async (req) => {
         resolution_step: engineResult.step,
         is_enriched_contact: true,
         lead_source_hint: "Search Result Only",
+        zoho_fields: {
+          ...zohoLeadFields(session, session_id),
+          // A found contact, not a given one: different source value (an
+          // existing picklist entry for exactly this shape), Email_Source
+          // Resolver, and the consent basis stays Legitimate Interests —
+          // contact_resolver.py is explicit this is not permission to market.
+          Lead_Source: "Search Result Only",
+          Email_Source: "Resolver",
+          Phone: engineResult.phone || undefined,
+          Website: engineResult.website || undefined,
+          Company_Number1: engineResult.company_number || undefined,
+          SIC: Array.isArray(engineResult.sic_codes)
+            ? engineResult.sic_codes.join(", ") : undefined,
+        },
       }, { zohoLeadId: null, isNewRecord: true }));
     }
 
