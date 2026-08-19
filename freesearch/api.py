@@ -195,7 +195,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin',
                          _allowed_origin(self.headers.get('Origin', '')))
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Engine-Key')
 
     def _send(self, body: dict, status: int = 200):
         payload = json.dumps(body).encode('utf-8')
@@ -227,6 +227,17 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
+
+    def _engine_key_ok(self) -> bool:
+        """True unless a key is configured and the caller did not present it."""
+        want = (os.environ.get('ENGINE_SHARED_KEY') or '').strip()
+        if not want:
+            return True                       # not configured — open, as before
+        got = (self.headers.get('X-Engine-Key') or '').strip()
+        # Constant-time compare: a plain == leaks the key one character at a
+        # time to anyone patient enough to measure the response.
+        import hmac
+        return hmac.compare_digest(got, want)
 
     def do_OPTIONS(self):
         self._send({}, 204)
@@ -277,6 +288,19 @@ class _Handler(BaseHTTPRequestHandler):
         path = self.path.rstrip('/')
         if path not in ('/free-search', '/enrich', '/suggest-classes', '/read-website'):
             self._send({'ok': False, 'error': 'not found'}, 404)
+            return
+        if not self._engine_key_ok():
+            # The usage gate lives in the Supabase Edge Function, in FRONT of
+            # this engine. Without a shared secret that gate is decorative:
+            # anyone who opens developer tools sees this URL and can call it
+            # directly, for ever, for free — and the AI routes cost real money
+            # per call.
+            #
+            # Opt-in by design. Unset ENGINE_SHARED_KEY and nothing changes,
+            # so deploying this cannot break a live site; set it here and on
+            # the Edge Function and the back door closes. Set it AFTER both
+            # are deployed, never between.
+            self._send({'ok': False, 'error': 'forbidden'}, 403)
             return
         try:
             length = int(self.headers.get('Content-Length', 0))
