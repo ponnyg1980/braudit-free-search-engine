@@ -1,0 +1,212 @@
+string standalone.tmh_freesearch_upsert(string crmAPIRequest)
+{
+	// TMH Free Search -> Leads upsert (19 Aug 2026).
+	// Receives zohoPayload() pushes from the Supabase journey function;
+	// ZOHO_FLOW_URL points at this function's REST API URL. The Edge
+	// Function pre-maps everything: zoho_fields arrives in the module's
+	// ACTUAL API values, so this stays a thin pipe - dedupe, write, callback.
+	// Extended 19 Aug (Jonathan's point 1): an optional payload.scope block
+	// additionally writes a G S Scope Asset for the Lead plus one G S Scope
+	// Classes Terms row per picked class, so classes & specifications carry
+	// into Deals / Trademark on conversion.
+	reqMap = crmAPIRequest.toMap();
+	bodyRaw = reqMap.get("body");
+	if(bodyRaw == null)
+	{
+		return "no body";
+	}
+	payload = bodyRaw.toString().toMap();
+	fields = payload.get("zoho_fields");
+	if(fields == null)
+	{
+		info "no zoho_fields; skipped";
+		return "skipped";
+	}
+	leadId = "";
+	if(payload.get("zoho_lead_id") != null)
+	{
+		leadId = payload.get("zoho_lead_id").toString();
+	}
+	// Dedupe on Email (unique, case-insensitive on Leads): the "look for
+	// the email within Zoho before creating the search item" step.
+	if(leadId == "")
+	{
+		em = fields.get("Email");
+		if(em != null && em != "")
+		{
+			found = zoho.crm.searchRecords("Leads","(Email:equals:" + em + ")");
+			if(found.size() > 0)
+			{
+				leadId = found.get(0).get("id").toString();
+			}
+		}
+	}
+	isNew = false;
+	if(leadId != "")
+	{
+		// Lead_Status is rep-managed after creation. zoho_fields never
+		// carries it, so an update cannot stomp a status a rep has set.
+		up = zoho.crm.updateRecord("Leads",leadId.toLong(),fields);
+		info "update:" + up.get("id");
+	}
+	else
+	{
+		ls = payload.get("lead_status");
+		if(ls != null && ls != "")
+		{
+			fields.put("Lead_Status",ls);
+		}
+		cr = zoho.crm.createRecord("Leads",fields);
+		if(cr.get("id") != null)
+		{
+			leadId = cr.get("id").toString();
+			isNew = true;
+		}
+		else
+		{
+			info cr;
+			return "create failed";
+		}
+	}
+	// Callback: store the id on the journey row so the NEXT push for this
+	// visitor updates this lead instead of creating a duplicate. Runs BEFORE
+	// the scope block on purpose - if scope writing ever errors, the id
+	// round-trip (the proven-critical path) has already happened.
+	cb = Map();
+	cb.put("zoho_lead_id",leadId);
+	cb.put("zoho_lead_url","https://crm.zoho.com/crm/org628887698/tab/Leads/" + leadId);
+	if(payload.get("session_id") != null)
+	{
+		cb.put("session_id",payload.get("session_id"));
+	}
+	if(payload.get("request_id") != null)
+	{
+		cb.put("request_id",payload.get("request_id"));
+	}
+	r = invokeurl
+	[
+		url : "https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey/zoho-linked"
+		type : POST
+		parameters : cb.toString()
+		headers : {"Content-Type":"application/json"}
+	];
+	// ------- G S Scope capture (optional, idempotent) -------
+	scope = payload.get("scope");
+	scopeNote = "";
+	if(scope != null)
+	{
+		mark = "";
+		if(scope.get("mark") != null)
+		{
+			mark = scope.get("mark").toString();
+		}
+		assetName = "Free Search - " + mark;
+		if(assetName.length() > 100)
+		{
+			assetName = assetName.subString(0,100);
+		}
+		// Find-or-create the asset for THIS lead (one per lead from Free
+		// Search; re-pushes reuse it).
+		assetId = "";
+		foundA = zoho.crm.searchRecords("G_S_Scope_Assets","(Lead.id:equals:" + leadId + ")");
+		for each a in foundA
+		{
+			if(assetId == "" && a.get("Asset_Type") == "Deal Search")
+			{
+				assetId = a.get("id").toString();
+			}
+		}
+		if(assetId == "")
+		{
+			aMap = Map();
+			aMap.put("Name",assetName);
+			aMap.put("Lead",leadId.toLong());
+			aMap.put("Asset_Type","Deal Search");
+			aMap.put("Asset_Status","Draft");
+			ca = zoho.crm.createRecord("G_S_Scope_Assets",aMap);
+			if(ca.get("id") != null)
+			{
+				assetId = ca.get("id").toString();
+			}
+		}
+		if(assetId != "")
+		{
+			// Existing class rows for this asset -> class number => row id,
+			// so a re-push updates instead of breeding duplicates.
+			existing = Map();
+			foundR = zoho.crm.searchRecords("G_S_Scope_Classes_Terms","(Scope_Asset.id:equals:" + assetId + ")");
+			for each rrow in foundR
+			{
+				if(rrow.get("Nice_Class_Number_Snapshot") != null)
+				{
+					existing.put(rrow.get("Nice_Class_Number_Snapshot").toString(),rrow.get("id").toString());
+				}
+			}
+			madeRows = 0;
+			clsList = scope.get("classes");
+			if(clsList != null)
+			{
+				for each c in clsList
+				{
+					n = c.get("n");
+					if(n != null)
+					{
+						nn = n.toString();
+						if(n.toLong() < 10)
+						{
+							nn = "0" + nn;
+						}
+						termsTxt = "";
+						tl = c.get("terms");
+						if(tl != null)
+						{
+							for each t in tl
+							{
+								if(termsTxt != "")
+								{
+									termsTxt = termsTxt + "\n";
+								}
+								termsTxt = termsTxt + t.toString();
+							}
+						}
+						rMap = Map();
+						rMap.put("Nice_Class_Number_Snapshot",n.toLong());
+						// Nice Class Reference records are contiguous:
+						// class N = 1964745000114603017 + N (COQL-verified 19 Aug).
+						rMap.put("Nice_Class_Reference",1964745000114603017 + n.toLong());
+						if(c.get("label") != null)
+						{
+							rMap.put("Class_Description_Snapshot",c.get("label").toString());
+						}
+						if(termsTxt != "")
+						{
+							rMap.put("Specific_Terms",termsTxt);
+						}
+						if(existing.get(nn.toLong().toString()) != null)
+						{
+							rid = existing.get(nn.toLong().toString());
+							ur = zoho.crm.updateRecord("G_S_Scope_Classes_Terms",rid.toLong(),rMap);
+						}
+						else
+						{
+							rowName = "Class " + nn + " - " + mark;
+							if(rowName.length() > 100)
+							{
+								rowName = rowName.subString(0,100);
+							}
+							rMap.put("Name",rowName);
+							rMap.put("Scope_Asset",assetId.toLong());
+							crr = zoho.crm.createRecord("G_S_Scope_Classes_Terms",rMap);
+							if(crr.get("id") != null)
+							{
+								madeRows = madeRows + 1;
+							}
+						}
+					}
+				}
+			}
+			scopeNote = ":scope=" + assetId + ":rows+" + madeRows;
+		}
+	}
+	return "ok:" + leadId + ":new=" + isNew + scopeNote;
+}
