@@ -1,3 +1,19 @@
+> **SUPERSEDED — 19 Aug 2026.** Zoho Flow was abandoned (the Flow app would
+> not load; possibly unprovisioned on this org). The webhook is instead a
+> **Zoho CRM standalone Deluge function** `tmh_freesearch_upsert`, REST-API
+> enabled with an API key (zapikey URL, saved as the `ZOHO_FLOW_URL` Supabase
+> secret — the secret name was kept so nothing else changed). The payload
+> contract below is IDENTICAL; only the receiving end moved. The function:
+> takes `crmAPIRequest`, reads `zoho_fields`, updates by `zoho_lead_id` else
+> searches Leads by email else creates (Lead_Status only ever set on create),
+> then calls back `POST /journey/zoho-linked` with the lead id and a
+> `crm.zoho.com/crm/org628887698` record URL. End-to-end proven 19 Aug:
+> create, email-dedupe update (no duplicate), callback stored id,
+> Lead_Status untouched. Two journey-side bugs fixed in the proving:
+> un-awaited pushes died on isolate suspend (now `EdgeRuntime.waitUntil`,
+> env read at call time) and Z-suffixed ISO datetimes made Zoho void the
+> whole update (now `+00:00`).
+
 # Zoho Flow — "TMH Free Search → Leads"
 
 The one piece that lives in Zoho Flow (flow.zoho.eu). Everything hard was
