@@ -390,7 +390,10 @@ function zohoScopeBlock(session: Record<string, unknown>) {
           n: r.n,
           label: r.heading || ZOHO_CLASS[r.n] || `Class ${r.n}`,
           terms: r.terms,
-          terms_text: r.terms.join("\n"),
+          // Uncapped by design — a competitor-trademark route can carry
+          // dozens of terms. Only guard: Zoho's 32k textarea limit, because
+          // an oversize value voids the entire row write.
+          terms_text: r.terms.join("\n").slice(0, 30000),
         })),
       };
     }
