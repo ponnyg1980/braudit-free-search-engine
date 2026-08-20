@@ -116,6 +116,11 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 				assetId = a.get("id").toString();
 			}
 		}
+		sess = "";
+		if(payload.get("session_id") != null)
+		{
+			sess = payload.get("session_id").toString();
+		}
 		if(assetId == "")
 		{
 			aMap = Map();
@@ -123,11 +128,26 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 			aMap.put("Lead",leadId.toLong());
 			aMap.put("Asset_Type","Deal Search");
 			aMap.put("Asset_Status","Draft");
+			if(sess != "")
+			{
+				// Conversion carry-through key: the Deal created at lead
+				// conversion inherits Free_Search_Session via the Lead ->
+				// Deal conversion mapping, and the Deals-on-create workflow
+				// finds this asset by the same value. No converted-lead
+				// reads needed anywhere.
+				aMap.put("Free_Search_Session",sess);
+			}
 			ca = zoho.crm.createRecord("G_S_Scope_Assets",aMap);
 			if(ca.get("id") != null)
 			{
 				assetId = ca.get("id").toString();
 			}
+		}
+		else if(sess != "")
+		{
+			sMap = Map();
+			sMap.put("Free_Search_Session",sess);
+			su = zoho.crm.updateRecord("G_S_Scope_Assets",assetId.toLong(),sMap);
 		}
 		if(assetId != "")
 		{
