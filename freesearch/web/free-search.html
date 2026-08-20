@@ -785,6 +785,22 @@ let PICKER={
    'quick_search', which Zoho maps to Lead Source "Quick Search". */
 const QUICK=/uk-trademark-quick-search/.test(location.pathname);
 if(QUICK) document.title='UK Trademark Quick Search \u2014 The Trademark Helpline';
+/* Embedded on the WordPress site the whole wizard lives in an iframe that
+   embed.js resizes from brauditHeight messages (same contract as the compact
+   search box). Screens vary from ~600px to 2000+px, so report continuously. */
+(function reportHeight(){
+  if(window.parent===window) return;          // standalone: nothing to do
+  var last=0;
+  function send(){
+    var h=Math.ceil(document.documentElement.scrollHeight)+8;
+    if(Math.abs(h-last)<4) return; last=h;
+    try{ window.parent.postMessage({brauditHeight:h},'*'); }catch(e){}
+  }
+  new MutationObserver(send).observe(document.documentElement,
+    {childList:true,subtree:true,attributes:true});
+  window.addEventListener('load',send); window.addEventListener('resize',send);
+  setInterval(send,800);                      // belt and braces for animations
+})();
 const STEP_ORDER=QUICK?['search','classes','results']
                       :['search','marks','jurisdiction','classes','results'];
 const STEP_LABELS={search:'Name',marks:'Searches',jurisdiction:'Jurisdictions',classes:'Classes',results:'Results'};
