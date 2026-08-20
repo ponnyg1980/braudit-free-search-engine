@@ -86,16 +86,33 @@
 <script>
 /* ---- config, read off the embedding script tag via the iframe URL ------- */
 const P = new URLSearchParams(location.search);
+/* SPLIT TEST (Jonathan, 20 Aug): one box, two variants.
+   variant=free  -> Free Search journey, lands on the Searches page (step 2)
+   variant=quick -> Quick Search journey, lands straight on Classes
+   The variant decides the journey source (so Zoho's Lead Source splits into
+   "Free Search" / "Quick Search"), the hand-off screen, and the default
+   wizard URL. Everything else is identical, which is what makes the A/B
+   comparison honest. */
+const VARIANT = P.get('variant') === 'quick' ? 'quick' : 'free';
 const CONFIG = {
   TENANT_ID: P.get('tenant') || 'tmh',
   EMBED:     P.get('embed') === '1',
+  VARIANT:   VARIANT,
+  SOURCE:    VARIANT === 'quick' ? 'quick_search' : 'free_search',
+  SCREEN:    VARIANT === 'quick' ? 'classes' : 'marks',
   // Where the full wizard lives. Defaults to this host's own copy.
-  TARGET:    P.get('target') || (location.origin + '/free-search'),
-  // Empty = same-origin (this host serves /journey too in dev). In the live
-  // setup the engine and the journey function are different hosts, so the
-  // embed passes it through explicitly.
-  JOURNEY:   P.get('journey') || ''
+  TARGET:    P.get('target') || (location.origin +
+             (VARIANT === 'quick' ? '/uk-trademark-quick-search' : '/free-search')),
+  // The journey Edge Function. Defaults to production so an embedded box
+  // logs the search term even when the embedding page passes nothing.
+  JOURNEY:   P.get('journey') || 'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey'
 };
+if (VARIANT === 'quick') {
+  document.title = 'UK Trademark Quick Search \u2014 The Trademark Helpline';
+  document.querySelector('.wrap h2').textContent = 'UK Trademark Quick Search';
+  document.querySelector('p.lead').textContent =
+    'Check the UK trademark register in seconds \u2014 just your name and your classes.';
+}
 
 function journeyBase(){
   if(CONFIG.JOURNEY) return CONFIG.JOURNEY.replace(/\/$/,'');
@@ -133,7 +150,8 @@ function submit(){
   const done = function(sid){
     const u = new URL(CONFIG.TARGET, location.href);
     u.searchParams.set('tenant', CONFIG.TENANT_ID);
-    u.searchParams.set('screen', 'marks');          // step 2, per the brief
+    u.searchParams.set('screen', CONFIG.SCREEN);    // marks (free) / classes (quick)
+    u.searchParams.set('journey', CONFIG.JOURNEY);  // keep logging wired after hand-off
     if(sid) u.searchParams.set('s', sid);
     else    u.searchParams.set('q', name);          // no session? at least carry the name
     handOff(u.toString());
@@ -147,7 +165,7 @@ function submit(){
   try{
     fetch(journeyBase() + '/session/start', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({tenant_id: CONFIG.TENANT_ID, source:'free_search', name: name})
+      body: JSON.stringify({tenant_id: CONFIG.TENANT_ID, source: CONFIG.SOURCE, name: name})
     }).then(r=>r.json()).then(function(d){
       if(!(d && d.ok && d.session_id)) return finish(null);
       const sid = d.session_id;
@@ -155,7 +173,7 @@ function submit(){
       // is indistinguishable downstream from one that started on the page.
       fetch(journeyBase() + '/session/event', {
         method:'POST', headers:{'Content-Type':'application/json'}, keepalive:true,
-        body: JSON.stringify({session_id: sid, event_type:'name_submitted', screen:'marks',
+        body: JSON.stringify({session_id: sid, event_type:'name_submitted', screen:CONFIG.SCREEN,
                               payload:{name:name, entry:'search_box'},
                               snapshot:{name:name}})
       }).catch(function(){});
