@@ -698,6 +698,10 @@ const CONFIG = (function(){
     SEARCH_BASE:q.get('searchbase')||'',
     RESUME_SESSION:q.get('s')||'', RESUME_SCREEN:q.get('screen')||'',
     RESUME_NAME:q.get('q')||'',
+    // The journey Edge Function. Production default (param-overridable) —
+    // relative same-origin calls 404 on the Render engine, which had been
+    // silently costing us every page-initiated journey log.
+    JOURNEY:q.get('journey')||'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey',
     // Where the new standalone Brand Audit page lives — point this at wherever
     // it's actually deployed (same open question as this page's own hosting).
     BRAND_AUDIT_URL:'/brand-audit/',
@@ -712,6 +716,7 @@ const CONFIG = (function(){
 // project) — swap the last path segment rather than needing a second config
 // line to keep in sync. Empty in the same-origin MOCK/dev mode as API_BASE.
 function journeyBase(){
+  if(CONFIG.JOURNEY) return CONFIG.JOURNEY.replace(/\/$/,'');
   var b=(CONFIG.API_BASE||'').replace(/\/$/,'');
   return b.replace(/\/free-search$/,'/journey');
 }
@@ -2309,7 +2314,7 @@ window.addEventListener('popstate',function(e){
     const wm = document.getElementById('word-mark');
     if(wm) wm.value = name;
     document.getElementById('tick-name').classList.add('on');
-    const target = wanted === 'marks' ? 'marks' : (wanted || 'marks');
+    const target = wanted || (QUICK ? 'classes' : 'marks');
     renderScreen(target);
     history.replaceState({screen:target},'','#'+target);
     // Deliberately NOT re-logging 'name_submitted' — the box already did.
