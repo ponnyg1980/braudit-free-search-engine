@@ -68,6 +68,14 @@
   .err{margin:10px 0 0;font-size:.85rem;color:var(--pink-dark);display:none}
   .err.on{display:block}
   @media (max-width:420px){ button{width:100%} }
+
+  /* ---- bar style (?style=bar / data-style="bar") ----
+     The same widget stripped to a single line: no card, no heading, no
+     lead copy — for dropping into hero strips and banners where the page
+     already provides the context. Same journey, same logging, same
+     hand-off; only the chrome differs, so A/B numbers stay comparable. */
+  body.bar .wrap{background:transparent;border:0;box-shadow:none;padding:4px 2px;max-width:none}
+  body.bar h2, body.bar p.lead, body.bar p.note{display:none}
 </style>
 </head>
 <body>
@@ -94,6 +102,7 @@ const P = new URLSearchParams(location.search);
    wizard URL. Everything else is identical, which is what makes the A/B
    comparison honest. */
 const VARIANT = P.get('variant') === 'quick' ? 'quick' : 'free';
+if (P.get('style') === 'bar') document.body.classList.add('bar');
 const CONFIG = {
   TENANT_ID: P.get('tenant') || 'tmh',
   EMBED:     P.get('embed') === '1',
