@@ -527,7 +527,9 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
     Seen_Via: ((channels.seen_via as unknown[]) ?? [])
       .map((v) => ZOHO_SEEN[String(v)]).filter(Boolean),
     Resale: ZOHO_RESALE[String(channels.resale ?? "")] || undefined,
-    Lead_Source: "Website - Search",
+    // "Website - Search" retired 20 Aug — the picklist now separates the
+    // two wizards so reporting can tell a considered search from a quick one.
+    Lead_Source: session.source === "quick_search" ? "Quick Search" : "Free Search",
     Lead_Source_Group: "Website Forms",
     // actual_value, not the "Consent - Obtained" display label
     Data_Processing_Basis: session.consent_marketing ? "Obtained"
@@ -622,7 +624,8 @@ serve(async (req) => {
     const { error } = await admin.from("journey_sessions").insert({
       session_id,
       tenant_id: tenant,
-      source: body.source === "brand_audit_direct" ? "brand_audit_direct" : "free_search",
+      source: ["brand_audit_direct", "quick_search"].includes(String(body.source))
+        ? String(body.source) : "free_search",
       name: body.name ?? null,
       trading_name: body.trading_name ?? null,
       current_screen: body.screen ?? null,
