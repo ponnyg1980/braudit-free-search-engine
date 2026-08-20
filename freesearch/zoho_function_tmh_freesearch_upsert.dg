@@ -113,13 +113,15 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		{
 			assetName = assetName.subString(0,100);
 		}
-		// Find-or-create the asset for THIS lead (one per lead from Free
-		// Search; re-pushes reuse it).
+		// Find-or-create the asset for THIS lead AND THIS BRAND (20 Aug:
+		// one asset per searched brand, so a visitor who searches three
+		// names keeps three separate class/term sets on one lead; re-pushes
+		// of the same brand reuse its asset).
 		assetId = "";
 		foundA = zoho.crm.searchRecords("G_S_Scope_Assets","(Lead.id:equals:" + leadId + ")");
 		for each a in foundA
 		{
-			if(assetId == "" && a.get("Asset_Type") == "Deal Search")
+			if(assetId == "" && a.get("Asset_Type") == "Deal Search" && a.get("Name") == assetName)
 			{
 				assetId = a.get("id").toString();
 			}
@@ -136,6 +138,9 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 			aMap.put("Lead",leadId.toLong());
 			aMap.put("Asset_Type","Deal Search");
 			aMap.put("Asset_Status","Draft");
+			// Survives conversion (plain text, unlike the Lead lookup):
+			// on_convert uses it to gather ALL of this lead's brand assets.
+			aMap.put("Free_Search_Lead_Id",leadId);
 			if(sess != "")
 			{
 				// Conversion carry-through key: the Deal created at lead
@@ -151,10 +156,14 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 				assetId = ca.get("id").toString();
 			}
 		}
-		else if(sess != "")
+		else
 		{
 			sMap = Map();
-			sMap.put("Free_Search_Session",sess);
+			sMap.put("Free_Search_Lead_Id",leadId);
+			if(sess != "")
+			{
+				sMap.put("Free_Search_Session",sess);
+			}
 			su = zoho.crm.updateRecord("G_S_Scope_Assets",assetId.toLong(),sMap);
 		}
 		if(assetId != "")
