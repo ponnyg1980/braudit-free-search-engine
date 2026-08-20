@@ -507,6 +507,23 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
       const text = [head, ...body].filter(Boolean).join("\n\n").slice(0, 1990);
       return text || undefined;
     })(),
+    // The five closest live marks, as shown on screen — for the "your
+    // report" email template (Jonathan, 20 Aug: send from Zoho). Plain
+    // text, one row per mark, newline-separated; the 2000-char field
+    // comfortably holds five rows.
+    Free_Search_Top_Matches: (() => {
+      const rows = (Array.isArray(lr.top_results) ? lr.top_results : [])
+        .slice(0, 5)
+        .map((r0, i) => {
+          const r = r0 as Record<string, unknown>;
+          const bits = [String(r.mark ?? "").toUpperCase()];
+          if (r.status) bits.push(String(r.status));
+          if (r.risk) bits.push(String(r.risk));
+          if (r.type) bits.push(String(r.type));
+          return `${i + 1}. ${bits.join(" \u2014 ")}`;
+        });
+      return rows.length ? rows.join("\n").slice(0, 1990) : undefined;
+    })(),
     Free_Search_Class_Route: ZOHO_CLASS_ROUTE[csRoute] ||
       ((Array.isArray(session.classes) && session.classes.length)
         ? "Self Selected" : undefined),
