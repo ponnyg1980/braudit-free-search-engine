@@ -46,7 +46,13 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 	{
 		// Lead_Status is rep-managed after creation. zoho_fields never
 		// carries it, so an update cannot stomp a status a rep has set.
-		up = zoho.crm.updateRecord("Leads",leadId.toLong(),fields);
+		// The options map matters: Deluge writes do NOT fire workflow rules
+		// unless asked (proven 20 Aug — the report-email rule sat silent on a
+		// created lead). The Free Search Report email hangs off exactly these
+		// writes, so both paths request workflow triggers explicitly.
+		trg = Map();
+		trg.put("trigger",{"workflow"});
+		up = zoho.crm.updateRecord("Leads",leadId.toLong(),fields,trg);
 		info "update:" + up.get("id");
 	}
 	else
@@ -56,7 +62,9 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		{
 			fields.put("Lead_Status",ls);
 		}
-		cr = zoho.crm.createRecord("Leads",fields);
+		trg = Map();
+		trg.put("trigger",{"workflow"});
+		cr = zoho.crm.createRecord("Leads",fields,trg);
 		if(cr.get("id") != null)
 		{
 			leadId = cr.get("id").toString();
