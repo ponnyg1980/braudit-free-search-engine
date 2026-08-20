@@ -102,6 +102,16 @@ _EMBED_JS = """(function(){
     if(s.dataset.target)  q+='&target='+encodeURIComponent(s.dataset.target);
     if(s.dataset.journey) q+='&journey='+encodeURIComponent(s.dataset.journey);
   }
+  // Domain-hosted wizard pages (20 Aug): the search box hands off to a
+  // WordPress page carrying ?s=<session>&screen=&q=&journey= — forward those
+  // into the iframe so the embedded wizard adopts the session instead of
+  // starting over. Only the known resume keys pass through.
+  try{
+    var hp=new URLSearchParams(window.location.search);
+    ['s','screen','q','journey','searchbase'].forEach(function(k){
+      var v=hp.get(k); if(v) q+='&'+k+'='+encodeURIComponent(v);
+    });
+  }catch(e){}
   var f=document.createElement('iframe');
   f.src=s.src.replace(/embed\\.js.*$/, page+q);
   f.style.cssText='width:100%;min-height:'+(page==='search-box'?'200px':'640px')
