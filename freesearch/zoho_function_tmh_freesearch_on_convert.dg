@@ -1,18 +1,27 @@
 void automation.tmh_freesearch_on_convert(int dealId)
 {
-	// Lead conversion carry-through (Jonathan, 20 Aug 2026): "When a lead
-	// is converted, we need the classes and terms to carry through to the
-	// Deal we create - which will usually be an Audit or a UK Trademark
-	// Application."
+	// Lead conversion carry-through, v2 (Jonathan, 20 Aug 2026): a visitor
+	// who searches several brands gets ONE lead (email dedupe) with one
+	// G S Scope Asset per brand. Before converting, the rep sets
+	// "Proceed With" on each brand's asset row (Brand Audit / UK Trademark
+	// Application / Not Proceeding). Convert once -> one Contact, one
+	// Account, and this function fans out ONE DEAL PER TICKED BRAND:
 	//
-	// Zoho has no when-converted workflow trigger, so this runs from a
-	// DEALS on-create workflow instead (criteria: Free Search Session is
-	// not empty). The chain: the lead upsert stamps Free_Search_Session on
-	// both the Lead and its G S Scope Asset; the Lead -> Deal conversion
-	// mapping copies the session onto the new Deal; this function joins
-	// the two and points the asset (and with it every G S Scope Classes
-	// Terms row - the classes, UKIPO headings and term selections) at the
-	// Deal. Nothing is copied; one version of the truth.
+	//  - the deal Zoho made at conversion is claimed by the first
+	//    proceeding brand (preferring the brand whose session the deal
+	//    carries), its asset linked + Active;
+	//  - every other proceeding brand gets a NEW deal (pipeline by type,
+	//    Stage "Prospect"), its asset linked + Active;
+	//  - non-proceeding brands stay Draft, parked on the Account so
+	//    nothing is lost if the client comes back.
+	//
+	// If NO asset carries a Proceed With tick (the pre-v2 flow), behaviour
+	// is unchanged: the session-matched asset rides the conversion deal.
+	//
+	// Runs from the DEALS on-create workflow (criteria: Free Search
+	// Session is not empty). Deals created HERE deliberately omit the
+	// {"trigger":...} options map, so this workflow does NOT re-fire for
+	// them - no recursion.
 	deal = zoho.crm.getRecordById("Deals",dealId);
 	if(deal == null)
 	{
@@ -28,21 +37,183 @@ void automation.tmh_freesearch_on_convert(int dealId)
 	{
 		return;
 	}
+	// Session -> lead id (plain-text stamp that survives conversion) ->
+	// ALL of this lead's brand assets.
 	found = zoho.crm.searchRecords("G_S_Scope_Assets","(Free_Search_Session:equals:" + sess + ")");
-	linked = 0;
+	fsLead = "";
 	for each a in found
+	{
+		if(fsLead == "" && a.get("Free_Search_Lead_Id") != null && a.get("Free_Search_Lead_Id") != "")
+		{
+			fsLead = a.get("Free_Search_Lead_Id").toString();
+		}
+	}
+	sibs = found;
+	if(fsLead != "")
+	{
+		sibs = zoho.crm.searchRecords("G_S_Scope_Assets","(Free_Search_Lead_Id:equals:" + fsLead + ")");
+	}
+	acctId = "";
+	if(deal.get("Account_Name") != null)
+	{
+		acctId = deal.get("Account_Name").get("id").toString();
+	}
+	contId = "";
+	if(deal.get("Contact_Name") != null)
+	{
+		contId = deal.get("Contact_Name").get("id").toString();
+	}
+	// Any per-brand ticks at all? (Legacy sessions have none.)
+	anyTick = false;
+	for each a in sibs
+	{
+		if(a.get("Asset_Type") == "Deal Search" && a.get("Proceed_With") != null && a.get("Proceed_With") != "")
+		{
+			anyTick = true;
+		}
+	}
+	// Which asset claims the conversion deal: the session-matched
+	// proceeding brand if there is one, else the first proceeding brand,
+	// else (legacy) the session-matched asset.
+	convAssetId = "";
+	firstGo = "";
+	for each a in sibs
 	{
 		if(a.get("Asset_Type") == "Deal Search")
 		{
-			up = Map();
-			up.put("Deal",dealId);
-			// Attached to a real matter now - promote out of Draft so
-			// captured-from-web scopes and worked scopes are tellable apart.
-			up.put("Asset_Status","Active");
-			r = zoho.crm.updateRecord("G_S_Scope_Assets",a.get("id").toString().toLong(),up);
-			linked = linked + 1;
-			info "on_convert: asset " + a.get("id") + " -> deal " + dealId;
+			pw = "";
+			if(a.get("Proceed_With") != null)
+			{
+				pw = a.get("Proceed_With").toString();
+			}
+			goes = false;
+			if(pw == "Brand Audit" || pw == "UK Trademark Application")
+			{
+				goes = true;
+			}
+			if(anyTick == false)
+			{
+				goes = false;
+				aSess = "";
+				if(a.get("Free_Search_Session") != null)
+				{
+					aSess = a.get("Free_Search_Session").toString();
+				}
+				if(aSess == sess)
+				{
+					goes = true;
+				}
+			}
+			if(goes)
+			{
+				if(firstGo == "")
+				{
+					firstGo = a.get("id").toString();
+				}
+				aSess2 = "";
+				if(a.get("Free_Search_Session") != null)
+				{
+					aSess2 = a.get("Free_Search_Session").toString();
+				}
+				if(convAssetId == "" && aSess2 == sess)
+				{
+					convAssetId = a.get("id").toString();
+				}
+			}
 		}
 	}
-	info "on_convert: deal " + dealId + " session " + sess + " linked " + linked + " asset(s)";
+	if(convAssetId == "")
+	{
+		convAssetId = firstGo;
+	}
+	linked = 0;
+	made = 0;
+	parked = 0;
+	for each a in sibs
+	{
+		if(a.get("Asset_Type") == "Deal Search")
+		{
+			aid = a.get("id").toString();
+			pw = "";
+			if(a.get("Proceed_With") != null)
+			{
+				pw = a.get("Proceed_With").toString();
+			}
+			goes = false;
+			if(pw == "Brand Audit" || pw == "UK Trademark Application")
+			{
+				goes = true;
+			}
+			if(anyTick == false)
+			{
+				goes = false;
+				if(aid == convAssetId)
+				{
+					goes = true;
+				}
+			}
+			up = Map();
+			if(acctId != "")
+			{
+				up.put("Account",acctId.toLong());
+			}
+			if(goes)
+			{
+				up.put("Asset_Status","Active");
+				if(aid == convAssetId)
+				{
+					up.put("Deal",dealId);
+					linked = linked + 1;
+				}
+				else
+				{
+					brand = a.get("Name").toString();
+					if(brand.contains("Free Search - "))
+					{
+						brand = brand.getSuffix("Free Search - ");
+					}
+					dMap = Map();
+					dMap.put("Deal_Name",brand + " - " + pw);
+					if(pw == "Brand Audit")
+					{
+						dMap.put("Pipeline","Audit and Consultation");
+					}
+					else
+					{
+						dMap.put("Pipeline","UK Trademark Application");
+					}
+					dMap.put("Stage","Prospect");
+					if(acctId != "")
+					{
+						dMap.put("Account_Name",acctId.toLong());
+					}
+					if(contId != "")
+					{
+						dMap.put("Contact_Name",contId.toLong());
+					}
+					if(a.get("Free_Search_Session") != null)
+					{
+						dMap.put("Free_Search_Session",a.get("Free_Search_Session"));
+					}
+					nd = zoho.crm.createRecord("Deals",dMap);
+					if(nd.get("id") != null)
+					{
+						up.put("Deal",nd.get("id").toString().toLong());
+						made = made + 1;
+						info "on_convert: created deal " + nd.get("id") + " for asset " + aid;
+					}
+					else
+					{
+						info "on_convert: deal create FAILED for asset " + aid + ": " + nd;
+					}
+				}
+			}
+			else
+			{
+				parked = parked + 1;
+			}
+			r = zoho.crm.updateRecord("G_S_Scope_Assets",aid.toLong(),up);
+		}
+	}
+	info "on_convert: deal " + dealId + " session " + sess + " linked " + linked + " created " + made + " parked " + parked;
 }
