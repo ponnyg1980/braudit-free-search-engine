@@ -772,7 +772,16 @@ let PICKER={
   }).catch(function(){});
 })();
 
-const STEP_ORDER=['search','marks','jurisdiction','classes','results'];
+/* QUICK MODE (Jonathan, 20 Aug) — /uk-trademark-quick-search serves this
+   SAME file (one file, two routes, zero drift). Quick is Name -> Classes ->
+   Results: it skips the Searches screen (the typed name IS the word mark;
+   no logo/tagline collection) and Jurisdictions (defaults stand: trading
+   now = UK, no expansion plans). The session carries source
+   'quick_search', which Zoho maps to Lead Source "Quick Search". */
+const QUICK=/uk-trademark-quick-search/.test(location.pathname);
+if(QUICK) document.title='UK Trademark Quick Search \u2014 The Trademark Helpline';
+const STEP_ORDER=QUICK?['search','classes','results']
+                      :['search','marks','jurisdiction','classes','results'];
 const STEP_LABELS={search:'Name',marks:'Searches',jurisdiction:'Jurisdictions',classes:'Classes',results:'Results'};
 let state={name:'',logo:false,logoLater:false,tagline:'',classes:[],
   now:{mode:'uk',codes:[]},plan:{mode:'none',codes:[]},lastResult:null,lead:null,
@@ -848,7 +857,7 @@ function ensureSession(){
   if(state._sessionStarting) return state._sessionStarting;
   state._sessionStarting=fetch(journeyBase()+'/session/start',{method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({tenant_id:CONFIG.TENANT_ID,source:'free_search',name:state.name})})
+    body:JSON.stringify({tenant_id:CONFIG.TENANT_ID,source:QUICK?'quick_search':'free_search',name:state.name})})
     .then(r=>r.json()).then(d=>{
       if(d&&d.ok&&d.session_id){ state.sessionId=d.session_id; }
       return state.sessionId;
@@ -1764,7 +1773,10 @@ function go(id){
     document.getElementById('tick-name').classList.add('on');
     // The first real decision — this is what mints the session (see
     // ensureSession()). Everything before this point was a blank visit.
-    logEvent('name_submitted','marks',{name:state.name},true);
+    logEvent('name_submitted',QUICK?'classes':'marks',{name:state.name},true);
+    // Quick mode: the name IS the word mark and jurisdictions keep their
+    // defaults (UK now, no plans) — straight to classes.
+    if(QUICK){ pushScreen('classes'); return; }
   } else {
     logEvent('screen_enter',id,{},false);
   }
