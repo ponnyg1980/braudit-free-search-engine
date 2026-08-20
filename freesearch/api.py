@@ -65,6 +65,9 @@ _WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web')
 _PAGES = {
     '': 'free-search.html',                    # GET /  -> the wizard
     '/free-search': 'free-search.html',
+    # The short wizard (Name -> Classes -> Results). Same file — the page
+    # switches itself into quick mode from the pathname.
+    '/uk-trademark-quick-search': 'free-search.html',
     '/class-assistant': 'class-assistant.html',
     '/search-bar': 'search-bar.html',
     '/search-box': 'search-box.html',          # compact drop-anywhere entry point
