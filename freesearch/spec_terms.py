@@ -21,11 +21,13 @@ Two consequences, both handled here:
    class heading (`nice_classes.NICE_HEADINGS`), not our short UI label.
 
 Selection order per class: context-matched vocabulary terms first (exact
-case-insensitive match, then substring containment either way), then top-up
-by real usage share ("Most use this" before "Recommended" before "Some use
-this") until MIN_TERMS is reached, capped at MAX_TERMS. A class with no
-context (self-selected) simply gets the most-used registered terms — the
-same starting point a fee-earner drafts from.
+case-insensitive match, token-subset, then substring either way) — kept in
+FULL, never capped (Jonathan, 19 Aug: "if somebody did a competitor
+trademark, then we would use the terms from that trademark and there could
+be dozens"). Only when context produces fewer than MIN_TERMS does the
+top-up add the class's most-used registered terms. A class with no context
+(self-selected) simply gets the most-used registered terms — the same
+starting point a fee-earner drafts from.
 """
 from __future__ import annotations
 
@@ -35,7 +37,6 @@ from functools import lru_cache
 from pathlib import Path
 
 MIN_TERMS = 8    # top up to at least this many when the vocabulary allows
-MAX_TERMS = 15   # a readable draft selection, not the whole class
 
 _DEPLOY = Path(__file__).resolve().parents[1] / 'deploy-v2-hotfix'
 if str(_DEPLOY) not in sys.path:
@@ -118,8 +119,9 @@ def _select(class_no: int, context: list[str]) -> list[str]:
     #    "retail services relating to food" but NOT "...relating to
     #    clothing"), plus plain substring both ways so "coffee" still
     #    selects "coffee beans". Words are compared with a trailing-s strip
-    #    so beverages/beverage agree.
-    if len(picked) < MAX_TERMS:
+    #    so beverages/beverage agree. NO CAP: a competitor-trademark route
+    #    legitimately yields dozens of matches and we keep every one.
+    if ctx:
         stop = {'and', 'or', 'of', 'the', 'for', 'in', 'to', 'with', 'a',
                 'an', 'on', 'by', 'relating', 'connected', 'relation'}
 
@@ -141,8 +143,6 @@ def _select(class_no: int, context: list[str]) -> list[str]:
             if subset or substr:
                 picked.append(v)
                 seen.add(vl)
-                if len(picked) >= MAX_TERMS:
-                    break
 
     # 3. Top-up with the most-used registered terms so a thin or
     #    self-selected class still gets a real draft selection.
@@ -153,7 +153,7 @@ def _select(class_no: int, context: list[str]) -> list[str]:
                 seen.add(v.lower())
                 if len(picked) >= MIN_TERMS:
                     break
-    return picked[:MAX_TERMS]
+    return picked
 
 
 def build_application_scope(classes, class_source) -> list[dict]:
