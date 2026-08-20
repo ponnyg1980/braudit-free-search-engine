@@ -98,6 +98,7 @@ _EMBED_JS = """(function(){
   var page=(s&&s.dataset.widget)||'free-search';
   var q='?tenant='+encodeURIComponent(t)+'&embed=1';
   if(page==='search-box'){
+    if(s.dataset.variant) q+='&variant='+encodeURIComponent(s.dataset.variant);
     if(s.dataset.target)  q+='&target='+encodeURIComponent(s.dataset.target);
     if(s.dataset.journey) q+='&journey='+encodeURIComponent(s.dataset.journey);
   }
