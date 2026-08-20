@@ -1,60 +1,48 @@
-void automation.tmh_freesearch_on_convert(int leadId)
+void automation.tmh_freesearch_on_convert(int dealId)
 {
 	// Lead conversion carry-through (Jonathan, 20 Aug 2026): "When a lead
 	// is converted, we need the classes and terms to carry through to the
 	// Deal we create - which will usually be an Audit or a UK Trademark
 	// Application."
 	//
-	// The classes & terms already live on the lead's G S Scope Asset (one
-	// per lead, Asset Type "Deal Search") and its G S Scope Classes Terms
-	// rows. Carrying them is therefore ONE write: point the asset's Deal
-	// lookup at the converted Deal. The rows ride along with the asset —
-	// nothing is copied, so there is exactly one version of the truth for
-	// Deals and, later, Trademark records.
-	//
-	// Attach this function to a Leads workflow rule with the CONVERT
-	// trigger, argument mapping: leadId = Lead Id.
-	lead = zoho.crm.getRecordById("Leads",leadId);
-	if(lead == null)
+	// Zoho has no when-converted workflow trigger, so this runs from a
+	// DEALS on-create workflow instead (criteria: Free Search Session is
+	// not empty). The chain: the lead upsert stamps Free_Search_Session on
+	// both the Lead and its G S Scope Asset; the Lead -> Deal conversion
+	// mapping copies the session onto the new Deal; this function joins
+	// the two and points the asset (and with it every G S Scope Classes
+	// Terms row - the classes, UKIPO headings and term selections) at the
+	// Deal. Nothing is copied; one version of the truth.
+	deal = zoho.crm.getRecordById("Deals",dealId);
+	if(deal == null)
 	{
-		info "on_convert: lead " + leadId + " not readable";
+		info "on_convert: deal " + dealId + " not readable";
 		return;
 	}
-	dealId = "";
-	cd = lead.get("Converted_Deal");
-	if(cd != null)
+	sess = "";
+	if(deal.get("Free_Search_Session") != null)
 	{
-		if(cd.toString().contains("id"))
-		{
-			dealId = cd.get("id").toString();
-		}
-		else
-		{
-			dealId = cd.toString();
-		}
+		sess = deal.get("Free_Search_Session").toString();
 	}
-	if(dealId == "")
+	if(sess == "")
 	{
-		// Converted to contact/account only — nothing to attach a scope to.
-		info "on_convert: lead " + leadId + " has no converted deal";
 		return;
 	}
-	found = zoho.crm.searchRecords("G_S_Scope_Assets","(Lead.id:equals:" + leadId + ")");
+	found = zoho.crm.searchRecords("G_S_Scope_Assets","(Free_Search_Session:equals:" + sess + ")");
 	linked = 0;
 	for each a in found
 	{
 		if(a.get("Asset_Type") == "Deal Search")
 		{
 			up = Map();
-			up.put("Deal",dealId.toLong());
-			// The search scope is now attached to a real matter; promote it
-			// out of Draft so downstream views can tell captured-from-web
-			// scopes apart from ones a fee-earner has started working.
+			up.put("Deal",dealId);
+			// Attached to a real matter now - promote out of Draft so
+			// captured-from-web scopes and worked scopes are tellable apart.
 			up.put("Asset_Status","Active");
 			r = zoho.crm.updateRecord("G_S_Scope_Assets",a.get("id").toString().toLong(),up);
 			linked = linked + 1;
 			info "on_convert: asset " + a.get("id") + " -> deal " + dealId;
 		}
 	}
-	info "on_convert: lead " + leadId + " linked " + linked + " asset(s)";
+	info "on_convert: deal " + dealId + " session " + sess + " linked " + linked + " asset(s)";
 }
