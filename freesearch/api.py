@@ -99,6 +99,7 @@ _EMBED_JS = """(function(){
   var q='?tenant='+encodeURIComponent(t)+'&embed=1';
   if(page==='search-box'){
     if(s.dataset.variant) q+='&variant='+encodeURIComponent(s.dataset.variant);
+    if(s.dataset.style)   q+='&style='+encodeURIComponent(s.dataset.style);
     if(s.dataset.target)  q+='&target='+encodeURIComponent(s.dataset.target);
     if(s.dataset.journey) q+='&journey='+encodeURIComponent(s.dataset.journey);
   }
@@ -114,8 +115,8 @@ _EMBED_JS = """(function(){
   }catch(e){}
   var f=document.createElement('iframe');
   f.src=s.src.replace(/embed\\.js.*$/, page+q);
-  f.style.cssText='width:100%;min-height:'+(page==='search-box'?'200px':'640px')
-    +';border:0;display:block';
+  var minH = page==='search-box' ? (s.dataset.style==='bar'?'70px':'200px') : '640px';
+  f.style.cssText='width:100%;min-height:'+minH+';border:0;display:block';
   f.setAttribute('title','Free Trademark Search');
   f.setAttribute('loading','lazy');
   s.parentNode.insertBefore(f, s);
