@@ -1,4 +1,4 @@
-void automation.tmh_freesearch_on_convert(Int64 leadId)
+void automation.tmh_freesearch_on_convert(int leadId)
 {
 	// Lead conversion carry-through (Jonathan, 20 Aug 2026): "When a lead
 	// is converted, we need the classes and terms to carry through to the
