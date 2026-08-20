@@ -41,6 +41,40 @@ the embedded wizard automatically.
 Place each snippet wherever the box should render — it injects an iframe in
 place and auto-sizes its height. Nothing else is required.
 
+## Slim bar versions (same journeys, single-line)
+
+Add `data-style="bar"` and the widget renders as one line — just the input
+and the Search button, no card, no heading. For hero strips and banners
+where the page already provides the context. Identical logging and
+hand-off, so A/B numbers stay comparable with the boxed versions.
+
+**Bar — Free Search:**
+
+```html
+<script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="search-box"
+        data-variant="free"
+        data-style="bar"
+        data-target="https://www.thetrademarkhelpline.com/free-search/"
+        async></script>
+```
+
+**Bar — Quick Search:**
+
+```html
+<script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="search-box"
+        data-variant="quick"
+        data-style="bar"
+        data-target="https://www.thetrademarkhelpline.com/uk-trademark-quick-search/"
+        async></script>
+```
+
+The bar sits on a transparent background and stretches to its container's
+width — constrain it with the surrounding column/section as usual.
+Verified live 20 Aug: bar → session minted + name logged → hand-off to the
+domain wizard page with the session adopted.
+
 ## What each variant does
 
 | | Variant A (free) | Variant B (quick) |
