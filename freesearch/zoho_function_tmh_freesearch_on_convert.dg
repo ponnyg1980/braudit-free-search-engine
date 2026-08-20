@@ -1,0 +1,60 @@
+void automation.tmh_freesearch_on_convert(Int64 leadId)
+{
+	// Lead conversion carry-through (Jonathan, 20 Aug 2026): "When a lead
+	// is converted, we need the classes and terms to carry through to the
+	// Deal we create - which will usually be an Audit or a UK Trademark
+	// Application."
+	//
+	// The classes & terms already live on the lead's G S Scope Asset (one
+	// per lead, Asset Type "Deal Search") and its G S Scope Classes Terms
+	// rows. Carrying them is therefore ONE write: point the asset's Deal
+	// lookup at the converted Deal. The rows ride along with the asset —
+	// nothing is copied, so there is exactly one version of the truth for
+	// Deals and, later, Trademark records.
+	//
+	// Attach this function to a Leads workflow rule with the CONVERT
+	// trigger, argument mapping: leadId = Lead Id.
+	lead = zoho.crm.getRecordById("Leads",leadId);
+	if(lead == null)
+	{
+		info "on_convert: lead " + leadId + " not readable";
+		return;
+	}
+	dealId = "";
+	cd = lead.get("Converted_Deal");
+	if(cd != null)
+	{
+		if(cd.toString().contains("id"))
+		{
+			dealId = cd.get("id").toString();
+		}
+		else
+		{
+			dealId = cd.toString();
+		}
+	}
+	if(dealId == "")
+	{
+		// Converted to contact/account only — nothing to attach a scope to.
+		info "on_convert: lead " + leadId + " has no converted deal";
+		return;
+	}
+	found = zoho.crm.searchRecords("G_S_Scope_Assets","(Lead.id:equals:" + leadId + ")");
+	linked = 0;
+	for each a in found
+	{
+		if(a.get("Asset_Type") == "Deal Search")
+		{
+			up = Map();
+			up.put("Deal",dealId.toLong());
+			// The search scope is now attached to a real matter; promote it
+			// out of Draft so downstream views can tell captured-from-web
+			// scopes apart from ones a fee-earner has started working.
+			up.put("Asset_Status","Active");
+			r = zoho.crm.updateRecord("G_S_Scope_Assets",a.get("id").toString().toLong(),up);
+			linked = linked + 1;
+			info "on_convert: asset " + a.get("id") + " -> deal " + dealId;
+		}
+	}
+	info "on_convert: lead " + leadId + " linked " + linked + " asset(s)";
+}
