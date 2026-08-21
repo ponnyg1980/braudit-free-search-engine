@@ -346,9 +346,12 @@ class _Handler(BaseHTTPRequestHandler):
             # running a register search. Same spec_terms source of truth as
             # the search journey's scope capture.
             try:
-                from spec_terms import build_application_scope
-                rows = build_application_scope(payload.get('classes'),
-                                               payload.get('class_source'))
+                try:
+                    from . import spec_terms  # package context (Render)
+                except ImportError:
+                    import spec_terms         # bare-script context (local dev)
+                rows = spec_terms.build_application_scope(
+                    payload.get('classes'), payload.get('class_source'))
                 out = {'ok': True, 'application_scope': rows}
             except Exception as e:  # degrade loudly but JSON-shaped
                 out = {'ok': False, 'error': f'class-scope failed: {e}',
