@@ -417,12 +417,15 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		{
 			markM = " - " + scope.get("mark").toString();
 		}
-		// From matt@ (Jonathan, 21 Aug) — must be a VERIFIED sender in CRM
-		// email settings or Zoho rejects the save. enquiries@ gets every
-		// copy: the shared sales inbox sees what went out and follows up.
+		// Jonathan wants From matt@ — but Zoho only accepts zoho.loginuserid
+		// or a VERIFIED sender, and matt@ is not verified yet (rejected at
+		// save, 21 Aug). Once matt@ is verified in Setup > Channels > Email,
+		// change the from line to "matt@thetrademarkhelpline.com".
+		// enquiries@ gets every copy: the shared sales inbox sees what went
+		// out and follows up.
 		sendmail
 		[
-			from : "matt@thetrademarkhelpline.com"
+			from : zoho.loginuserid
 			to : emAll
 			cc : "enquiries@thetrademarkhelpline.com"
 			subject : "Your trademark classes & terms" + markM
