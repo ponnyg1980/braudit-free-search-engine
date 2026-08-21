@@ -417,10 +417,14 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		{
 			markM = " - " + scope.get("mark").toString();
 		}
+		// From matt@ (Jonathan, 21 Aug) — must be a VERIFIED sender in CRM
+		// email settings or Zoho rejects the save. enquiries@ gets every
+		// copy: the shared sales inbox sees what went out and follows up.
 		sendmail
 		[
-			from : zoho.loginuserid
+			from : "matt@thetrademarkhelpline.com"
 			to : emAll
+			cc : "enquiries@thetrademarkhelpline.com"
 			subject : "Your trademark classes & terms" + markM
 			message : "<p>Hello,</p><p>Attached are the trademark classes and specific terms you built with our Class Builder" + markM + ", as a CSV you can open in Excel or Google Sheets.</p><p>If you would like us to check the UK register for conflicts with these classes, or to file an application using them, call us on 0161 833 5400 or simply reply to this email.</p><p>The Trademark Helpline<br>Search. Register. Protect.</p>"
 			Attachments : file:csvF
