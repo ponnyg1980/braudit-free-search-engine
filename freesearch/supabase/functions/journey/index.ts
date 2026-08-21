@@ -276,6 +276,9 @@ const ZOHO_TIER: Record<string, string> = {
 };
 const ZOHO_EMAIL_SOURCE: Record<string, string> = {
   ai_gate: "AI Gate", report_form: "Report Form", resolver: "Resolver",
+  // Class Builder's send-me-my-classes form (21 Aug). Also the trigger the
+  // Deluge upsert uses to email the CSV back to the visitor.
+  class_tools: "Class Tools",
 };
 const ZOHO_SELLS: Record<string, string> = {
   premises: "Premises", own_site: "Own Website", marketplace: "Online Marketplace",
@@ -432,6 +435,21 @@ function zohoScopeBlock(session: Record<string, unknown>) {
   };
 }
 
+// The Class Builder visitor's selection as a CSV (one row per term) — sent
+// through the payload so the Deluge upsert can attach it to the "your
+// classes & terms" email. Built HERE because Deluge string literals cannot
+// express newlines; real \r\n survives JSON -> toMap().
+function classCsv(scope: { classes?: { n: number; label: string; terms?: string[] }[] }): string {
+  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = ["Class,Description,Term"];
+  for (const c of scope.classes ?? []) {
+    const terms = c.terms ?? [];
+    if (!terms.length) lines.push([esc(c.n), esc(c.label), '""'].join(","));
+    for (const t of terms) lines.push([esc(c.n), esc(c.label), esc(t)].join(","));
+  }
+  return lines.join("\r\n");
+}
+
 function splitLocations(codes: unknown): { mapped: string[]; unmapped: string[] } {
   const mapped: string[] = [], unmapped: string[] = [];
   for (const c of Array.isArray(codes) ? codes : []) {
@@ -528,10 +546,12 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
     // Rep-facing copy of the client's report (Jonathan, 21 Aug): a link
     // that re-opens THIS visitor's actual results screen on the domain —
     // available on every lead, whether or not they asked for the email.
-    Free_Search_Report_URL: (session.source === "quick_search"
-      ? "https://www.thetrademarkhelpline.com/uk-trademark-quick-search/"
-      : "https://www.thetrademarkhelpline.com/free-search/") +
-      `?fs=${sessionId}&screen=results`,
+    Free_Search_Report_URL: session.source === "class_tools"
+      ? `https://www.thetrademarkhelpline.com/class-builder/?fs=${sessionId}&screen=review`
+      : (session.source === "quick_search"
+        ? "https://www.thetrademarkhelpline.com/uk-trademark-quick-search/"
+        : "https://www.thetrademarkhelpline.com/free-search/") +
+        `?fs=${sessionId}&screen=results`,
     Free_Search_Class_Route: ZOHO_CLASS_ROUTE[csRoute] ||
       ((Array.isArray(session.classes) && session.classes.length)
         ? "Self Selected" : undefined),
@@ -554,7 +574,8 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
     Resale: ZOHO_RESALE[String(channels.resale ?? "")] || undefined,
     // "Website - Search" retired 20 Aug — the picklist now separates the
     // two wizards so reporting can tell a considered search from a quick one.
-    Lead_Source: session.source === "quick_search" ? "Quick Search" : "Free Search",
+    Lead_Source: session.source === "quick_search" ? "Quick Search"
+      : session.source === "class_tools" ? "Class Tools" : "Free Search",
     Lead_Source_Group: "Website Forms",
     // actual_value, not the "Consent - Obtained" display label
     Data_Processing_Basis: session.consent_marketing ? "Obtained"
@@ -649,7 +670,7 @@ serve(async (req) => {
     const { error } = await admin.from("journey_sessions").insert({
       session_id,
       tenant_id: tenant,
-      source: ["brand_audit_direct", "quick_search"].includes(String(body.source))
+      source: ["brand_audit_direct", "quick_search", "class_tools"].includes(String(body.source))
         ? String(body.source) : "free_search",
       name: body.name ?? null,
       trading_name: body.trading_name ?? null,
@@ -726,6 +747,7 @@ serve(async (req) => {
         (body.event_type === "lead_captured" && session.email) ||
         (body.event_type === "search_run" && session.email && !session.zoho_lead_id));
       if (givenContact) {
+        const scopeBlk = zohoScopeBlock(session);
         fireAndForget(ZOHO_FLOW_URL, zohoPayload("lead", {
           session_id, tenant_id: session.tenant_id, search_term: session.name,
           classes: session.classes, class_source: session.class_source,
@@ -735,7 +757,11 @@ serve(async (req) => {
           trading_now: session.trading_now, planning_to_trade: session.planning_to_trade,
           // Zoho-ready: Flow maps this object straight into the Leads upsert.
           zoho_fields: zohoLeadFields(session, session_id),
-          scope: zohoScopeBlock(session),
+          scope: scopeBlk,
+          // Class Builder sends: the Deluge upsert emails this back to the
+          // visitor as an attachment when Email_Source is Class Tools.
+          class_csv: session.email_source === "class_tools" && scopeBlk
+            ? classCsv(scopeBlk) : undefined,
         }, { zohoLeadId: session.zoho_lead_id, isNewRecord: !session.zoho_lead_id }));
       }
 
