@@ -699,6 +699,12 @@ const CONFIG = (function(){
     // 'fs' is the WordPress-safe alias for 's' (WP hijacks ?s= as site
     // search, 404ing the page — found 21 Aug). Both accepted here.
     RESUME_SESSION:q.get('s')||q.get('fs')||'', RESUME_SCREEN:q.get('screen')||'',
+    // Deal-scoped class builder (Jonathan, 21 Aug): opened from a Zoho
+    // Deal's "Build Classes & Terms" button with ?deal=<zoho deal id>.
+    // Every journey event then carries zoho_deal_id, which routes the
+    // completed search's classes & terms onto THAT Deal (and suppresses
+    // all lead creation server-side).
+    DEAL:q.get('deal')||'',
     RESUME_NAME:q.get('q')||'',
     // The journey Edge Function. Production default (param-overridable) —
     // relative same-origin calls 404 on the Render engine, which had been
@@ -905,6 +911,8 @@ function goToBrandAudit(){
   location.href=url;
 }
 function logEvent(type,screen,payload,includeSnapshot){
+  payload = payload||{};
+  if(CONFIG.DEAL) payload.zoho_deal_id = CONFIG.DEAL;
   ensureSession().then(function(id){
     if(!id) return; // dev/mock mode or the function is unreachable — never block the UI over it
     try{
@@ -2042,7 +2050,8 @@ async function beginSearch(){
   ensureSession().then(function(id){ if(!id)return;
     fetch(journeyBase()+'/session/event',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({session_id:id,event_type:'search_result',screen:'results',
-        payload:{},snapshot:{last_result:out.result,status:'search_completed'}}),
+        payload:CONFIG.DEAL?{zoho_deal_id:CONFIG.DEAL}:{},
+        snapshot:{last_result:out.result,status:'search_completed'}}),
       keepalive:true}).catch(()=>{});
   });
   pushScreen('results');
