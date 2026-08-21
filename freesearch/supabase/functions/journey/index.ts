@@ -325,6 +325,7 @@ const ZOHO_COUNTRY: Record<string, string> = {
   MU: "Mauritius", MV: "Maldives", MW: "Malawi", MX: "Mexico",
   MY: "Malaysia", MZ: "Mozambique", NA: "Namibia", NG: "Nigeria",
   NI: "Nicaragua", NL: "Netherlands", NO: "Norway", NP: "Nepal",
+  NZ: "New Zealand",
   OAPI: "OAPI", OM: "Oman", PA: "Panama", PE: "Peru",
   PG: "Papua New Guinea", PH: "Philippines", PK: "Pakistan", PL: "Poland",
   PT: "Portugal", PY: "Paraguay", QA: "Qatar", RO: "Romania",
