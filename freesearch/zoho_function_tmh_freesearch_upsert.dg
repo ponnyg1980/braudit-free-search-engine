@@ -405,5 +405,27 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 			scopeNote = ":scope=" + assetId + ":rows+" + madeRows;
 		}
 	}
+	// ------- Class Builder: email the visitor their selection (21 Aug) ----
+	// "I would send them an email with a csv" — the journey pre-builds the
+	// CSV (Deluge string literals cannot hold newlines); this just attaches
+	// and sends. Only fires for Class Tools sends, never for searches.
+	if(payload.get("class_csv") != null && emAll != "" && fields.get("Email_Source") != null && fields.get("Email_Source") == "Class Tools")
+	{
+		csvF = payload.get("class_csv").toString().toFile("trademark-classes.csv");
+		markM = "";
+		if(scope != null && scope.get("mark") != null && scope.get("mark") != "")
+		{
+			markM = " - " + scope.get("mark").toString();
+		}
+		sendmail
+		[
+			from : zoho.adminuserid
+			to : emAll
+			subject : "Your trademark classes & terms" + markM
+			message : "<p>Hello,</p><p>Attached are the trademark classes and specific terms you built with our Class Builder" + markM + ", as a CSV you can open in Excel or Google Sheets.</p><p>If you would like us to check the UK register for conflicts with these classes, or to file an application using them, call us on 0161 833 5400 or simply reply to this email.</p><p>The Trademark Helpline<br>Search. Register. Protect.</p>"
+			Attachments : file:csvF
+		]
+		scopeNote = scopeNote + ":csv_emailed";
+	}
 	return "ok:" + leadId + ":new=" + isNew + scopeNote;
 }
