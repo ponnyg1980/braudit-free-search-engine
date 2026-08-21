@@ -16,6 +16,134 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		return "no body";
 	}
 	payload = bodyRaw.toString().toMap();
+	// ------- Deal-scoped class builder (21 Aug) -------
+	// A search opened from a Deal's "Build Classes & Terms" button sends a
+	// scope-only payload with zoho_deal_id: classes & UKIPO terms go straight
+	// onto THAT Deal as a scope asset. No lead is read or written.
+	dealTgt = "";
+	if(payload.get("zoho_deal_id") != null)
+	{
+		dealTgt = payload.get("zoho_deal_id").toString();
+	}
+	if(dealTgt != "")
+	{
+		scopeD = payload.get("scope");
+		if(scopeD == null)
+		{
+			return "deal:no scope";
+		}
+		markD = "";
+		if(scopeD.get("mark") != null)
+		{
+			markD = scopeD.get("mark").toString();
+		}
+		nameD = "Class Builder - " + markD;
+		if(nameD.length() > 100)
+		{
+			nameD = nameD.subString(0,100);
+		}
+		sessD = "";
+		if(payload.get("session_id") != null)
+		{
+			sessD = payload.get("session_id").toString();
+		}
+		// One asset per (deal, mark): re-running the button for the same
+		// mark updates its rows instead of breeding duplicates.
+		assetD = "";
+		foundD = zoho.crm.searchRecords("G_S_Scope_Assets","(Deal.id:equals:" + dealTgt + ")");
+		for each ad in foundD
+		{
+			if(assetD == "" && ad.get("Asset_Type") == "Deal Search" && ad.get("Name") == nameD)
+			{
+				assetD = ad.get("id").toString();
+			}
+		}
+		if(assetD == "")
+		{
+			amD = Map();
+			amD.put("Name",nameD);
+			amD.put("Deal",dealTgt.toLong());
+			amD.put("Asset_Type","Deal Search");
+			amD.put("Asset_Status","Active");
+			if(sessD != "")
+			{
+				amD.put("Free_Search_Session",sessD);
+			}
+			caD = zoho.crm.createRecord("G_S_Scope_Assets",amD);
+			if(caD.get("id") != null)
+			{
+				assetD = caD.get("id").toString();
+			}
+			else
+			{
+				info caD;
+				return "deal:asset create failed";
+			}
+		}
+		existingD = Map();
+		foundRD = zoho.crm.searchRecords("G_S_Scope_Classes_Terms","(Scope_Asset.id:equals:" + assetD + ")");
+		for each rd in foundRD
+		{
+			if(rd.get("Nice_Class_Number_Snapshot") != null)
+			{
+				existingD.put(rd.get("Nice_Class_Number_Snapshot").toString(),rd.get("id").toString());
+			}
+		}
+		madeD = 0;
+		clsD = scopeD.get("classes");
+		if(clsD != null)
+		{
+			for each cd in clsD
+			{
+				nD = cd.get("n");
+				if(nD != null)
+				{
+					nnD = nD.toString();
+					if(nD.toLong() < 10)
+					{
+						nnD = "0" + nnD;
+					}
+					termsD = "";
+					if(cd.get("terms_text") != null)
+					{
+						termsD = cd.get("terms_text").toString();
+					}
+					rMapD = Map();
+					rMapD.put("Nice_Class_Number_Snapshot",nD.toLong());
+					rMapD.put("Nice_Class_Reference",1964745000114603017 + nD.toLong());
+					if(cd.get("label") != null)
+					{
+						rMapD.put("Class_Description_Snapshot",cd.get("label").toString());
+					}
+					if(termsD != "")
+					{
+						rMapD.put("Specific_Terms",termsD);
+					}
+					if(existingD.get(nnD.toLong().toString()) != null)
+					{
+						ridD = existingD.get(nnD.toLong().toString());
+						urD = zoho.crm.updateRecord("G_S_Scope_Classes_Terms",ridD.toLong(),rMapD);
+					}
+					else
+					{
+						rowNameD = "Class " + nnD + " - " + markD;
+						if(rowNameD.length() > 100)
+						{
+							rowNameD = rowNameD.subString(0,100);
+						}
+						rMapD.put("Name",rowNameD);
+						rMapD.put("Scope_Asset",assetD.toLong());
+						crD = zoho.crm.createRecord("G_S_Scope_Classes_Terms",rMapD);
+						if(crD.get("id") != null)
+						{
+							madeD = madeD + 1;
+						}
+					}
+				}
+			}
+		}
+		return "ok:deal:" + dealTgt + ":scope=" + assetD + ":rows+" + madeD;
+	}
 	fields = payload.get("zoho_fields");
 	if(fields == null)
 	{
