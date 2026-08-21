@@ -68,6 +68,13 @@ _PAGES = {
     # The short wizard (Name -> Classes -> Results). Same file — the page
     # switches itself into quick mode from the pathname.
     '/uk-trademark-quick-search': 'free-search.html',
+    # Standalone Class Builder (Jonathan, 21 Aug): Name -> Classes ->
+    # Review & Send. Same file again — builder mode from the pathname. No
+    # register search: the class tools feed a review screen where classes,
+    # descriptions and UKIPO terms are amended, then SENT (to a Deal's
+    # Classes & Terms when opened from Zoho, or emailed as a CSV to a new
+    # Class Tools lead from the public site).
+    '/class-builder': 'free-search.html',
     '/class-assistant': 'class-assistant.html',
     '/search-bar': 'search-bar.html',
     '/search-box': 'search-box.html',          # compact drop-anywhere entry point
@@ -304,7 +311,8 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.rstrip('/')
-        if path not in ('/free-search', '/enrich', '/suggest-classes', '/read-website'):
+        if path not in ('/free-search', '/enrich', '/suggest-classes', '/read-website',
+                        '/class-scope'):
             self._send({'ok': False, 'error': 'not found'}, 404)
             return
         if not self._engine_key_ok():
@@ -332,6 +340,19 @@ class _Handler(BaseHTTPRequestHandler):
             out = handle_suggest_classes(payload)
         elif path == '/read-website':
             out = handle_read_website(payload)
+        elif path == '/class-scope':
+            # Class Builder's review screen: the application-grade selection
+            # (official Nice headings + registered-vocabulary terms) WITHOUT
+            # running a register search. Same spec_terms source of truth as
+            # the search journey's scope capture.
+            try:
+                from spec_terms import build_application_scope
+                rows = build_application_scope(payload.get('classes'),
+                                               payload.get('class_source'))
+                out = {'ok': True, 'application_scope': rows}
+            except Exception as e:  # degrade loudly but JSON-shaped
+                out = {'ok': False, 'error': f'class-scope failed: {e}',
+                       'status': 500}
         else:
             out = handle_free_search(payload, _make_client())
         self._send(out, out.get('status', 200))
