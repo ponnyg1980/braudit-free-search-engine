@@ -109,8 +109,11 @@ _EMBED_JS = """(function(){
   // starting over. Only the known resume keys pass through.
   try{
     var hp=new URLSearchParams(window.location.search);
-    ['s','screen','q','journey','searchbase'].forEach(function(k){
-      var v=hp.get(k); if(v) q+='&'+k+'='+encodeURIComponent(v);
+    // 'fs' is the WordPress-safe alias for the session param: WP reserves
+    // ?s= for site search and 404s page URLs carrying it (21 Aug). The
+    // host page uses fs; the iframe wizard still receives s.
+    ['s','fs','screen','q','journey','searchbase'].forEach(function(k){
+      var v=hp.get(k); if(v) q+='&'+(k==='fs'?'s':k)+'='+encodeURIComponent(v);
     });
   }catch(e){}
   var f=document.createElement('iframe');
