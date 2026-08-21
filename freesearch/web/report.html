@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Trademark Search Report — The Trademark Helpline</title>
+<!--
+  Free / Quick Search full report (Jonathan, 21 Aug 2026): "The reports which
+  are emailed are supposed to have the full results within them. Use the
+  Sector Reports Tailored Search report as a guide for design and layout. We
+  create it as a unique URL to a webpage, which can be downloaded."
+
+  Design lifted from Sample Report - Maple & Birch (Survey 1).html — navy
+  header with the skewed accent, scoreband, numbered pink-eyebrow sections,
+  stat cards, gradient CTA, print stylesheet (Download = browser print-to-PDF).
+
+  The unique URL is the journey session id: /search-report/?fs=<session> (or
+  /report/<session> on this host). Everything renders client-side from the
+  journey session row — the same stored result the visitor saw, so the page,
+  the email and the Zoho record can never disagree.
+-->
+<style>
+  :root{
+    --pink:#E91E63; --navy:#0A1F33; --blue:#1F4E79; --blue2:#2B5C8A;
+    --ink:#16222e; --muted:#5b6b7a; --line:#e3e8ee; --bg:#f4f6f9;
+    --amber:#c0392b; --orange:#c87f0a; --green:#1e8e5a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); line-height:1.55; -webkit-font-smoothing:antialiased;}
+  .page{max-width:880px; margin:24px auto; background:#fff; box-shadow:0 6px 30px rgba(10,31,51,.10);}
+
+  .dlbar{max-width:880px; margin:18px auto 0; display:flex; justify-content:flex-end; padding:0 4px;}
+  .dlbtn{background:var(--navy); color:#fff; border:0; padding:11px 20px; font-weight:700;
+    font-size:14px; cursor:pointer; transform:skewX(-12deg);}
+  .dlbtn span{display:inline-block; transform:skewX(12deg);}
+
+  header{position:relative; background:var(--navy); color:#fff; padding:30px 40px 34px; overflow:hidden;}
+  header:after{content:""; position:absolute; right:-60px; top:0; bottom:0; width:240px;
+    background:linear-gradient(120deg,var(--blue) 0%,var(--blue2) 100%); transform:skewX(-12deg);}
+  .brandrow{display:flex; align-items:center; gap:14px; position:relative; z-index:2;}
+  .mark{display:inline-flex; align-items:center; justify-content:center; width:46px; height:46px;
+    background:var(--pink); color:#fff; font-weight:800; font-size:18px; transform:skewX(-12deg);}
+  .mark span{transform:skewX(12deg);}
+  .brandname{font-weight:700; font-size:15px;}
+  .brandname small{display:block; font-weight:400; opacity:.75; font-size:12px; letter-spacing:.06em; text-transform:uppercase;}
+  .report-title{position:relative; z-index:2; margin-top:22px; font-size:13px; letter-spacing:.18em;
+    text-transform:uppercase; opacity:.85;}
+  .client{position:relative; z-index:2; font-size:30px; font-weight:800; margin:2px 0 0; line-height:1.15;}
+  .client small{display:block; font-size:14px; font-weight:400; opacity:.8; margin-top:6px;}
+
+  .scoreband{display:flex; align-items:stretch; border-bottom:1px solid var(--line);}
+  .scorebox{flex:0 0 220px; background:var(--amber); color:#fff; padding:22px 26px;
+    display:flex; flex-direction:column; justify-content:center;}
+  .scorebox.green{background:var(--green);} .scorebox.orange{background:var(--orange);}
+  .scorebox .lab{font-size:12px; letter-spacing:.14em; text-transform:uppercase; opacity:.9;}
+  .scorebox .val{font-size:40px; font-weight:800; line-height:1; margin-top:4px;}
+  .scorebox .scale{font-size:12px; opacity:.9; margin-top:8px;}
+  .scoreline{flex:1; padding:22px 28px; display:flex; align-items:center; font-size:16px; font-weight:600;}
+
+  section{padding:26px 40px; border-bottom:1px solid var(--line);}
+  h2{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--pink); margin:0 0 14px;}
+  h2 .n{color:var(--muted); margin-right:8px;}
+  p{margin:0 0 12px;}
+  .lead{font-size:16px;}
+
+  .stats{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:18px;}
+  .stat{flex:1 1 130px; background:var(--bg); border:1px solid var(--line); padding:14px 16px;}
+  .stat .big{font-size:26px; font-weight:800; color:var(--navy);}
+  .stat.hi .big{color:var(--amber);} .stat.med .big{color:var(--orange);} .stat.lo .big{color:var(--green);}
+  .stat .cap{font-size:12.5px; color:var(--muted); margin-top:2px;}
+
+  table{width:100%; border-collapse:collapse; font-size:13.5px; margin-top:6px;}
+  th{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+    text-align:left; padding:8px 10px; border-bottom:2px solid var(--line); background:var(--bg);}
+  td{padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
+  .chip{display:inline-block; font-size:11px; font-weight:800; letter-spacing:.04em; padding:3px 9px;
+    text-transform:uppercase; color:#fff; background:var(--muted); white-space:nowrap;}
+  .chip.hi{background:var(--amber);} .chip.med{background:var(--orange);} .chip.lo{background:var(--green);}
+  .markname{font-weight:700; color:var(--navy);}
+
+  .clsblock{border:1px solid var(--line); padding:14px 18px; margin:0 0 12px; background:#fff;}
+  .clsblock h3{margin:0 0 4px; font-size:15px; color:var(--navy);}
+  .clsblock .heading{font-size:13px; color:#33424f; margin-bottom:8px;}
+  .terms{font-size:12.5px; color:var(--muted); line-height:1.7;}
+
+  .disc{font-size:12.5px; color:var(--muted); font-style:italic; margin-top:8px;}
+
+  .cta{background:linear-gradient(120deg,var(--navy),var(--blue)); color:#fff; padding:28px 40px; border-bottom:none;}
+  .cta h2{color:#fff; opacity:.85;}
+  .cta h3{margin:0 0 6px; font-size:22px;}
+  .cta p{opacity:.92; max-width:560px;}
+  .btns{display:flex; gap:12px; flex-wrap:wrap; margin-top:16px;}
+  .btn{display:inline-block; padding:13px 22px; font-weight:700; font-size:14.5px; text-decoration:none; transform:skewX(-12deg);}
+  .btn span{display:inline-block; transform:skewX(12deg);}
+  .btn.primary{background:var(--pink); color:#fff;}
+  .btn.ghost{background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.5);}
+
+  footer{padding:18px 40px 26px; font-size:11.5px; color:var(--muted); line-height:1.5;}
+
+  .loading,.errbox{max-width:880px;margin:60px auto;text-align:center;color:var(--muted);font-size:15px;}
+  .hidden{display:none;}
+
+  @media print{
+    body{background:#fff;}
+    .page{box-shadow:none; margin:0; max-width:none;}
+    .dlbar{display:none;}
+    a{color:inherit; text-decoration:none;}
+    tr{page-break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+
+<div class="loading" id="loading">Preparing your report&hellip;</div>
+<div class="errbox hidden" id="errbox">We could not find that report. The link may be incomplete &mdash;
+  please use the link from your email, or call us on 0161&nbsp;833&nbsp;5400.</div>
+
+<div class="dlbar hidden" id="dlbar">
+  <button class="dlbtn" onclick="window.print()"><span>Download this report (PDF)</span></button>
+</div>
+
+<div class="page hidden" id="page">
+  <header>
+    <div class="brandrow">
+      <span class="mark"><span>TH</span></span>
+      <span class="brandname">The Trademark Helpline<small>Search. Register. Protect.</small></span>
+    </div>
+    <div class="report-title" id="rpt-kind">Free Trademark Search Report</div>
+    <h1 class="client" id="rpt-name">&mdash;<small id="rpt-sub"></small></h1>
+  </header>
+
+  <div class="scoreband">
+    <div class="scorebox" id="scorebox">
+      <div class="lab">Registrability</div>
+      <div class="val" id="rpt-score">&mdash;</div>
+      <div class="scale" id="rpt-tier"></div>
+    </div>
+    <div class="scoreline" id="rpt-headline"></div>
+  </div>
+
+  <section>
+    <h2><span class="n">01</span> Our opinion</h2>
+    <div id="rpt-opinion"></div>
+  </section>
+
+  <section>
+    <h2><span class="n">02</span> What we found on the register</h2>
+    <div class="stats">
+      <div class="stat"><div class="big" id="st-flagged">&mdash;</div><div class="cap">marks flagged in total</div></div>
+      <div class="stat hi"><div class="big" id="st-high">&mdash;</div><div class="cap">high risk</div></div>
+      <div class="stat med"><div class="big" id="st-med">&mdash;</div><div class="cap">medium risk</div></div>
+      <div class="stat lo"><div class="big" id="st-low">&mdash;</div><div class="cap">low risk</div></div>
+    </div>
+    <p class="lead" id="rpt-searched"></p>
+    <table id="rpt-table">
+      <thead><tr><th>Risk</th><th>Mark</th><th>Type</th><th>Status</th></tr></thead>
+      <tbody id="rpt-rows"></tbody>
+    </table>
+    <p class="disc" id="rpt-trunc"></p>
+  </section>
+
+  <section id="sec-classes">
+    <h2><span class="n">03</span> Your classes &amp; specifications</h2>
+    <p>Trademarks are registered against classes of goods and services. These are the classes you
+      chose, with specific terms drawn from marks already registered at the UKIPO.</p>
+    <div id="rpt-classes"></div>
+  </section>
+
+  <section id="sec-disc">
+    <h2><span class="n">04</span> What this search does and doesn&rsquo;t cover</h2>
+    <div id="rpt-disclaimers"></div>
+  </section>
+
+  <div class="cta">
+    <h2>What to do next</h2>
+    <h3 id="cta-head">Turn this search into a plan</h3>
+    <p>A search tells you what is on the register today. A Brand Audit tells you what to do about
+      it &mdash; across marketplaces, social media, domains and the territories that matter to you
+      &mdash; and an application secures the name before someone else does.</p>
+    <div class="btns">
+      <a class="btn primary" href="https://www.thetrademarkhelpline.com/make-an-enquiry/"><span>Request a Brand Audit &mdash; &pound;99 &rarr;</span></a>
+      <a class="btn ghost" href="tel:+441618335400"><span>Call us &mdash; 0161 833 5400</span></a>
+    </div>
+  </div>
+
+  <footer id="rpt-footer">
+    The Trademark Helpline has supported UK businesses since 2008. This report reflects the United
+    Kingdom trademark register at the date of the search shown above. It is provided for general
+    guidance and is not legal advice; a word-similarity search of this kind is indicative, not
+    exhaustive, and trademark rights are territorial.
+  </footer>
+</div>
+
+<script>
+/* Embedded on the WordPress site the report lives in an iframe that embed.js
+   resizes from brauditHeight messages — same contract as the wizard. */
+(function(){
+  if(window.parent===window) return;
+  var last=0;
+  function send(){ var h=document.documentElement.scrollHeight;
+    if(Math.abs(h-last)<4) return; last=h;
+    try{ window.parent.postMessage({brauditHeight:h},'*'); }catch(e){} }
+  new MutationObserver(send).observe(document.documentElement,{childList:true,subtree:true,attributes:true});
+  window.addEventListener('load',send); setInterval(send,800);
+})();
+(function(){
+  var q = new URLSearchParams(location.search);
+  var sid = q.get('fs') || q.get('s') || '';
+  if(!sid){
+    // /report/<uuid> pretty-URL form on the engine host.
+    var m = location.pathname.match(/\/report\/([0-9a-f-]{20,})/i);
+    if(m) sid = m[1];
+  }
+  var JOURNEY = q.get('journey') || 'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey';
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function fail(){ document.getElementById('loading').classList.add('hidden');
+    document.getElementById('errbox').classList.remove('hidden'); }
+  if(!sid){ fail(); return; }
+
+  fetch(JOURNEY + '/session?id=' + encodeURIComponent(sid))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!(d && d.ok && d.session)) { fail(); return; }
+      render(d.session);
+    }).catch(fail);
+
+  function riskCls(r){ r = String(r||'').toLowerCase();
+    if(r.indexOf('high')>=0) return 'hi'; if(r.indexOf('med')>=0) return 'med';
+    if(r.indexOf('low')>=0) return 'lo'; return ''; }
+
+  function render(s){
+    var lr = s.last_result || {};
+    var sum = lr.summary || {};
+    var vb  = lr.viability || {};
+    var quick = s.source === 'quick_search';
+    document.getElementById('rpt-kind').textContent =
+      quick ? 'UK Trademark Quick Search Report' : 'Free Trademark Search Report';
+    document.title = (s.name ? s.name + ' — ' : '') + 'Trademark Search Report — The Trademark Helpline';
+
+    var who = [];
+    var person = [s.first_name, s.last_name].filter(Boolean).join(' ');
+    if(person) who.push('Prepared for ' + person);
+    if(s.business_name) who.push(s.business_name);
+    var when = (s.updated_at || s.created_at || '').slice(0,10);
+    if(when){ var dt = new Date(when);
+      who.push(dt.toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'})); }
+    document.getElementById('rpt-name').firstChild.textContent = s.name || 'Your search';
+    document.getElementById('rpt-sub').textContent = who.join(' · ');
+
+    var score = (vb.score != null) ? vb.score + '%' : '—';
+    document.getElementById('rpt-score').textContent = score;
+    var tier = vb.tier ? String(vb.tier) : '';
+    document.getElementById('rpt-tier').textContent = tier ? ('Verdict: ' + tier.charAt(0).toUpperCase()+tier.slice(1)) : '';
+    document.getElementById('rpt-headline').textContent = vb.headline || '';
+    var sb = document.getElementById('scorebox');
+    if(typeof vb.score === 'number'){
+      if(vb.score >= 70) sb.classList.add('green');
+      else if(vb.score >= 45) sb.classList.add('orange');
+    }
+
+    var op = document.getElementById('rpt-opinion');
+    (Array.isArray(vb.body) ? vb.body : []).forEach(function(par){
+      if(typeof par !== 'string') return;
+      var p = document.createElement('p'); p.textContent = par; op.appendChild(p);
+    });
+    if(!op.children.length){ var p0=document.createElement('p');
+      p0.textContent='See the register findings below.'; op.appendChild(p0); }
+
+    document.getElementById('st-flagged').textContent = sum.total_flagged != null ? sum.total_flagged : '—';
+    document.getElementById('st-high').textContent = sum.high != null ? sum.high : '—';
+    document.getElementById('st-med').textContent = sum.medium != null ? sum.medium : '—';
+    document.getElementById('st-low').textContent = sum.low != null ? sum.low : '—';
+
+    var rows = Array.isArray(lr.report_rows) && lr.report_rows.length ? lr.report_rows
+             : (Array.isArray(lr.all_results) && lr.all_results ? lr.all_results
+             : (Array.isArray(lr.top_results) ? lr.top_results : []));
+    var qy = lr.query || {};
+    document.getElementById('rpt-searched').textContent =
+      'We searched the ' + (lr.searched_office || 'UK IPO') + ' register for “' + (s.name||'') +
+      '”' + (Array.isArray(qy.classes) && qy.classes.length ? ' in class' +
+      (qy.classes.length>1?'es ':' ') + qy.classes.join(', ') : '') + '. ' +
+      (rows.length ? 'Every flagged mark is listed below.' : 'No conflicting marks were flagged.');
+
+    var tb = document.getElementById('rpt-rows');
+    rows.forEach(function(r){
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td><span class="chip ' + riskCls(r.risk) + '">' + esc(r.risk||'—') +
+        '</span></td><td class="markname">' + esc(r.mark) + '</td><td>' + esc(r.type||'—') +
+        '</td><td>' + esc(r.status||'—') + '</td>';
+      tb.appendChild(tr);
+    });
+    if(!rows.length) document.getElementById('rpt-table').classList.add('hidden');
+    if(sum.total_flagged > rows.length && rows.length){
+      document.getElementById('rpt-trunc').textContent =
+        'Showing the ' + rows.length + ' closest of ' + sum.total_flagged +
+        ' flagged marks (searches run before the full-report upgrade stored only the shortlist — re-run the search for the complete list).';
+    }
+
+    var cls = document.getElementById('rpt-classes');
+    var scope = Array.isArray(lr.application_scope) ? lr.application_scope : [];
+    if(scope.length){
+      scope.forEach(function(c){
+        var b = document.createElement('div'); b.className='clsblock';
+        b.innerHTML = '<h3>Class ' + esc(c.n) + '</h3>' +
+          (c.heading ? '<div class="heading">' + esc(c.heading) + '</div>' : '') +
+          (Array.isArray(c.terms) && c.terms.length
+            ? '<div class="terms">' + c.terms.map(esc).join(' · ') + '</div>' : '');
+        cls.appendChild(b);
+      });
+    } else if (Array.isArray(s.classes) && s.classes.length){
+      var b2 = document.createElement('div'); b2.className='clsblock';
+      b2.innerHTML = '<h3>Classes ' + s.classes.map(esc).join(', ') + '</h3>';
+      cls.appendChild(b2);
+    } else {
+      document.getElementById('sec-classes').classList.add('hidden');
+    }
+
+    var dsc = document.getElementById('rpt-disclaimers');
+    var ds = Array.isArray(lr.disclaimers) ? lr.disclaimers : [];
+    if(ds.length){ ds.forEach(function(t){ if(typeof t !== 'string') return;
+      var p = document.createElement('p'); p.className='disc'; p.style.fontStyle='normal';
+      p.style.fontSize='13px'; p.style.color='#33424f'; p.textContent = t; dsc.appendChild(p); }); }
+    else document.getElementById('sec-disc').classList.add('hidden');
+
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('dlbar').classList.remove('hidden');
+    document.getElementById('page').classList.remove('hidden');
+  }
+})();
+</script>
+</body>
+</html>
