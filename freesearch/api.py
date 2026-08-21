@@ -112,7 +112,7 @@ _EMBED_JS = """(function(){
     // 'fs' is the WordPress-safe alias for the session param: WP reserves
     // ?s= for site search and 404s page URLs carrying it (21 Aug). The
     // host page uses fs; the iframe wizard still receives s.
-    ['s','fs','screen','q','journey','searchbase'].forEach(function(k){
+    ['s','fs','screen','q','journey','searchbase','deal'].forEach(function(k){
       var v=hp.get(k); if(v) q+='&'+(k==='fs'?'s':k)+'='+encodeURIComponent(v);
     });
   }catch(e){}
