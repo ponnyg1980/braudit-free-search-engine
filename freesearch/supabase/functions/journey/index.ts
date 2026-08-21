@@ -708,9 +708,23 @@ serve(async (req) => {
       // Without the second trigger an AI-gate session was invisible: its
       // email blocked the resolver fallback below (correctly — a given
       // address beats a found one) but nothing else ever fired.
-      const givenContact =
+      // Deal-scoped class builder (Jonathan, 21 Aug): the wizard opened
+      // from a Zoho Deal's button stamps zoho_deal_id on every event. Such
+      // a session pushes its scope onto THAT Deal (below) and must never
+      // create or update a Lead, nor run the resolver.
+      const dealMarker = body.payload && typeof body.payload === "object"
+        ? (body.payload as Record<string, unknown>).zoho_deal_id : undefined;
+      if (dealMarker && body.event_type === "search_result") {
+        fireAndForget(ZOHO_FLOW_URL, zohoPayload("lead", {
+          session_id, tenant_id: session.tenant_id, search_term: session.name,
+          zoho_deal_id: String(dealMarker),
+          scope: zohoScopeBlock(session),
+        }));
+      }
+
+      const givenContact = !dealMarker && (
         (body.event_type === "lead_captured" && session.email) ||
-        (body.event_type === "search_run" && session.email && !session.zoho_lead_id);
+        (body.event_type === "search_run" && session.email && !session.zoho_lead_id));
       if (givenContact) {
         fireAndForget(ZOHO_FLOW_URL, zohoPayload("lead", {
           session_id, tenant_id: session.tenant_id, search_term: session.name,
@@ -733,7 +747,8 @@ serve(async (req) => {
       // actually executes. Guarded so it never re-runs on a session that's
       // already been resolved (enrichment_status set) or that already has a
       // real channel (email/phone) or a Zoho record (zoho_lead_id).
-      if (body.event_type === "search_run" && !session.email && !session.phone &&
+      if (!dealMarker &&
+          body.event_type === "search_run" && !session.email && !session.phone &&
           !session.zoho_lead_id && !session.enrichment_status && session.name) {
         const { found, engineResult } = await runEnrichment(session);
         if (found) {
