@@ -525,6 +525,13 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
         });
       return rows.length ? rows.join("\n").slice(0, 1990) : undefined;
     })(),
+    // Rep-facing copy of the client's report (Jonathan, 21 Aug): a link
+    // that re-opens THIS visitor's actual results screen on the domain —
+    // available on every lead, whether or not they asked for the email.
+    Free_Search_Report_URL: (session.source === "quick_search"
+      ? "https://www.thetrademarkhelpline.com/uk-trademark-quick-search/"
+      : "https://www.thetrademarkhelpline.com/free-search/") +
+      `?s=${sessionId}&screen=results`,
     Free_Search_Class_Route: ZOHO_CLASS_ROUTE[csRoute] ||
       ((Array.isArray(session.classes) && session.classes.length)
         ? "Self Selected" : undefined),
