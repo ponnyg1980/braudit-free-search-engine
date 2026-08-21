@@ -75,6 +75,12 @@ _PAGES = {
     # Classes & Terms when opened from Zoho, or emailed as a CSV to a new
     # Class Tools lead from the public site).
     '/class-builder': 'free-search.html',
+    # Full search report at a unique URL (Jonathan, 21 Aug): the emailed
+    # Free/Quick Search reports link here; the page renders the COMPLETE
+    # stored result (all flagged marks) in the Sector-Report design and
+    # offers a print-to-PDF download. /report/<session> also works — see
+    # the startswith route in do_GET.
+    '/search-report': 'report.html',
     '/class-assistant': 'class-assistant.html',
     '/search-bar': 'search-bar.html',
     '/search-box': 'search-box.html',          # compact drop-anywhere entry point
@@ -271,8 +277,10 @@ class _Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip('/')
         params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
-        if path in _PAGES:
-            page = os.path.join(_WEB, _PAGES[path])
+        if path in _PAGES or path.startswith('/report/'):
+            # /report/<session-uuid> is the pretty unique-URL form of the
+            # search report; the page reads the id from the path itself.
+            page = os.path.join(_WEB, _PAGES.get(path, 'report.html'))
             try:
                 with open(page, 'rb') as f:
                     self._send_raw(f.read(), 'text/html; charset=utf-8')
