@@ -161,7 +161,11 @@ function submit(){
     u.searchParams.set('tenant', CONFIG.TENANT_ID);
     u.searchParams.set('screen', CONFIG.SCREEN);    // marks (free) / classes (quick)
     u.searchParams.set('journey', CONFIG.JOURNEY);  // keep logging wired after hand-off
-    if(sid) u.searchParams.set('s', sid);
+    // 'fs', not 's': WordPress reserves ?s= for its own site search and
+    // 404s any page URL carrying it (found 21 Aug — the domain hand-off
+    // died). embed.js translates fs -> s for the iframe; the wizard also
+    // accepts fs directly.
+    if(sid) u.searchParams.set('fs', sid);
     else    u.searchParams.set('q', name);          // no session? at least carry the name
     handOff(u.toString());
   };
