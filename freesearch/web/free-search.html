@@ -696,7 +696,9 @@ const CONFIG = (function(){
     //
     // Empty SEARCH_BASE = same-origin = ungated. Set it at go-live.
     SEARCH_BASE:q.get('searchbase')||'',
-    RESUME_SESSION:q.get('s')||'', RESUME_SCREEN:q.get('screen')||'',
+    // 'fs' is the WordPress-safe alias for 's' (WP hijacks ?s= as site
+    // search, 404ing the page — found 21 Aug). Both accepted here.
+    RESUME_SESSION:q.get('s')||q.get('fs')||'', RESUME_SCREEN:q.get('screen')||'',
     RESUME_NAME:q.get('q')||'',
     // The journey Edge Function. Production default (param-overridable) —
     // relative same-origin calls 404 on the Render engine, which had been
