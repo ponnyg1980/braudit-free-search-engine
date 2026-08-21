@@ -72,9 +72,17 @@ void automation.tmh_freesearch_on_convert(int dealId)
 			anyTick = true;
 		}
 	}
-	// Which asset claims the conversion deal: the session-matched
-	// proceeding brand if there is one, else the first proceeding brand,
-	// else (legacy) the session-matched asset.
+	// Which asset claims the conversion deal. Priority (fixed 21 Aug after
+	// the first real conversion crossed brands): 1) the brand NAMED in the
+	// deal the rep created at conversion — the rep's naming is intent;
+	// 2) the session-matched proceeding brand (the lead's session field is
+	// just the LATEST search, so this is only a fallback); 3) the first
+	// proceeding brand; legacy untucked flow unchanged.
+	dealNameLc = "";
+	if(deal.get("Deal_Name") != null)
+	{
+		dealNameLc = deal.get("Deal_Name").toString().toLowerCase();
+	}
 	convAssetId = "";
 	firstGo = "";
 	for each a in sibs
@@ -109,6 +117,16 @@ void automation.tmh_freesearch_on_convert(int dealId)
 				if(firstGo == "")
 				{
 					firstGo = a.get("id").toString();
+				}
+				brandLc = a.get("Name").toString().toLowerCase();
+				if(brandLc.contains("free search - "))
+				{
+					brandLc = brandLc.getSuffix("free search - ");
+				}
+				if(brandLc != "" && dealNameLc.contains(brandLc))
+				{
+					// Rep named this brand in the conversion deal — hard claim.
+					convAssetId = a.get("id").toString();
 				}
 				aSess2 = "";
 				if(a.get("Free_Search_Session") != null)
@@ -198,6 +216,14 @@ void automation.tmh_freesearch_on_convert(int dealId)
 					nd = zoho.crm.createRecord("Deals",dMap);
 					if(nd.get("id") != null)
 					{
+						// Zoho ignores Pipeline/Stage on CREATE and applies the
+						// layout default (proven 21 Aug: an Audit fan-out deal
+						// arrived as UK Trademark Application). An UPDATE
+						// applies them faithfully, so set them again.
+						pMap = Map();
+						pMap.put("Pipeline",dMap.get("Pipeline"));
+						pMap.put("Stage","Prospect");
+						pu = zoho.crm.updateRecord("Deals",nd.get("id").toString().toLong(),pMap);
 						up.put("Deal",nd.get("id").toString().toLong());
 						made = made + 1;
 						info "on_convert: created deal " + nd.get("id") + " for asset " + aid;
