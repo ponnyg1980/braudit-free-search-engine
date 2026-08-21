@@ -78,6 +78,17 @@
 
   .brand{display:flex;align-items:center;gap:14px;padding:8px 2px 20px}
 
+  /* Class Builder review screen */
+  .txt{width:100%;padding:11px 13px;border:1.5px solid var(--line,#d9dee4);border-radius:9px;
+       font:inherit;font-size:15px;box-sizing:border-box}
+  .rv-block{border:1.5px solid var(--line,#d9dee4);border-radius:12px;padding:16px 18px;margin:0 0 14px}
+  .rv-block h3{margin:0 0 2px;font-size:17px}
+  .rv-block .rv-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  .rv-block .rv-x{background:none;border:0;color:#c0392b;font-weight:700;cursor:pointer;font-size:13px}
+  .rv-block label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;
+       letter-spacing:.4px;color:var(--muted);margin:12px 0 4px}
+  .rv-block textarea{width:100%;box-sizing:border-box;font:inherit;font-size:14px;
+       border:1.5px solid var(--line,#d9dee4);border-radius:9px;padding:10px 12px;resize:vertical}
   .steps{display:flex;gap:6px;margin:0 0 20px;flex-wrap:wrap}
   .steps .s{flex:1;min-width:88px;font-size:11px;font-weight:700;color:var(--muted);
     text-transform:uppercase;letter-spacing:.06em;padding:8px 4px;border-top:3px solid var(--line);text-align:center}
@@ -506,6 +517,40 @@
     <div class="err hidden" id="cls-gate"></div>
   </section>
 
+  <!-- CLASS BUILDER ONLY — review & send. The class tools' standalone exit
+       (Jonathan, 21 Aug): see classes + official descriptions + UKIPO terms,
+       amend anything, then Send — to the Deal's Classes & Terms when opened
+       from Zoho, or emailed as a CSV with a Class Tools lead created. -->
+  <section class="card hidden" data-screen="review">
+    <h1>Review your classes &amp; terms</h1>
+    <p class="lead">These are the official class descriptions and the specific terms drawn from
+      marks already registered at the UKIPO. Edit anything &mdash; remove classes, delete or
+      reword terms &mdash; then send. What you send is exactly what we file against.</p>
+    <div id="rv-list"></div>
+    <p style="margin:14px 0 26px"><button class="btn ghost" onclick="history.back()">+ Add or change classes</button></p>
+
+    <div id="rv-deal-send" class="hidden">
+      <button class="btn primary" onclick="sendToDeal()">Send to the Deal&rsquo;s Classes &amp; Terms</button>
+    </div>
+
+    <div id="rv-lead-send" class="hidden" style="max-width:560px">
+      <h2 style="font-size:20px">Email me my classes &amp; terms</h2>
+      <p class="sub">We&rsquo;ll send your selection as a spreadsheet (CSV) you can keep.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <input class="txt" id="rv-first" placeholder="First name *">
+        <input class="txt" id="rv-last" placeholder="Last name *">
+      </div>
+      <input class="txt" id="rv-email" type="email" placeholder="Email *" style="margin-top:10px">
+      <input class="txt" id="rv-phone" type="tel" placeholder="Mobile *" style="margin-top:10px">
+      <input class="txt" id="rv-company" placeholder="Company (optional)" style="margin-top:10px">
+      <p style="margin-top:14px"><button class="btn primary" onclick="sendClassTools()">Send my classes &amp; terms</button></p>
+    </div>
+
+    <div class="err hidden" id="rv-err"></div>
+    <div class="hidden" id="rv-done" style="margin-top:18px;padding:16px 18px;background:#eefbf2;border:1px solid #bfe8cc;border-radius:10px;font-weight:600"></div>
+    <div class="actions"><button class="link" onclick="history.back()">&larr; Back</button></div>
+  </section>
+
   <!-- STEP 3 — jurisdictions -->
   <section class="card hidden" data-screen="jurisdiction">
     <h1>Where do you trade?</h1>
@@ -793,6 +838,14 @@ let PICKER={
    'quick_search', which Zoho maps to Lead Source "Quick Search". */
 const QUICK=/uk-trademark-quick-search/.test(location.pathname);
 if(QUICK) document.title='UK Trademark Quick Search \u2014 The Trademark Helpline';
+/* Standalone Class Builder (Jonathan, 21 Aug): the class tools were built
+   to feed "Begin search" \u2014 the builder gives them a different exit: see the
+   classes, official descriptions and UKIPO terms, AMEND them, then SEND.
+   From a Zoho Deal (?deal=) Send writes to that Deal's Classes & Terms; on
+   the public site Send takes contact details, creates a Class Tools lead
+   and emails the visitor their selection as a CSV. */
+const BUILDER=/class-builder/.test(location.pathname);
+if(BUILDER) document.title='Trademark Class Builder \u2014 The Trademark Helpline';
 /* Embedded on the WordPress site the whole wizard lives in an iframe that
    embed.js resizes from brauditHeight messages (same contract as the compact
    search box). Screens vary from ~600px to 2000+px, so report continuously. */
@@ -809,9 +862,10 @@ if(QUICK) document.title='UK Trademark Quick Search \u2014 The Trademark Helplin
   window.addEventListener('load',send); window.addEventListener('resize',send);
   setInterval(send,800);                      // belt and braces for animations
 })();
-const STEP_ORDER=QUICK?['search','classes','results']
+const STEP_ORDER=BUILDER?['search','classes','review']
+                :QUICK?['search','classes','results']
                       :['search','marks','jurisdiction','classes','results'];
-const STEP_LABELS={search:'Name',marks:'Searches',jurisdiction:'Jurisdictions',classes:'Classes',results:'Results'};
+const STEP_LABELS={search:'Name',marks:'Searches',jurisdiction:'Jurisdictions',classes:'Classes',results:'Results',review:'Review & Send'};
 let state={name:'',logo:false,logoLater:false,tagline:'',classes:[],
   now:{mode:'uk',codes:[]},plan:{mode:'none',codes:[]},lastResult:null,lead:null,
   emailForAI:null,classSource:null,resultsComputedFrom:null,portalRequested:false,
@@ -886,7 +940,8 @@ function ensureSession(){
   if(state._sessionStarting) return state._sessionStarting;
   state._sessionStarting=fetch(journeyBase()+'/session/start',{method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({tenant_id:CONFIG.TENANT_ID,source:QUICK?'quick_search':'free_search',name:state.name})})
+    body:JSON.stringify({tenant_id:CONFIG.TENANT_ID,
+      source:BUILDER?'class_tools':(QUICK?'quick_search':'free_search'),name:state.name})})
     .then(r=>r.json()).then(d=>{
       if(d&&d.ok&&d.session_id){ state.sessionId=d.session_id; }
       return state.sessionId;
@@ -2056,6 +2111,122 @@ async function beginSearch(){
   });
   pushScreen('results');
 }
+/* ── Class Builder: review & send ───────────────────────────────────────
+   The class tools' STANDALONE exit (Jonathan, 21 Aug). No register search:
+   /class-scope returns the application-grade selection (official headings +
+   registered-vocabulary terms) for the picked classes; the visitor amends
+   classes, descriptions and terms in place, then sends. */
+function rvErr(msg){const e=document.getElementById('rv-err');
+  e.textContent=msg; e.classList.toggle('hidden', !msg);}
+async function goToReview(){
+  if(!state.classes.length){
+    const e=document.getElementById('cls-gate');
+    if(e){e.textContent='Please add at least one class first — use the tools below if you are not sure which apply.';
+      e.classList.remove('hidden');}
+    return;
+  }
+  const base=(CONFIG.SEARCH_BASE||CONFIG.API_BASE||'').replace(/\/$/,'');
+  overlayOn('Building your class selection…','Pulling the official descriptions and registered terms.');
+  let out=null;
+  try{
+    const r=await fetch(base+'/class-scope',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:state.name,classes:state.classes,class_source:state.classSource})});
+    out=await r.json();
+  }catch(e){ out=null; }
+  finally{ await overlayOff(); }
+  state.review=(out&&out.ok&&Array.isArray(out.application_scope))?out.application_scope
+    :state.classes.map(n=>({n:+n,heading:'',terms:[]}));   // degrade: still editable
+  renderReview();
+  logEvent('screen_enter','review',{classes:state.classes},true);
+  pushScreen('review');
+}
+function renderReview(){
+  const host=document.getElementById('rv-list');
+  host.innerHTML=(state.review||[]).map((r,i)=>`
+    <div class="rv-block" data-rv="${r.n}">
+      <div class="rv-head"><h3>Class ${r.n} &middot; ${classLabel(r.n)}</h3>
+        <button class="rv-x" onclick="rvRemove(${r.n})">Remove class</button></div>
+      <label>Class description</label>
+      <textarea id="rv-h-${r.n}" rows="2">${(r.heading||'').replace(/</g,'&lt;')}</textarea>
+      <label>Specific terms (one per line)</label>
+      <textarea id="rv-t-${r.n}" rows="${Math.min(14,Math.max(4,(r.terms||[]).length))}">${(r.terms||[]).join('\n').replace(/</g,'&lt;')}</textarea>
+    </div>`).join('');
+  document.getElementById('rv-deal-send').classList.toggle('hidden', !CONFIG.DEAL);
+  document.getElementById('rv-lead-send').classList.toggle('hidden', !!CONFIG.DEAL);
+}
+function rvRemove(n){
+  state.review=(state.review||[]).filter(r=>r.n!==n);
+  state.classes=state.classes.filter(c=>+c!==+n);
+  renderBasket(); renderReview();
+}
+function collectReview(){
+  return (state.review||[]).map(r=>{
+    const h=document.getElementById('rv-h-'+r.n), t=document.getElementById('rv-t-'+r.n);
+    const terms=(t?t.value:'').split('\n').map(s=>s.trim()).filter(Boolean);
+    return {n:r.n, heading:(h?h.value.trim():r.heading)||'', terms:terms};
+  }).filter(r=>r.terms.length||r.heading);
+}
+function rvDone(msg){
+  rvErr('');
+  const d=document.getElementById('rv-done');
+  d.textContent=msg; d.classList.remove('hidden');
+  document.getElementById('rv-deal-send').classList.add('hidden');
+  document.getElementById('rv-lead-send').classList.add('hidden');
+}
+function sendToDeal(){
+  const rows=collectReview();
+  if(!rows.length){ rvErr('Nothing to send — add at least one class with terms.'); return; }
+  ensureSession().then(function(id){
+    if(!id){ rvErr('Could not reach the server — please try again.'); return; }
+    fetch(journeyBase()+'/session/event',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:id,event_type:'search_result',screen:'review',
+        payload:{zoho_deal_id:CONFIG.DEAL,sent_from:'class_builder'},
+        snapshot:{name:state.name,classes:rows.map(r=>r.n),class_source:state.classSource,
+                  last_result:{application_scope:rows},status:'class_builder_sent'}})})
+      .then(r=>r.json())
+      .then(d=>{ if(d&&d.ok) rvDone('Sent — the classes and terms are on the Deal in Zoho.');
+                 else rvErr('The send failed — please try again.'); })
+      .catch(()=>rvErr('The send failed — please try again.'));
+  });
+}
+function sendClassTools(){
+  const first=document.getElementById('rv-first').value.trim();
+  const last=document.getElementById('rv-last').value.trim();
+  const email=document.getElementById('rv-email').value.trim();
+  const phone=document.getElementById('rv-phone').value.trim();
+  const company=document.getElementById('rv-company').value.trim();
+  if(!first||!last||!email||!phone){ rvErr('First name, last name, email and mobile are all needed to send your classes.'); return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ rvErr('That email address does not look right.'); return; }
+  const rows=collectReview();
+  if(!rows.length){ rvErr('Nothing to send — add at least one class with terms.'); return; }
+  state.email=email; state.emailSource='class_tools';
+  ensureSession().then(function(id){
+    if(!id){ rvErr('Could not reach the server — please try again.'); return; }
+    fetch(journeyBase()+'/session/event',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:id,event_type:'lead_captured',screen:'review',
+        payload:{sent_from:'class_builder'},
+        snapshot:{name:state.name,classes:rows.map(r=>r.n),class_source:state.classSource,
+                  first_name:first,last_name:last,email:email,phone:phone,
+                  business_name:company||'',email_source:'class_tools',
+                  last_result:{application_scope:rows},status:'class_builder_sent'}})})
+      .then(r=>r.json())
+      .then(d=>{ if(d&&d.ok) rvDone('Done — your classes and terms are on their way to '+email+' as a CSV.');
+                 else rvErr('The send failed — please try again.'); })
+      .catch(()=>rvErr('The send failed — please try again.'));
+  });
+}
+/* In builder mode the classes screen's exit is Review, not a search. */
+if(BUILDER){
+  document.querySelectorAll('[data-screen="classes"] button').forEach(function(b){
+    if((b.getAttribute('onclick')||'')==='beginSearch()'){
+      b.textContent='Review classes & terms';
+      b.setAttribute('onclick','goToReview()');
+    }
+  });
+}
 async function callSearch(payload){
   // The gated route. Falls back to API_BASE so local/dev still works.
   const base=(CONFIG.SEARCH_BASE||CONFIG.API_BASE||'').replace(/\/$/,'');
@@ -2341,7 +2512,17 @@ window.addEventListener('popstate',function(e){
     const wm = document.getElementById('word-mark');
     if(wm) wm.value = name;
     document.getElementById('tick-name').classList.add('on');
-    let target = wanted || (QUICK ? 'classes' : 'marks');
+    let target = wanted || (BUILDER ? 'classes' : (QUICK ? 'classes' : 'marks'));
+    /* Builder resume (the Lead's report URL / re-opened session): re-open
+       the review screen from the stored selection. */
+    if(BUILDER && target === 'review'){
+      const lr = sess && sess.last_result;
+      if(lr && Array.isArray(lr.application_scope) && lr.application_scope.length){
+        if(Array.isArray(sess.classes)) state.classes = sess.classes.map(Number).filter(n=>n>=1&&n<=45);
+        state.review = lr.application_scope;
+        renderBasket(); renderReview();
+      } else { target = 'classes'; }
+    }
     /* Report-link resume (Jonathan, 21 Aug): the "Free Search Report URL"
        on the Zoho Lead points at ?s=SESSION&screen=results — re-open the
        visitor's ACTUAL results screen from the stored search result, so a
