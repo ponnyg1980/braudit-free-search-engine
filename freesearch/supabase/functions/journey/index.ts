@@ -531,7 +531,7 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
     Free_Search_Report_URL: (session.source === "quick_search"
       ? "https://www.thetrademarkhelpline.com/uk-trademark-quick-search/"
       : "https://www.thetrademarkhelpline.com/free-search/") +
-      `?s=${sessionId}&screen=results`,
+      `?fs=${sessionId}&screen=results`,
     Free_Search_Class_Route: ZOHO_CLASS_ROUTE[csRoute] ||
       ((Array.isArray(session.classes) && session.classes.length)
         ? "Self Selected" : undefined),
