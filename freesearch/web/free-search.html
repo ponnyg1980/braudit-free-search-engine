@@ -2323,14 +2323,34 @@ window.addEventListener('popstate',function(e){
   const wanted = CONFIG.RESUME_SCREEN;
   if(!CONFIG.RESUME_SESSION && !CONFIG.RESUME_NAME){ renderScreen('search'); return; }
 
-  function open(name){
+  function open(name, sess){
     if(!name){ renderScreen('search'); return; }
     state.name = name;
     document.getElementById('name').value = name;
     const wm = document.getElementById('word-mark');
     if(wm) wm.value = name;
     document.getElementById('tick-name').classList.add('on');
-    const target = wanted || (QUICK ? 'classes' : 'marks');
+    let target = wanted || (QUICK ? 'classes' : 'marks');
+    /* Report-link resume (Jonathan, 21 Aug): the "Free Search Report URL"
+       on the Zoho Lead points at ?s=SESSION&screen=results — re-open the
+       visitor's ACTUAL results screen from the stored search result, so a
+       rep sees the report exactly as the client did. Degrades to the
+       normal journey when the session has no stored result. */
+    if(target === 'results'){
+      const lr = sess && sess.last_result;
+      if(lr && lr.summary){
+        try{
+          if(Array.isArray(sess.classes) && sess.classes.length){
+            state.classes = sess.classes.map(Number).filter(n=>n>=1&&n<=45);
+            renderBasket();
+          }
+          state.lastResult = lr;
+          renderResults(lr);
+        }catch(e){ target = QUICK ? 'classes' : 'marks'; }
+      } else {
+        target = QUICK ? 'classes' : 'marks';
+      }
+    }
     renderScreen(target);
     history.replaceState({screen:target},'','#'+target);
     // Deliberately NOT re-logging 'name_submitted' — the box already did.
@@ -2341,7 +2361,8 @@ window.addEventListener('popstate',function(e){
     state.sessionId = CONFIG.RESUME_SESSION;   // adopt, don't mint
     fetch(journeyBase()+'/session?id='+encodeURIComponent(CONFIG.RESUME_SESSION))
       .then(r=>r.json())
-      .then(d=>{ open((d && d.ok && d.session && d.session.name) || CONFIG.RESUME_NAME); })
+      .then(d=>{ open((d && d.ok && d.session && d.session.name) || CONFIG.RESUME_NAME,
+                      d && d.ok ? d.session : null); })
       .catch(()=>open(CONFIG.RESUME_NAME));
   } else {
     open(CONFIG.RESUME_NAME);
