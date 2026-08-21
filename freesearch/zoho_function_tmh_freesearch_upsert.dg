@@ -22,6 +22,33 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		info "no zoho_fields; skipped";
 		return "skipped";
 	}
+	// Existing-client detection (Jonathan, 21 Aug): a search from an email
+	// we already know as a Contact (or on an Account) still creates/updates
+	// the Lead exactly as normal — but Lead Source Group is re-pointed to
+	// "Existing Contact" / "Existing Account" so reps spot the existing
+	// relationship at a glance. (Zoho accepts these values on write even
+	// before they're added to the picklist — proven 21 Aug.)
+	emAll = "";
+	if(fields.get("Email") != null)
+	{
+		emAll = fields.get("Email").toString();
+	}
+	if(emAll != "")
+	{
+		foundC = zoho.crm.searchRecords("Contacts","(Email:equals:" + emAll + ")");
+		if(foundC.size() > 0)
+		{
+			fields.put("Lead_Source_Group","Existing Contact");
+		}
+		else
+		{
+			foundAc = zoho.crm.searchRecords("Accounts","(Email:equals:" + emAll + ")");
+			if(foundAc.size() > 0)
+			{
+				fields.put("Lead_Source_Group","Existing Account");
+			}
+		}
+	}
 	leadId = "";
 	if(payload.get("zoho_lead_id") != null)
 	{
