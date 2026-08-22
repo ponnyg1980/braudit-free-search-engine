@@ -2272,10 +2272,17 @@ function rvRemove(n){
   renderBasket(); renderReview();
 }
 function collectReview(){
+  /* terms_source: "Approved" when the terms still match the register's
+     approved wording exactly (order included); "Custom Edited" the moment
+     the visitor changes anything. A resumed row that was already Custom
+     Edited stays Custom Edited even if unchanged this visit. */
   return (state.review||[]).map(r=>{
     const h=document.getElementById('rv-h-'+r.n), t=document.getElementById('rv-t-'+r.n);
     const terms=(t?t.value:'').split('\n').map(s=>s.trim()).filter(Boolean);
-    return {n:r.n, heading:(h?h.value.trim():r.heading)||'', terms:terms};
+    const orig=(r.terms||[]).map(s=>String(s).trim()).filter(Boolean);
+    const same=terms.length===orig.length&&terms.every((x,i)=>x===orig[i]);
+    const src=(r.terms_source==='Custom Edited'||!same)?'Custom Edited':'Approved';
+    return {n:r.n, heading:(h?h.value.trim():r.heading)||'', terms:terms, terms_source:src};
   }).filter(r=>r.terms.length||r.heading);
 }
 function rvDone(msg){
