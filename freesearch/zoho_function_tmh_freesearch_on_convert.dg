@@ -147,6 +147,10 @@ void automation.tmh_freesearch_on_convert(int dealId)
 	linked = 0;
 	made = 0;
 	parked = 0;
+	// asset id -> the deal that brand ends up on; used after the loop to
+	// mirror each asset's classes into that deal's Classes Terms SUB-FORM
+	// (the sub-form still drives live automations - Jonathan, 22 Aug).
+	mirrorMap = Map();
 	for each a in sibs
 	{
 		if(a.get("Asset_Type") == "Deal Search")
@@ -182,6 +186,7 @@ void automation.tmh_freesearch_on_convert(int dealId)
 				{
 					up.put("Deal",dealId);
 					linked = linked + 1;
+					mirrorMap.put(aid,dealId.toString());
 				}
 				else
 				{
@@ -226,6 +231,7 @@ void automation.tmh_freesearch_on_convert(int dealId)
 						pu = zoho.crm.updateRecord("Deals",nd.get("id").toString().toLong(),pMap);
 						up.put("Deal",nd.get("id").toString().toLong());
 						made = made + 1;
+						mirrorMap.put(aid,nd.get("id").toString());
 						info "on_convert: created deal " + nd.get("id") + " for asset " + aid;
 					}
 					else
@@ -241,5 +247,124 @@ void automation.tmh_freesearch_on_convert(int dealId)
 			r = zoho.crm.updateRecord("G_S_Scope_Assets",aid.toLong(),up);
 		}
 	}
-	info "on_convert: deal " + dealId + " session " + sess + " linked " + linked + " created " + made + " parked " + parked;
+	// ------- Sub-form mirror (22 Aug) ------------------------------------
+	// For every brand that got a deal above, copy its G S class rows into
+	// that deal's Classes Terms sub-form. The sub-form is still read by live
+	// automations, so the search tools populate BOTH stores. Merge rule:
+	// a sub-form row covering exactly ONE of our classes is replaced in
+	// place; all other rows (multi-class, "All Classes", manual) are kept.
+	clsPick = Map();
+	clsPick.put("1","1 - Chemicals");
+	clsPick.put("2","2 - Colourants");
+	clsPick.put("3","3 - Toiletries");
+	clsPick.put("4","4 - Fuels");
+	clsPick.put("5","5 - Preparations");
+	clsPick.put("6","6 - Metal");
+	clsPick.put("7","7 - Machinery");
+	clsPick.put("8","8 - Tools");
+	clsPick.put("9","9 - Scientific Devices");
+	clsPick.put("10","10 - Therapeutic Devices");
+	clsPick.put("11","11 - Heating Components");
+	clsPick.put("12","12 - Vehicles");
+	clsPick.put("13","13 - Weapons & Explosives");
+	clsPick.put("14","14 - Jewellery & Precious Minerals");
+	clsPick.put("15","15 - Musical Instruments");
+	clsPick.put("16","16 - Artistic Materials");
+	clsPick.put("17","17 - Piping & Tubing");
+	clsPick.put("18","18 - Accessories & Leather");
+	clsPick.put("19","19 - Construction Materials");
+	clsPick.put("20","20 - Decorative Fittings & Furniture");
+	clsPick.put("21","21 - Household Utensils");
+	clsPick.put("22","22 - Raw Fibres");
+	clsPick.put("23","23 - Yarns & Threads");
+	clsPick.put("24","24 - Textiles");
+	clsPick.put("25","25 - Clothing");
+	clsPick.put("26","26 - Accessories Components");
+	clsPick.put("27","27 - Floor & Wall Coverings");
+	clsPick.put("28","28 - Sports Equipment & Toys");
+	clsPick.put("29","29 - Raw and Prepared Food");
+	clsPick.put("30","30 - Convenience Food");
+	clsPick.put("31","31 - Agriculture & Livestock");
+	clsPick.put("32","32 - Beer & Non-Alcoholic Beverages");
+	clsPick.put("33","33 - Alcoholic Beverages");
+	clsPick.put("34","34 - Tobacco & Lighting Articles");
+	clsPick.put("35","35 - Business Services");
+	clsPick.put("36","36 - Financial Services");
+	clsPick.put("37","37 - Building & Construction");
+	clsPick.put("38","38 - Telecoms");
+	clsPick.put("39","39 - Transport");
+	clsPick.put("40","40 - Various Chemical Treatment & Energy Production");
+	clsPick.put("41","41 - Education");
+	clsPick.put("42","42 - I.T.");
+	clsPick.put("43","43 - Hospitality");
+	clsPick.put("44","44 - Animal, Environmental & Human Health Care");
+	clsPick.put("45","45 - Personal & Social, Legal & Security Services");
+	mirrored = 0;
+	for each mAid in mirrorMap.keys()
+	{
+		mDeal = mirrorMap.get(mAid).toString();
+		rowsM = zoho.crm.searchRecords("G_S_Scope_Classes_Terms","(Scope_Asset.id:equals:" + mAid + ")");
+		ourCls = Map();
+		for each rm in rowsM
+		{
+			nM = rm.get("Nice_Class_Number_Snapshot");
+			if(nM != null && clsPick.get(nM.toLong().toString()) != null)
+			{
+				tM = "";
+				if(rm.get("Specific_Terms") != null)
+				{
+					tM = rm.get("Specific_Terms").toString();
+				}
+				rw = Map();
+				lst = List();
+				lst.add(clsPick.get(nM.toLong().toString()));
+				rw.put("Classes",lst);
+				rw.put("Terms1",tM);
+				ourCls.put(nM.toLong().toString(),rw);
+			}
+		}
+		if(!ourCls.isEmpty())
+		{
+			dRecM = zoho.crm.getRecordById("Deals",mDeal.toLong());
+			subNew = List();
+			exSub = dRecM.get("Classes_Terms");
+			if(exSub != null)
+			{
+				for each er in exSub
+				{
+					keep = true;
+					ecl = er.get("Classes");
+					if(ecl != null && ecl.size() == 1)
+					{
+						e1 = ecl.get(0).toString();
+						if(e1.contains(" - "))
+						{
+							eNum = e1.getPrefix(" - ").trim();
+							if(ourCls.get(eNum) != null)
+							{
+								ourCls.get(eNum).put("id",er.get("id"));
+								keep = false;
+							}
+						}
+					}
+					if(keep)
+					{
+						// id-only row = leave untouched (omitting = delete).
+						kr = Map();
+						kr.put("id",er.get("id"));
+						subNew.add(kr);
+					}
+				}
+			}
+			for each kM in ourCls.keys()
+			{
+				subNew.add(ourCls.get(kM));
+			}
+			sfMap = Map();
+			sfMap.put("Classes_Terms",subNew);
+			sfU = zoho.crm.updateRecord("Deals",mDeal.toLong(),sfMap);
+			mirrored = mirrored + 1;
+		}
+	}
+	info "on_convert: deal " + dealId + " session " + sess + " linked " + linked + " created " + made + " parked " + parked + " subform-mirrored " + mirrored;
 }
