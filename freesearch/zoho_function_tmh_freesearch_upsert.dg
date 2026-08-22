@@ -16,6 +16,16 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		return "no body";
 	}
 	payload = bodyRaw.toString().toMap();
+	// ------- Register (22 Aug) -------
+	// Terms vary by register (UK approved list vs US ID Manual etc). The
+	// journey sends payload.register; everything today is UKIPO, but the
+	// asset + row snapshots carry it so a US/EU term library can slot in
+	// without a data migration.
+	reg = "UKIPO";
+	if(payload.get("register") != null && payload.get("register").toString() != "")
+	{
+		reg = payload.get("register").toString();
+	}
 	// ------- Deal-scoped class builder (21 Aug) -------
 	// A search opened from a Deal's "Build Classes & Terms" button sends a
 	// scope-only payload with zoho_deal_id: classes & UKIPO terms go straight
@@ -65,6 +75,7 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 			amD.put("Deal",dealTgt.toLong());
 			amD.put("Asset_Type","Deal Search");
 			amD.put("Asset_Status","Active");
+			amD.put("Register",reg);
 			if(sessD != "")
 			{
 				amD.put("Free_Search_Session",sessD);
@@ -111,6 +122,15 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 					rMapD = Map();
 					rMapD.put("Nice_Class_Number_Snapshot",nD.toLong());
 					rMapD.put("Nice_Class_Reference",1964745000114603017 + nD.toLong());
+					rMapD.put("Register_Snapshot",reg);
+					if(cd.get("terms_source") != null)
+					{
+						rMapD.put("Terms_Source",cd.get("terms_source").toString());
+					}
+					else
+					{
+						rMapD.put("Terms_Source","Approved");
+					}
 					if(cd.get("label") != null)
 					{
 						rMapD.put("Class_Description_Snapshot",cd.get("label").toString());
@@ -293,6 +313,7 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 			aMap.put("Lead",leadId.toLong());
 			aMap.put("Asset_Type","Deal Search");
 			aMap.put("Asset_Status","Draft");
+			aMap.put("Register",reg);
 			// Survives conversion (plain text, unlike the Lead lookup):
 			// on_convert uses it to gather ALL of this lead's brand assets.
 			aMap.put("Free_Search_Lead_Id",leadId);
@@ -371,6 +392,15 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 						// Nice Class Reference records are contiguous:
 						// class N = 1964745000114603017 + N (COQL-verified 19 Aug).
 						rMap.put("Nice_Class_Reference",1964745000114603017 + n.toLong());
+						rMap.put("Register_Snapshot",reg);
+						if(c.get("terms_source") != null)
+						{
+							rMap.put("Terms_Source",c.get("terms_source").toString());
+						}
+						else
+						{
+							rMap.put("Terms_Source","Approved");
+						}
 						if(c.get("label") != null)
 						{
 							rMap.put("Class_Description_Snapshot",c.get("label").toString());
