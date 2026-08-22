@@ -417,13 +417,17 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		{
 			markM = " - " + scope.get("mark").toString();
 		}
-		// From matt@ — verified org email (Setup > Channels > Email >
-		// Organization Emails, confirmed + authenticated, 22 Aug 2026).
-		// enquiries@ gets every copy: the shared sales inbox sees what went
-		// out and follows up.
+		// From: matt@ is a verified+authenticated org email, but Zoho CRM's
+		// Deluge validator STILL rejects it in sendmail (tested 22 Aug 2026:
+		// bare address, Name<addr> and Name <addr> all fail with "from must
+		// be zoho.loginuserid or a verified email address"). CRM Deluge
+		// sendmail only accepts zoho.loginuserid/adminuserid — org emails
+		// work in workflow email notifications, not here. So the CSV email
+		// sends from the executing user; the report emails DO come from
+		// Matt Griffiths via the workflow notification.
 		sendmail
 		[
-			from : "Matt Griffiths<matt@thetrademarkhelpline.com>"
+			from : zoho.loginuserid
 			to : emAll
 			cc : "enquiries@thetrademarkhelpline.com"
 			subject : "Your trademark classes & terms" + markM
