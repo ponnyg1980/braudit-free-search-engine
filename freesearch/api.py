@@ -129,16 +129,75 @@ _EMBED_JS = """(function(){
       var v=hp.get(k); if(v) q+='&'+(k==='fs'?'s':k)+'='+encodeURIComponent(v);
     });
   }catch(e){}
+  var minH = page==='search-box' ? (s.dataset.style==='bar'?'70px':'200px') : '760px';
+  // Change spec 22 Aug (section 3): reserve space immediately so the WP page
+  // never looks empty and the footer never jumps; show a branded loading
+  // panel until the app's first height report proves it has rendered; fall
+  // back to a static retry message on timeout.
+  var wrap=document.createElement('div');
+  wrap.style.cssText='position:relative;width:100%;min-height:'+minH;
   var f=document.createElement('iframe');
   f.src=s.src.replace(/embed\\.js.*$/, page+q);
-  var minH = page==='search-box' ? (s.dataset.style==='bar'?'70px':'200px') : '640px';
   f.style.cssText='width:100%;min-height:'+minH+';border:0;display:block';
   f.setAttribute('title','Free Trademark Search');
   f.setAttribute('loading','lazy');
-  s.parentNode.insertBefore(f, s);
+  wrap.appendChild(f);
+  var panel=null, rot=null, tm=null, ready=false;
+  if(page!=='search-box'){
+    panel=document.createElement('div');
+    panel.style.cssText='position:absolute;top:0;left:0;right:0;bottom:0;display:flex;'+
+      'flex-direction:column;align-items:center;justify-content:center;background:#f7f8fa;'+
+      'border:1px solid #e3e8ee;border-radius:12px;text-align:center;padding:28px;z-index:2;'+
+      'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif';
+    panel.innerHTML='<div style="width:46px;height:46px;background:#E51652;color:#fff;'+
+      'font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center;'+
+      'transform:skewX(-12deg);margin:0 0 16px"><span style="transform:skewX(12deg)">TH</span></div>'+
+      '<div style="font-weight:700;color:#1c2d3b;font-size:17px;margin-bottom:8px">'+
+      'Loading your UK trademark search\\u2026</div>'+
+      '<div data-bmsg style="color:#5b6b7a;font-size:14px;max-width:480px;line-height:1.55"></div>';
+    wrap.appendChild(panel);
+    var msgs=[
+      'A register search helps identify earlier marks that may affect a new application.',
+      'Challenges can arise during examination, opposition or after registration, so early research matters.',
+      'A word search is an important first step \\u2014 logos, prior use and activity outside the register can also affect risk.'
+    ];
+    var mi=0, msgEl=panel.querySelector('[data-bmsg]');
+    msgEl.textContent=msgs[0];
+    rot=setInterval(function(){ mi=(mi+1)%msgs.length; msgEl.textContent=msgs[mi]; },5000);
+    var arm=function(){
+      tm=setTimeout(function(){
+        if(ready) return;
+        clearInterval(rot);
+        msgEl.innerHTML='The search tool is taking longer than usual to load. '+
+          '<a href="#" data-bretry style="color:#E51652;font-weight:700">Try again</a> '+
+          'or call us on 0161 833 5400.';
+        var a=panel.querySelector('[data-bretry]');
+        if(a) a.addEventListener('click',function(ev){
+          ev.preventDefault();
+          msgEl.textContent=msgs[0]; mi=0;
+          rot=setInterval(function(){ mi=(mi+1)%msgs.length; msgEl.textContent=msgs[mi]; },5000);
+          var src=f.src; f.src='about:blank';
+          setTimeout(function(){ f.src=src; },60);
+          arm();
+        });
+      },25000);
+    };
+    arm();
+  }
+  function appReady(){
+    if(ready) return; ready=true;
+    if(rot) clearInterval(rot);
+    if(tm) clearTimeout(tm);
+    if(panel&&panel.parentNode) panel.parentNode.removeChild(panel);
+  }
+  s.parentNode.insertBefore(wrap, s);
   window.addEventListener('message', function(e){
     if(!e.data) return;
-    if(e.data.brauditHeight) f.style.height = e.data.brauditHeight+'px';
+    // The first height report is the app saying "I have rendered" — replace
+    // the loading panel at once, never prolong it (spec: never delay merely
+    // to display all messages).
+    if(e.data.brauditHeight){ f.style.height = e.data.brauditHeight+'px'; appReady(); }
+    if(e.data.brauditReady) appReady();
     // The compact box hands the visitor over to the full wizard. It cannot
     // navigate the host page itself from inside a cross-origin iframe, so it
     // asks us to. Only ever a navigation, never arbitrary script.
