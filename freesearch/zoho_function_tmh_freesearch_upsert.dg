@@ -234,7 +234,7 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 			}
 		}
 		subNote = "";
-		if(!ourCls.isEmpty())
+		if(ourCls.isEmpty() == false)
 		{
 			dRec2 = zoho.crm.getRecordById("Deals",dealTgt.toLong());
 			subNew = List();
@@ -253,7 +253,9 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 							eNum = e1.getPrefix(" - ").trim();
 							if(ourCls.get(eNum) != null)
 							{
-								ourCls.get(eNum).put("id",er.get("id"));
+								tmpRw = ourCls.get(eNum);
+							tmpRw.put("id",er.get("id"));
+							ourCls.put(eNum,tmpRw);
 								keep = false;
 							}
 						}
