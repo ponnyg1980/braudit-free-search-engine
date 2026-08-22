@@ -323,7 +323,7 @@ void automation.tmh_freesearch_on_convert(int dealId)
 				ourCls.put(nM.toLong().toString(),rw);
 			}
 		}
-		if(!ourCls.isEmpty())
+		if(ourCls.isEmpty() == false)
 		{
 			dRecM = zoho.crm.getRecordById("Deals",mDeal.toLong());
 			subNew = List();
@@ -342,7 +342,9 @@ void automation.tmh_freesearch_on_convert(int dealId)
 							eNum = e1.getPrefix(" - ").trim();
 							if(ourCls.get(eNum) != null)
 							{
-								ourCls.get(eNum).put("id",er.get("id"));
+								tmpRw = ourCls.get(eNum);
+							tmpRw.put("id",er.get("id"));
+							ourCls.put(eNum,tmpRw);
 								keep = false;
 							}
 						}
