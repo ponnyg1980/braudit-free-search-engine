@@ -162,7 +162,122 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 				}
 			}
 		}
-		return "ok:deal:" + dealTgt + ":scope=" + assetD + ":rows+" + madeD;
+		// ------- Mirror into the Deal's Classes Terms SUB-FORM (22 Aug) ------
+		// The Deals sub-form still drives live automations, so every tool
+		// writes BOTH: the G S rows above (source of truth) AND the sub-form.
+		// Merge rule: a sub-form row covering exactly ONE class that we are
+		// writing is replaced in place (same row id); every other row
+		// (multi-class, "All Classes", manually added) is left untouched.
+		clsPick = Map();
+		clsPick.put("1","1 - Chemicals");
+		clsPick.put("2","2 - Colourants");
+		clsPick.put("3","3 - Toiletries");
+		clsPick.put("4","4 - Fuels");
+		clsPick.put("5","5 - Preparations");
+		clsPick.put("6","6 - Metal");
+		clsPick.put("7","7 - Machinery");
+		clsPick.put("8","8 - Tools");
+		clsPick.put("9","9 - Scientific Devices");
+		clsPick.put("10","10 - Therapeutic Devices");
+		clsPick.put("11","11 - Heating Components");
+		clsPick.put("12","12 - Vehicles");
+		clsPick.put("13","13 - Weapons & Explosives");
+		clsPick.put("14","14 - Jewellery & Precious Minerals");
+		clsPick.put("15","15 - Musical Instruments");
+		clsPick.put("16","16 - Artistic Materials");
+		clsPick.put("17","17 - Piping & Tubing");
+		clsPick.put("18","18 - Accessories & Leather");
+		clsPick.put("19","19 - Construction Materials");
+		clsPick.put("20","20 - Decorative Fittings & Furniture");
+		clsPick.put("21","21 - Household Utensils");
+		clsPick.put("22","22 - Raw Fibres");
+		clsPick.put("23","23 - Yarns & Threads");
+		clsPick.put("24","24 - Textiles");
+		clsPick.put("25","25 - Clothing");
+		clsPick.put("26","26 - Accessories Components");
+		clsPick.put("27","27 - Floor & Wall Coverings");
+		clsPick.put("28","28 - Sports Equipment & Toys");
+		clsPick.put("29","29 - Raw and Prepared Food");
+		clsPick.put("30","30 - Convenience Food");
+		clsPick.put("31","31 - Agriculture & Livestock");
+		clsPick.put("32","32 - Beer & Non-Alcoholic Beverages");
+		clsPick.put("33","33 - Alcoholic Beverages");
+		clsPick.put("34","34 - Tobacco & Lighting Articles");
+		clsPick.put("35","35 - Business Services");
+		clsPick.put("36","36 - Financial Services");
+		clsPick.put("37","37 - Building & Construction");
+		clsPick.put("38","38 - Telecoms");
+		clsPick.put("39","39 - Transport");
+		clsPick.put("40","40 - Various Chemical Treatment & Energy Production");
+		clsPick.put("41","41 - Education");
+		clsPick.put("42","42 - I.T.");
+		clsPick.put("43","43 - Hospitality");
+		clsPick.put("44","44 - Animal, Environmental & Human Health Care");
+		clsPick.put("45","45 - Personal & Social, Legal & Security Services");
+		ourCls = Map();
+		for each cd2 in scopeD.get("classes")
+		{
+			n2 = cd2.get("n");
+			if(n2 != null && clsPick.get(n2.toLong().toString()) != null)
+			{
+				t2 = "";
+				if(cd2.get("terms_text") != null)
+				{
+					t2 = cd2.get("terms_text").toString();
+				}
+				rw = Map();
+				lst = List();
+				lst.add(clsPick.get(n2.toLong().toString()));
+				rw.put("Classes",lst);
+				rw.put("Terms1",t2);
+				ourCls.put(n2.toLong().toString(),rw);
+			}
+		}
+		subNote = "";
+		if(!ourCls.isEmpty())
+		{
+			dRec2 = zoho.crm.getRecordById("Deals",dealTgt.toLong());
+			subNew = List();
+			exSub = dRec2.get("Classes_Terms");
+			if(exSub != null)
+			{
+				for each er in exSub
+				{
+					keep = true;
+					ecl = er.get("Classes");
+					if(ecl != null && ecl.size() == 1)
+					{
+						e1 = ecl.get(0).toString();
+						if(e1.contains(" - "))
+						{
+							eNum = e1.getPrefix(" - ").trim();
+							if(ourCls.get(eNum) != null)
+							{
+								ourCls.get(eNum).put("id",er.get("id"));
+								keep = false;
+							}
+						}
+					}
+					if(keep)
+					{
+						// id-only row = leave this row exactly as it is
+						// (omitting it would DELETE it).
+						kr = Map();
+						kr.put("id",er.get("id"));
+						subNew.add(kr);
+					}
+				}
+			}
+			for each k2 in ourCls.keys()
+			{
+				subNew.add(ourCls.get(k2));
+			}
+			sfMap = Map();
+			sfMap.put("Classes_Terms",subNew);
+			sfU = zoho.crm.updateRecord("Deals",dealTgt.toLong(),sfMap);
+			subNote = ":subform=" + subNew.size();
+		}
+		return "ok:deal:" + dealTgt + ":scope=" + assetD + ":rows+" + madeD + subNote;
 	}
 	fields = payload.get("zoho_fields");
 	if(fields == null)
