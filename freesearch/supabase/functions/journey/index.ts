@@ -827,6 +827,102 @@ serve(async (req) => {
     return json({ ok: true, session: data }, 200, origin);
   }
 
+  // --- ai/use ---------------------------------------------------------------
+  // Change spec 22 Aug §9, interim anonymous restriction: AI-tool usage is
+  // checked and recorded SERVER-SIDE against a normalised email hash — never
+  // just a clearable browser cookie. One call does both: if the allowance
+  // remains it records the use and answers allowed; if exhausted it answers
+  // with the configurable Portal-registration message. Allowance size,
+  // window and message are env-configurable so the operational values in
+  // spec §14 can change without a deploy. Fail-open by design: an error here
+  // must never strand a visitor mid-journey (the caller treats non-JSON or
+  // network failure as allowed).
+  if (req.method === "POST" && path === "/ai/use") {
+    const body = await readJson(req);
+    const email = String(body?.email ?? "").trim().toLowerCase();
+    if (!email) return json({ ok: true, allowed: true, access_mode: "anonymous" }, 200, origin);
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(email));
+    const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const allowance = Number(Deno.env.get("AI_ALLOWANCE") ?? "5");
+    const windowDays = Number(Deno.env.get("AI_WINDOW_DAYS") ?? "30");
+    const since = new Date(Date.now() - windowDays * 86400 * 1000).toISOString();
+    let used = 0;
+    try {
+      const { count } = await admin.from("journey_events")
+        .select("id", { count: "exact", head: true })
+        .eq("event_type", "ai_tool_used")
+        .eq("payload->>email_hash", hash)
+        .gte("created_at", since);
+      used = count ?? 0;
+    } catch (_e) { used = 0; }
+    if (used >= allowance) {
+      return json({
+        ok: true, allowed: false, remaining: 0,
+        access_mode: "identified_lead", requires_portal_signup: true,
+        message: Deno.env.get("AI_EXHAUSTED_MESSAGE") ??
+          "You’ve used your free AI class searches for now. Call us on 0161 833 5400 " +
+          "and we’ll pick the classes with you — and when the TMH Portal launches, " +
+          "registered users will get unlimited access to the free tools.",
+      }, 200, origin);
+    }
+    if (body?.session_id) {
+      try {
+        await admin.from("journey_events").insert({
+          session_id: String(body.session_id),
+          event_type: "ai_tool_used", screen: "classes",
+          payload: { email_hash: hash, tool: String(body?.tool ?? "") },
+        });
+      } catch (_e) { /* recording failure must not block the tool */ }
+    }
+    return json({
+      ok: true, allowed: true, remaining: Math.max(0, allowance - used - 1),
+      access_mode: "identified_lead",
+    }, 200, origin);
+  }
+
+  // --- entitlements ---------------------------------------------------------
+  // Spec §9 portal-readiness: the conceptual access/identity/usage/capability
+  // fields exist NOW so the entitlement source can later switch to verified
+  // Portal sessions without a UI rebuild. Until PORTAL_ENABLED=true this only
+  // distinguishes anonymous vs identified_lead; authenticated mode arrives
+  // with the Portal token exchange (never a URL token, never WP cookies).
+  if (req.method === "GET" && path === "/entitlements") {
+    const email = String(url.searchParams.get("email") ?? "").trim().toLowerCase();
+    const portal = (Deno.env.get("PORTAL_ENABLED") ?? "false") === "true";
+    const allowance = Number(Deno.env.get("AI_ALLOWANCE") ?? "5");
+    let remaining = allowance, hash = null as string | null;
+    if (email) {
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(email));
+      hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+      const windowDays = Number(Deno.env.get("AI_WINDOW_DAYS") ?? "30");
+      const since = new Date(Date.now() - windowDays * 86400 * 1000).toISOString();
+      try {
+        const { count } = await admin.from("journey_events")
+          .select("id", { count: "exact", head: true })
+          .eq("event_type", "ai_tool_used")
+          .eq("payload->>email_hash", hash)
+          .gte("created_at", since);
+        remaining = Math.max(0, allowance - (count ?? 0));
+      } catch (_e) { /* default to full allowance */ }
+    }
+    return json({
+      ok: true,
+      access_mode: email ? "identified_lead" : "anonymous",
+      access_tier: "free", email_verified: false,
+      email_hash: hash, portal_user_id: null,
+      ai_uses_remaining: email ? remaining : null,
+      allowance_period: `${Deno.env.get("AI_WINDOW_DAYS") ?? "30"}d`,
+      capabilities: {
+        can_use_manual_search: true,
+        can_use_ai_class_helper: !email || remaining > 0,
+        can_use_website_analysis: !email || remaining > 0,
+        can_view_saved_searches: false,
+        can_use_unlimited_tools: false,
+        requires_portal_signup: Boolean(email) && remaining <= 0 && !portal,
+      },
+    }, 200, origin);
+  }
+
   // --- audit/start -----------------------------------------------------------------
   if (req.method === "POST" && path === "/audit/start") {
     const body = await readJson(req);
