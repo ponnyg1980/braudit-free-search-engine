@@ -385,7 +385,8 @@ function zohoScopeBlock(session: Record<string, unknown>) {
   if (appScope.length) {
     const rows = appScope
       .map((r) => ({ n: Number(r.n), heading: String(r.heading ?? ""),
-                     terms: (Array.isArray(r.terms) ? r.terms : []).map(String) }))
+                     terms: (Array.isArray(r.terms) ? r.terms : []).map(String),
+                     terms_source: String(r.terms_source ?? "") }))
       .filter((r) => r.n >= 1 && r.n <= 45);
     if (rows.length) {
       return {
@@ -398,6 +399,10 @@ function zohoScopeBlock(session: Record<string, unknown>) {
           // dozens of terms. Only guard: Zoho's 32k textarea limit, because
           // an oversize value voids the entire row write.
           terms_text: r.terms.join("\n").slice(0, 30000),
+          // Register split (22 Aug): the builder marks a row Custom Edited
+          // when the visitor amends the approved wording; Deluge writes it
+          // to Terms_Source on the class row.
+          terms_source: r.terms_source === "Custom Edited" ? "Custom Edited" : "Approved",
         })),
       };
     }
@@ -740,6 +745,9 @@ serve(async (req) => {
           session_id, tenant_id: session.tenant_id, search_term: session.name,
           zoho_deal_id: String(dealMarker),
           scope: zohoScopeBlock(session),
+          // Register split (22 Aug): everything today is UKIPO; a future
+          // US/EU builder sets session.register and the whole pipe follows.
+          register: String(session.register || "UKIPO"),
         }));
       }
 
@@ -758,6 +766,7 @@ serve(async (req) => {
           // Zoho-ready: Flow maps this object straight into the Leads upsert.
           zoho_fields: zohoLeadFields(session, session_id),
           scope: scopeBlk,
+          register: String(session.register || "UKIPO"),
           // Class Builder sends: the Deluge upsert emails this back to the
           // visitor as an attachment when Email_Source is Class Tools.
           class_csv: session.email_source === "class_tools" && scopeBlk
