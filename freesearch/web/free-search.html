@@ -311,17 +311,27 @@
   <!-- STEP 1 -->
   <section class="card s1" data-screen="search">
     <div>
-      <div class="eyebrow">Free trademark search</div>
+      <div class="eyebrow" id="s1-eyebrow">Free trademark search</div>
       <h1>What&rsquo;s the name you want to protect?</h1>
       <p class="lead">Pop in your brand name and we&rsquo;ll check it against the UK register
         straight away. No sign up, and nothing to pay.</p>
       <input id="name" class="hero-in" type="text" autocomplete="off"
              placeholder="Type your Trademark Name and click Search">
-      <p class="sub" style="margin-top:14px">Just the name for now. We&rsquo;ll ask about
+      <p class="sub" id="s1-note" style="margin-top:14px">Just the name for now. We&rsquo;ll ask about
         logos and taglines next.</p>
+      <!-- Quick mode only (change spec 22 Aug §5): scope notice BEFORE the
+           first submission, and the one-and-only link to the full flow. -->
+      <div class="hidden" id="s1-quick-scope" style="margin-top:14px;padding:12px 16px;
+           background:#f7f8fa;border:1px solid #e3e8ee;border-radius:10px;font-size:13.5px;
+           color:#33424f"><b>UK word/name search only.</b> This quick search checks a name
+        against the UK trademark register. It does not collect your logo or tagline, or
+        assess where else you trade.</div>
       <div style="margin-top:26px">
-        <button class="btn primary" onclick="go('marks')">Search</button>
+        <button class="btn primary" id="s1-go" onclick="go('marks')">Start my free trademark search</button>
       </div>
+      <p class="sub hidden" id="s1-quick-link" style="margin-top:14px">Need a broader brand
+        review? <a href="https://www.thetrademarkhelpline.com/free-search/" style="color:var(--pink);font-weight:700">Use
+        our Free Trademark Search</a>.</p>
     </div>
     <img src="/brand/knowledge-centre-owl.png" alt="" class="ill s1-owl">
   </section>
@@ -626,6 +636,18 @@
       <div id="res-rows"></div>
     </div>
 
+    <!-- Change spec 22 Aug §6: the remaining flagged results are not missing —
+         they live in the full report, and the CTA says so explicitly. -->
+    <div id="res-fullreport" style="margin:18px 0 6px;padding:16px 20px;background:#f7f8fa;
+         border:1px solid #e3e8ee;border-radius:12px">
+      <p style="margin:0 0 12px;font-size:14.5px;color:#33424f">We&rsquo;ve shown the five
+        closest live marks here. Your <b>full report</b> contains all flagged results so you
+        can review the complete picture, including owners, status, classes, goods and services.</p>
+      <button class="btn primary" onclick="document.getElementById('report-form').scrollIntoView({behavior:'smooth',block:'center'})">Get my full trademark search report</button>
+      <p class="sub" style="font-size:13px;margin:8px 0 0">See and assess every result &mdash;
+        not just the five closest matches.</p>
+    </div>
+
     <!-- OPINION — the viability read, ported from the Industry Report's
          Tailored Report. Rendered from what the engine sent; never
          recalculated here, so screen, email and CRM can't disagree. -->
@@ -684,6 +706,9 @@
   <!-- PORTAL OFFER (after Send my report) -->
   <section class="card hidden" data-screen="portal">
     <h2>Your report is on its way 📧</h2>
+    <p class="lead" style="margin-bottom:10px">You don&rsquo;t have to wait for the email &mdash;
+      <a id="portal-report-link" href="#" target="_blank" rel="noopener"
+         style="color:var(--pink);font-weight:700">view and download your full report now</a>.</p>
     <p class="lead">Before you go — create your free Temmy Portal login and get much more, at no cost.</p>
     <ul class="benefits">
       <li>Unlimited free searches</li>
@@ -846,6 +871,23 @@ if(QUICK) document.title='UK Trademark Quick Search \u2014 The Trademark Helplin
    and emails the visitor their selection as a CSV. */
 const BUILDER=/class-builder/.test(location.pathname);
 if(BUILDER) document.title='Trademark Class Builder \u2014 The Trademark Helpline';
+/* Quick-mode step-1 copy (change spec 22 Aug \u00a75): never promise logo or
+   tagline collection, surface the UK word/name-only scope BEFORE the first
+   submission, and link to the full flow here and ONLY here. */
+if(QUICK){
+  var _e=document.getElementById('s1-eyebrow'); if(_e)_e.textContent='Quick UK Trademark Search';
+  var _n=document.getElementById('s1-note');
+  if(_n)_n.textContent='Enter the word or name you want to check. This Quick Search does not assess logo similarity.';
+  var _sc=document.getElementById('s1-quick-scope'); if(_sc)_sc.classList.remove('hidden');
+  var _lk=document.getElementById('s1-quick-link'); if(_lk)_lk.classList.remove('hidden');
+  var _b=document.getElementById('s1-go'); if(_b)_b.textContent='Start quick UK search';
+}
+if(BUILDER){
+  var _n2=document.getElementById('s1-note');
+  if(_n2)_n2.textContent='Enter the brand name these classes and terms are for.';
+  var _b2=document.getElementById('s1-go'); if(_b2)_b2.textContent='Choose my classes';
+  var _e2=document.getElementById('s1-eyebrow'); if(_e2)_e2.textContent='Trademark Class Builder';
+}
 /* Embedded on the WordPress site the whole wizard lives in an iframe that
    embed.js resizes from brauditHeight messages (same contract as the compact
    search box). Screens vary from ~600px to 2000+px, so report continuously. */
@@ -861,6 +903,9 @@ if(BUILDER) document.title='Trademark Class Builder \u2014 The Trademark Helplin
     {childList:true,subtree:true,attributes:true});
   window.addEventListener('load',send); window.addEventListener('resize',send);
   setInterval(send,800);                      // belt and braces for animations
+  // Explicit ready signal for the host page's loading panel (change spec
+  // 22 Aug §3) — sent as soon as the script is running, alongside heights.
+  try{ window.parent.postMessage({brauditReady:true},'*'); }catch(e){}
 })();
 const STEP_ORDER=BUILDER?['search','classes','review']
                 :QUICK?['search','classes','results']
@@ -1014,18 +1059,71 @@ function openHelp(opt){
   else body.innerHTML=aiGateHtml(opt);
 }
 function aiGateHtml(opt){
+  /* Change spec 22 Aug §8: the description or website comes FIRST. The email
+     is requested just-in-time, with an honest explanation, immediately
+     before the AI runs — see aiEmailGate(). No "unlock step 2", no
+     "no obligation" framing. */
   const ph={1:'Describe what your business does — the more detail the better',
             2:'https://your-website.com'}[opt];
-  if(!state.emailForAI){
-    return `<div class="gate-note"><b>Step 1 of 2 — unlock this option.</b><br>
-      This option uses AI to read what you give it, so we ask for your email
-      first (one line, no obligation — it's also where your results go). Your
-      ${opt==='1'?'business description':'website address'} comes in step 2.</div>
-      <div class="hbar" style="margin-top:8px">
-        <input id="ho${opt}-email" type="email" autocomplete="email" placeholder="you@business.com">
-        <button class="btn primary" onclick="aiGate('${opt}')">Unlock step 2 →</button></div>`;
-  }
   return aiInputHtml(opt,ph);
+}
+/* The just-in-time email notice (spec §8, required copy verbatim). Renders
+   inline where the visitor is working; on a valid email it captures the
+   address (session + Zoho via the ai_gate source) and immediately continues
+   with the AI run it interrupted. */
+function aiEmailGate(opt, cont){
+  const out=document.getElementById('ho'+(opt==='1'?'1':'2')+'-out')
+        || document.getElementById('ho1-out');
+  if(!out){ cont(); return; }
+  const old=document.getElementById('ai-email-gate'); if(old) old.remove();
+  const g=document.createElement('div');
+  g.id='ai-email-gate'; g.className='gate-note'; g.style.marginTop='10px';
+  g.innerHTML='<b>Enter your email to run the AI class search</b><br>'+
+    'We use your email to prevent repeated anonymous use of our AI tools, create or '+
+    'update your trademark enquiry record, and send your results. We may contact you '+
+    'about this trademark enquiry. When the TMH Portal launches, registered users will '+
+    'be able to access the full range of free search tools from their account. '+
+    '<a href="https://www.thetrademarkhelpline.com/privacy-policy/" target="_blank" rel="noopener" '+
+    'style="color:var(--pink);font-weight:700">Privacy Policy</a>'+
+    '<div class="hbar" style="margin-top:10px">'+
+    '<input id="ai-gate-email" type="email" autocomplete="email" placeholder="you@business.com">'+
+    '<button class="btn primary" id="ai-gate-go">Run my AI class search</button></div>'+
+    '<div class="err hidden" id="ai-gate-err" style="margin-top:8px"></div>';
+  out.parentNode.insertBefore(g, out);
+  try{ g.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
+  document.getElementById('ai-gate-go').addEventListener('click', function(){
+    const e=(document.getElementById('ai-gate-email').value||'').trim();
+    const err=document.getElementById('ai-gate-err');
+    if(!/.+@.+\..+/.test(e)){ err.textContent='Please enter a valid email address.';
+      err.classList.remove('hidden'); return; }
+    err.classList.add('hidden');
+    state.emailForAI=e; state.email=e; state.emailSource='ai_gate';
+    logEvent('email_captured','classes',{source:'ai_gate'},true);
+    g.remove();
+    cont();
+  });
+}
+/* Server-side AI allowance (spec §9 interim restriction): every AI run is
+   checked against the journey's per-email allowance and recorded there —
+   deleting cookies doesn't reset it. Fail-open: if the journey can't be
+   reached the tool still runs; a lost usage record beats a dead tool. */
+function aiUse(tool, outEl, cont){
+  const email=state.emailForAI||state.email||'';
+  if(!email){ cont(); return; }
+  ensureSession().then(function(id){
+    return fetch(journeyBase()+'/ai/use',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:id||null,email:email,tool:tool,
+                           tenant_id:CONFIG.TENANT_ID})});
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if(d && d.ok && d.allowed===false){
+      if(outEl){ outEl.innerHTML='<b>'+esc(d.message||
+        'You have used your free AI class searches for now — call us on 0161 833 5400.')+'</b>'; }
+      logEvent('ai_allowance_exhausted','classes',{tool:tool},false);
+      return;
+    }
+    cont();
+  }).catch(function(){ cont(); });
 }
 /* The guided questions carry fixed element ids, and TWO routes render them —
    "Describe your business" directly, and "Your website" after it has read the
@@ -1179,7 +1277,7 @@ function q1Html(){
     </div>
   </div>
 
-  <button class="btn primary" onclick="q1Submit()">Add to my report</button>
+  <button class="btn primary" onclick="q1Submit()">Find my classes with AI</button>
   <div class="muted-note" id="ho1-out"></div>`;
 }
 function q1Seg(groupId,attr,val,key){
@@ -1239,6 +1337,9 @@ function q1Submit(){
     out.textContent='Please answer the first question so we know what to look for.'; return; }
   if(Q1.web==='yes' && site && !/^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([\/#?].*)?$/i.test(site)){
     out.textContent='That doesn’t look like a website address — e.g. yourbusiness.co.uk'; return; }
+  // Spec §8 sequence: the description came first; ask for the email
+  // just-in-time, then this function re-runs and the AI executes at once.
+  if(!state.emailForAI){ aiEmailGate('1', q1Submit); return; }
 
   const ticked=id=>[...document.querySelectorAll('#'+id+' input:checked')].map(c=>c.value);
   const sell=ticked('q1-sell'), seen=ticked('q1-seen');
@@ -1292,7 +1393,8 @@ function q1Submit(){
              seen_via:seen, seen_via_other:seenOther}};
   state.channels={sells_via:sell, sells_via_other:sellOther, resale:Q1.resale||'',
                   seen_via:seen, seen_via_other:seenOther};
-  runClassAgent(parts.join(' — '), Q1.mode||null, out);
+  // Spec §9: server-side allowance check + usage record before every run.
+  aiUse('class_agent', out, function(){ runClassAgent(parts.join(' — '), Q1.mode||null, out); });
   // A website given here is the visitor's own site, so it belongs on the
   // session proper, not buried in class_source — otherwise it never reaches
   // the resolver or Zoho. currentSnapshot() sends it as business_website.
@@ -1373,6 +1475,15 @@ function readWebsite(){
   const out=document.getElementById('ho2-out');
   if(!/^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([\/#?].*)?$/i.test(val)){
     out.textContent='That doesn\u2019t look like a website address — e.g. yourbusiness.co.uk'; return; }
+  // Spec §8: the website address came first; email just-in-time before the
+  // AI reads the site.
+  if(!state.emailForAI){ aiEmailGate('2', readWebsite); return; }
+  if(!readWebsite._ok){
+    aiUse('read_website', out, function(){
+      readWebsite._ok=true; try{ readWebsite(); } finally { readWebsite._ok=false; }
+    });
+    return;
+  }
   const body=document.getElementById('ho-2');
   busyOn('ho2', out, 'Reading your website\u2026');
   fetch((CONFIG.API_BASE||'').replace(/\/$/,'')+'/read-website',{
@@ -2249,8 +2360,37 @@ function discJur(p){const nonUk=[...(p.trading_now||[]),...(p.planning_to_trade|
   if((p.planning_to_trade||[]).length)bits.push('you plan to trade in '+p.planning_to_trade.join(', '));
   return 'You told us '+bits.join(' and ')+'. '+base+' A Brand Audit covers the full brand landscape across the territories that matter to you.';}
 
+/* Change spec 22 Aug §7: the headline, supporting message and CTA hierarchy
+   are all derived from ONE authoritative outcome computed here from the
+   engine's summary — the counts, the narrative and the buttons can never
+   disagree. Never declares a mark "clear", "available" or "safe". */
+function resultOutcome(s){
+  if(!s || s.truncated) return 'error';
+  if(s.high>0) return 'high';
+  if(s.medium>0) return 'medium';
+  if(s.total_flagged>0) return 'clean';
+  return 'none';
+}
+const OUTCOME_COPY={
+  high:['Potential conflicts found — review before applying',
+    'We found one or more closely related marks that may affect your application. Review the full results and speak with an adviser before proceeding.'],
+  medium:['Some potentially relevant marks need reviewing',
+    'We found one or more marks with meaningful similarities. This does not necessarily prevent an application, but their classes, wording and status should be assessed first.'],
+  clean:['No major conflicts found in this initial search',
+    'We found similar marks, but none currently score above low risk. Review the closest matches and your full report before deciding whether to apply.'],
+  none:['No close matches found in this initial search',
+    'That is encouraging, but register availability is only part of the assessment. Earlier unregistered use and activity outside the UK IPO register can still matter.'],
+  error:['We couldn’t complete the full register check',
+    'Part of the register search did not finish, so these results are incomplete and no risk score is shown. Please go back and run the search again, or call us on 0161 833 5400.']};
 function renderResults(r){const s=r.summary;
-  document.getElementById('res-sub').textContent=`We searched the ${r.searched_office} register for “${r.query.word_marks[0]}”.`;
+  const outcome=resultOutcome(s);
+  const oc=OUTCOME_COPY[outcome];
+  document.getElementById('res-head').textContent=oc[0];
+  document.getElementById('res-sub').textContent=
+    `We searched the ${r.searched_office} register for “${r.query.word_marks[0]}”. `+oc[1];
+  // An incomplete search must never be presented as a low-risk result: no
+  // score, no opinion dial (spec §7 consistency rules).
+  r._outcome=outcome;
   document.getElementById('res-summary').innerHTML=[['Flagged',s.total_flagged,''],['Shown here',s.displayed,''],
     ['High risk',s.high,'high'],['Medium risk',s.medium,'med'],['Low risk',s.low,'low']]
     .map(([k,v,cx])=>`<div class="stat ${cx}"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
@@ -2295,7 +2435,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,
   c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function renderOpinion(r){
   const box=document.getElementById('res-opinion'), v=r.viability;
-  if(!v){ box.classList.add('hidden'); return; }
+  if(!v || r._outcome==='error'){ box.classList.add('hidden'); return; }
   box.classList.remove('hidden');
   const body=(v.body||[]);
   document.getElementById('op-dials').classList.remove('hidden');
@@ -2333,38 +2473,56 @@ function renderOpinion(r){
    an audit they don't need; a messy one leads with the audit because that
    is the answer that actually saves them a filing fee. */
 function renderNexts(r){
-  // Fallbacks matter here: the engine and this page deploy separately, and a
-  // results screen that renders two blank cards because the engine is one
-  // version behind is worse than one that renders the standing copy.
-  const c=(r.cta||{}), a=c.brand_audit||{}, ap=c.apply||{};
-  if(!a.blurb) a.blurb="You've already done the hard work. The Brand Audit "+
-    'expands on this search to cover logos, taglines, social media, '+
-    'marketplaces, domains, company registers, international & prior-use '+
-    'risk, and allows us to give you all the information you need to make an '+
-    'informed decision.';
-  if(!a.offer) a.offer='The great news is we can offer the Brand Audit and '+
-    'consultation worth £299 for only £99 — and if you choose to use us for '+
-    'your application we deduct it from your fees.';
-  if(!ap.blurb) ap.blurb='Ready to go? Start your application and one of our '+
-    'team will check the detail with you before anything is filed.';
-  if(!a.label) a.label='Request a Brand Audit — £99';
-  const lead=(c.lead==='application')?'application':'audit';
+  /* Change spec 22 Aug §10: the CTA hierarchy is decided by the SAME
+     authoritative outcome as the headline (resultOutcome), not a separate
+     judgement — a low-risk result leads with the application, medium/high
+     lead with the Audit, and high risk stops visually encouraging the
+     application in favour of an adviser conversation. The Audit price stays
+     visible; the £99 credit is against TMH professional fees, said plainly;
+     the unevidenced "£299 value" framing is retired. */
+  const outcome=r._outcome||resultOutcome(r.summary);
+  const auditLabel = outcome==='high' ? 'Get a Brand Audit before applying — £99'
+    : outcome==='medium' ? 'Review the risks with a Brand Audit — £99'
+    : 'Start my Brand Audit — £99';
+  const auditBlurb='Go beyond the UK word-mark search. We’ll assess your name, logo '+
+    'and tagline across additional brand-risk sources and discuss the findings with you.';
+  const auditCredit='If you proceed with your application through TMH, the £99 Audit fee '+
+    'is credited in full against our professional application fees.';
+  const auditReassure='You’ll provide your details and choose an appointment before '+
+    'the Audit begins.';
+  const applyBlurb='Tell us about the applicant and the mark. You’ll then be able to '+
+    'book an appointment with our team before anything is filed.';
+  const lead=(outcome==='clean'||outcome==='none')?'application':'audit';
   const audit=`<div class="nx${lead==='audit'?' lead-card':''}">
-    ${lead==='audit'?'<div class="eyebrow">'+esc(a.eyebrow||'Our recommended next step')+'</div>':''}
-    <h4>Brand Audit</h4>
-    <p>${esc(a.blurb||'')}</p>
-    ${a.offer?`<div class="offer">${esc(a.offer)}</div>`:''}
+    ${lead==='audit'?'<div class="eyebrow">Our recommended next step</div>':''}
+    <h4>Comprehensive Brand Audit — £99</h4>
+    <p>${esc(auditBlurb)}</p>
+    <div class="offer">${esc(auditCredit)}</div>
     <button class="btn ${lead==='audit'?'primary':'ghost'} block" id="brand-audit-cta"
-      onclick="goToBrandAudit()">${esc(a.label||'Request a Brand Audit')}</button></div>`;
+      onclick="goToBrandAudit()">${esc(auditLabel)}</button>
+    <p class="sub" style="font-size:12.5px;margin-top:10px">${esc(auditReassure)}</p></div>`;
+  const applyGhost = outcome==='high';
   const apply=`<div class="nx${lead==='application'?' lead-card':''}">
     ${lead==='application'?'<div class="eyebrow">Our recommended next step</div>':''}
     <h4>Proceed to application</h4>
-    <p>${esc(ap.blurb||'')}</p>
-    ${ap.note?`<p>${esc(ap.note)}</p>`:''}
-    <button class="btn ${lead==='application'?'primary':'ghost'} block"
-      onclick="goToApply()">${esc(ap.label||'Proceed to application')}</button></div>`;
+    <p>${esc(applyBlurb)}</p>
+    ${applyGhost?'<p class="sub" style="font-size:13px">With closely related marks on the register, we recommend a short adviser conversation before you file — call <b>0161 833 5400</b>.</p>':''}
+    <button class="btn ghost block"
+      onclick="goToApply()">Proceed to application</button></div>`;
+  // High/medium: audit first. Clean/none: application first (and it takes the
+  // primary styling via lead-card). Error: neither is pushed — retry instead.
+  if(outcome==='error'){
+    document.getElementById('res-nexts').innerHTML=
+      `<div class="nx"><h4>Run the search again</h4>
+        <p>The register check didn’t finish, so we can’t recommend a next step yet.</p>
+        <button class="btn primary block" onclick="history.back()">Back to classes — try again</button>
+        <p class="sub" style="font-size:13px;margin-top:10px">Or call us on 0161 833 5400 and we’ll run it with you.</p></div>`;
+    return;
+  }
+  // Give the application card the primary button when it leads.
+  const applyLead=apply.replace('btn ghost block','btn primary block');
   document.getElementById('res-nexts').innerHTML=
-    lead==='audit' ? audit+apply : apply+audit;
+    lead==='audit' ? audit+apply : applyLead+audit;
 }
 function goToApply(){
   logEvent('apply_clicked','results',
@@ -2430,6 +2588,13 @@ function sendReport(){
      and press "Send my report" a second time (e.g. to fix a typo'd email).
      Make that POST idempotent per report/session, the same lesson the
      Industry Report tool already learned the hard way — see its build doc. */
+  // Direct link to the unique full-report page (spec §6: the emailed report
+  // and this page are the same complete result set).
+  const prl=document.getElementById('portal-report-link');
+  if(prl && state.sessionId){
+    prl.href='https://www.thetrademarkhelpline.com/search-report/?fs='+
+      encodeURIComponent(state.sessionId);
+  }
   pushScreen('portal');
 }
 function createPortal(){
