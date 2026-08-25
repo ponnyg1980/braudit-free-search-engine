@@ -2254,15 +2254,29 @@ async function goToReview(){
 }
 function renderReview(){
   const host=document.getElementById('rv-list');
-  host.innerHTML=(state.review||[]).map((r,i)=>`
+  const esc=s=>String(s||'').replace(/</g,'&lt;');
+  const ta=(id,list,minR)=>`<textarea id="${id}" rows="${Math.min(14,Math.max(minR,(list||[]).length))}">${esc((list||[]).join('\n'))}</textarea>`;
+  host.innerHTML=(state.review||[]).map((r,i)=>{
+    const tt=r.term_tiers;
+    /* Tiered view (Jonathan, 22 Aug): everything included, grouped so the
+       obvious cuts are easy. Delete a line to drop a term. */
+    const termsHtml = tt
+      ? `<label>Definitely needed &mdash; core terms for this business</label>
+         ${ta('rv-t-'+r.n+'-def',tt.definite,3)}
+         <label>Possibly needed &mdash; delete any that don't apply</label>
+         ${ta('rv-t-'+r.n+'-pos',tt.possible,3)}
+         <label>Unlikely needed &mdash; keep only if they genuinely apply</label>
+         ${ta('rv-t-'+r.n+'-unl',tt.unlikely,2)}`
+      : `<label>Specific terms (one per line)</label>
+         ${ta('rv-t-'+r.n,r.terms,4)}`;
+    return `
     <div class="rv-block" data-rv="${r.n}">
       <div class="rv-head"><h3>Class ${r.n} &middot; ${classLabel(r.n)}</h3>
         <button class="rv-x" onclick="rvRemove(${r.n})">Remove class</button></div>
       <label>Class description</label>
-      <textarea id="rv-h-${r.n}" rows="2">${(r.heading||'').replace(/</g,'&lt;')}</textarea>
-      <label>Specific terms (one per line)</label>
-      <textarea id="rv-t-${r.n}" rows="${Math.min(14,Math.max(4,(r.terms||[]).length))}">${(r.terms||[]).join('\n').replace(/</g,'&lt;')}</textarea>
-    </div>`).join('');
+      <textarea id="rv-h-${r.n}" rows="2">${esc(r.heading)}</textarea>
+      ${termsHtml}
+    </div>`;}).join('');
   document.getElementById('rv-deal-send').classList.toggle('hidden', !CONFIG.DEAL);
   document.getElementById('rv-lead-send').classList.toggle('hidden', !!CONFIG.DEAL);
 }
@@ -2277,8 +2291,15 @@ function collectReview(){
      the visitor changes anything. A resumed row that was already Custom
      Edited stays Custom Edited even if unchanged this visit. */
   return (state.review||[]).map(r=>{
-    const h=document.getElementById('rv-h-'+r.n), t=document.getElementById('rv-t-'+r.n);
-    const terms=(t?t.value:'').split('\n').map(s=>s.trim()).filter(Boolean);
+    const h=document.getElementById('rv-h-'+r.n);
+    const grab=id=>{const el=document.getElementById(id);
+      return el?el.value.split('\n').map(s=>s.trim()).filter(Boolean):null;};
+    let terms=grab('rv-t-'+r.n);
+    if(terms===null){ /* tiered layout: merge the three groups in order */
+      terms=[].concat(grab('rv-t-'+r.n+'-def')||[],
+                      grab('rv-t-'+r.n+'-pos')||[],
+                      grab('rv-t-'+r.n+'-unl')||[]);
+    }
     const orig=(r.terms||[]).map(s=>String(s).trim()).filter(Boolean);
     const same=terms.length===orig.length&&terms.every((x,i)=>x===orig[i]);
     const src=(r.terms_source==='Custom Edited'||!same)?'Custom Edited':'Approved';
