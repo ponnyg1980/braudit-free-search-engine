@@ -198,6 +198,14 @@ _EMBED_JS = """(function(){
     // to display all messages).
     if(e.data.brauditHeight){ f.style.height = e.data.brauditHeight+'px'; appReady(); }
     if(e.data.brauditReady) appReady();
+    // Screen changes and the register-search overlay live INSIDE a very tall
+    // iframe; window.scrollTo in there is a no-op and position:fixed pins to
+    // the iframe box, not the visitor's viewport. Without this the search
+    // wait looked like a crash on WordPress (Jonathan, 26 Aug): the hint
+    // carousel was rendering 1000px+ below the fold. The app asks, we scroll.
+    if(e.data.brauditScrollTop){
+      try{ wrap.scrollIntoView({behavior:'smooth', block:'start'}); }catch(_e){}
+    }
     // The compact box hands the visitor over to the full wizard. It cannot
     // navigate the host page itself from inside a cross-origin iframe, so it
     // asks us to. Only ever a navigation, never arbitrary script.
