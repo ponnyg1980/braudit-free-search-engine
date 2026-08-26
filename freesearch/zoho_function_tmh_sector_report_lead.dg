@@ -1,0 +1,229 @@
+string standalone.tmh_sector_report_lead(string crmAPIRequest)
+{
+	// Sector / Industry Trademark Report -> Leads (Jonathan, 26 Aug 2026).
+	//
+	// The tailored report's "One last step" gate (First/Last/Email/Phone +
+	// consent) fires a "lead" event; the finished report fires "completed".
+	// The WP plugin's /wp-json/tmh/v1/lead proxy forwards both here (set
+	// this function's API-key URL as the plugin's "Zoho webhook").
+	//
+	// Same shape as tmh_freesearch_upsert: dedupe on Email, update rather
+	// than duplicate, existing-client detection, {"trigger":"workflow"} so
+	// Lead workflows fire. Sources are the segregated pair agreed 26 Aug:
+	// Lead Source "Sector Report", Lead Source Group "Industry Report"
+	// (normalised HERE regardless of what the front end sends, so the
+	// deployed plugin never needs a re-release to stay correct).
+	reqMap = crmAPIRequest.toMap();
+	bodyRaw = reqMap.get("body");
+	if(bodyRaw == null)
+	{
+		return "no body";
+	}
+	p = bodyRaw.toString().toMap();
+	ev = "";
+	if(p.get("event") != null)
+	{
+		ev = p.get("event").toString();
+	}
+	if(ev != "lead" && ev != "completed")
+	{
+		return "ignored:" + ev;
+	}
+	em = "";
+	if(p.get("email") != null)
+	{
+		em = p.get("email").toString().trim();
+	}
+	if(em == "" || em.contains("@") == false)
+	{
+		// The PHP proxy already blocks a "lead" event without a real email;
+		// a "completed" from a visitor who skipped the gate has nothing to
+		// key on, so there is no lead to write.
+		return "no email";
+	}
+	g = "";
+	if(p.get("first_name") != null)
+	{
+		g = p.get("first_name").toString().trim();
+	}
+	sn = "";
+	if(p.get("last_name") != null)
+	{
+		sn = p.get("last_name").toString().trim();
+	}
+	if(sn == "" && p.get("last_name_safe") != null)
+	{
+		sn = p.get("last_name_safe").toString().trim();
+	}
+	if(sn == "")
+	{
+		sn = "Report visitor";
+	}
+	co = "";
+	if(p.get("company_name") != null && p.get("company_name").toString().trim() != "")
+	{
+		co = p.get("company_name").toString().trim();
+	}
+	else if(p.get("trading_name") != null && p.get("trading_name").toString().trim() != "")
+	{
+		co = p.get("trading_name").toString().trim();
+	}
+	else if(p.get("company_safe") != null)
+	{
+		co = p.get("company_safe").toString().trim();
+	}
+	if(co == "")
+	{
+		co = "Unknown";
+	}
+	fields = Map();
+	fields.put("Last_Name",sn);
+	fields.put("Company",co);
+	fields.put("Email",em);
+	if(g != "")
+	{
+		fields.put("First_Name",g);
+	}
+	if(p.get("phone") != null && p.get("phone").toString().trim() != "")
+	{
+		fields.put("Phone",p.get("phone").toString().trim());
+	}
+	fields.put("Lead_Source","Sector Report");
+	fields.put("Lead_Source_Group","Industry Report");
+	if(p.get("company_number") != null && p.get("company_number").toString() != "")
+	{
+		fields.put("Company_Number1",p.get("company_number").toString());
+	}
+	if(p.get("sic") != null && p.get("sic").toString() != "")
+	{
+		fields.put("SIC",p.get("sic").toString());
+	}
+	// GDPR basis mirrors the search wizards: ticked box = consent obtained,
+	// otherwise legitimate interests (they asked us to send the report).
+	if(p.get("consent") != null && p.get("consent").toString() == "Yes")
+	{
+		fields.put("Data_Processing_Basis","Obtained");
+	}
+	else
+	{
+		fields.put("Data_Processing_Basis","Legitimate Interests");
+	}
+	// The report context the team acts on, as one readable Description.
+	dl = List();
+	dl.add("Sector / Industry Trademark Report (" + ev + ")");
+	if(p.get("report_id") != null && p.get("report_id").toString() != "")
+	{
+		dl.add("Report ID: " + p.get("report_id").toString());
+	}
+	if(p.get("trading_name") != null && p.get("trading_name").toString() != "")
+	{
+		dl.add("Trading name: " + p.get("trading_name").toString());
+	}
+	if(p.get("industry_label") != null && p.get("industry_label").toString() != "")
+	{
+		dl.add("Industry: " + p.get("industry_label").toString());
+	}
+	if(p.get("searched_for") != null && p.get("searched_for").toString() != "")
+	{
+		dl.add("Searched for: " + p.get("searched_for").toString());
+	}
+	if(p.get("brand_scored") != null && p.get("brand_scored").toString() != "")
+	{
+		dl.add("Brand scored: " + p.get("brand_scored").toString());
+	}
+	if(p.get("viability_master") != null)
+	{
+		dl.add("Viability score: " + p.get("viability_master").toString() + "%");
+	}
+	if(p.get("risk_high") != null || p.get("risk_medium") != null || p.get("risk_low") != null)
+	{
+		rh = "0";
+		rm = "0";
+		rl = "0";
+		if(p.get("risk_high") != null)
+		{
+			rh = p.get("risk_high").toString();
+		}
+		if(p.get("risk_medium") != null)
+		{
+			rm = p.get("risk_medium").toString();
+		}
+		if(p.get("risk_low") != null)
+		{
+			rl = p.get("risk_low").toString();
+		}
+		dl.add("Conflicts: " + rh + " high / " + rm + " medium / " + rl + " low");
+	}
+	if(p.get("assessment_band") != null && p.get("assessment_band").toString() != "")
+	{
+		dl.add("Assessment band: " + p.get("assessment_band").toString());
+	}
+	if(p.get("classes_kept") != null && p.get("classes_kept").toString() != "")
+	{
+		dl.add("Classes kept: " + p.get("classes_kept").toString());
+	}
+	if(p.get("terms_kept") != null && p.get("terms_kept").toString() != "")
+	{
+		tk = p.get("terms_kept").toString();
+		if(tk.length() > 2000)
+		{
+			tk = tk.subString(0,2000) + "…";
+		}
+		dl.add("Terms kept: " + tk);
+	}
+	if(p.get("source_url") != null && p.get("source_url").toString() != "")
+	{
+		dl.add("Report page: " + p.get("source_url").toString());
+	}
+	desc = "";
+	for each dline in dl
+	{
+		if(desc != "")
+		{
+			desc = desc + "\n";
+		}
+		desc = desc + dline;
+	}
+	fields.put("Description",desc);
+	// Existing-client detection — identical to the search wizards, so a
+	// report run by someone we already know is flagged, not mislabelled.
+	foundC = zoho.crm.searchRecords("Contacts","(Email:equals:" + em + ")");
+	if(foundC.size() > 0)
+	{
+		fields.put("Lead_Source_Group","Existing Contact");
+	}
+	else
+	{
+		foundAc = zoho.crm.searchRecords("Accounts","(Email:equals:" + em + ")");
+		if(foundAc.size() > 0)
+		{
+			fields.put("Lead_Source_Group","Existing Account");
+		}
+	}
+	// Dedupe on Email: one person, one lead, later events update it.
+	trg = Map();
+	trg.put("trigger",{"workflow"});
+	leadId = "";
+	isNew = false;
+	foundL = zoho.crm.searchRecords("Leads","(Email:equals:" + em + ")");
+	if(foundL.size() > 0)
+	{
+		leadId = foundL.get(0).get("id").toString();
+		ur = zoho.crm.updateRecord("Leads",leadId.toLong(),fields,trg);
+	}
+	else
+	{
+		cr = zoho.crm.createRecord("Leads",fields,trg);
+		if(cr.get("id") != null)
+		{
+			leadId = cr.get("id").toString();
+			isNew = true;
+		}
+		else
+		{
+			info cr;
+			return "create failed";
+		}
+	}
+	return "ok:" + ev + ":" + leadId + ":new=" + isNew;
+}
