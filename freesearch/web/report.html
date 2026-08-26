@@ -80,6 +80,8 @@
     text-transform:uppercase; color:#fff; background:var(--muted); white-space:nowrap;}
   .chip.hi{background:var(--amber);} .chip.med{background:var(--orange);} .chip.lo{background:var(--green);}
   .markname{font-weight:700; color:var(--navy);}
+  .quiet{color:var(--muted);}
+  .co{font-size:12px; color:var(--muted); margin-top:2px;}
 
   .clsblock{border:1px solid var(--line); padding:14px 18px; margin:0 0 12px; background:#fff;}
   .clsblock h3{margin:0 0 4px; font-size:15px; color:var(--navy);}
@@ -156,7 +158,7 @@
     </div>
     <p class="lead" id="rpt-searched"></p>
     <table id="rpt-table">
-      <thead><tr><th>Risk</th><th>Mark</th><th>Type</th><th>Status</th></tr></thead>
+      <thead><tr><th>Risk</th><th>Mark</th><th>Owner</th><th>Type</th><th>Status</th></tr></thead>
       <tbody id="rpt-rows"></tbody>
     </table>
     <p class="disc" id="rpt-trunc"></p>
@@ -289,8 +291,17 @@
     var tb = document.getElementById('rpt-rows');
     rows.forEach(function(r){
       var tr = document.createElement('tr');
+      /* Ownership is the report's unlock — the on-page shortlist withholds
+         it and tells the visitor to request this report to see it. */
+      var own = r.company_name || r.owner_name || '';
+      var co  = r.company && r.company.status
+        ? '<div class="co">' + esc(r.company.status) +
+          (r.company.locality ? ' &middot; ' + esc(r.company.locality) : '') + '</div>'
+        : '';
       tr.innerHTML = '<td><span class="chip ' + riskCls(r.risk) + '">' + esc(r.risk||'—') +
-        '</span></td><td class="markname">' + esc(r.mark) + '</td><td>' + esc(r.type||'—') +
+        '</span></td><td class="markname">' + esc(r.mark) + '</td><td>' +
+        (own ? esc(own) : '<span class="quiet">Not recorded</span>') + co +
+        '</td><td>' + esc(r.type||'—') +
         '</td><td>' + esc(r.status||'—') + '</td>';
       tb.appendChild(tr);
     });
