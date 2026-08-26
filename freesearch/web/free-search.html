@@ -34,6 +34,11 @@
   .tmh-overlay{position:fixed;inset:0;background:var(--bg);z-index:9999;
     display:flex;flex-direction:column;align-items:center;justify-content:center;
     gap:16px;padding:20px}
+  /* Embedded (WordPress iframe): "fixed" spans the whole content-height
+     iframe, so vertical centring puts the card far below the visitor's
+     viewport — it looked crashed (Jonathan, 26 Aug). Anchor to the top and
+     ask the parent to scroll the widget into view instead. */
+  .tmh-overlay.embedded{justify-content:flex-start;padding-top:110px}
   .tmh-overlay .msg{font-size:15px;color:var(--navy);font-weight:600}
   .tmh-overlay .sub{font-size:14px;color:var(--muted)}
   .tmh-overlay .nug{background:#fff;border:1px solid var(--line);
@@ -945,7 +950,13 @@ let state={name:'',logo:false,logoLater:false,tagline:'',classes:[],
 */
 function screen(id){document.querySelectorAll('[data-screen]').forEach(s=>s.classList.add('hidden'));
   const el=document.querySelector(`[data-screen="${id}"]`);if(el)el.classList.remove('hidden');
-  renderStepper(id);window.scrollTo({top:0,behavior:'smooth'});}
+  renderStepper(id);window.scrollTo({top:0,behavior:'smooth'});
+  // Embedded: the iframe cannot scroll itself (it is content-height), so a
+  // screen change must ask the PARENT page to bring the widget's top back
+  // into view — otherwise the visitor lands mid-screen after every step.
+  if(window!==window.parent){
+    try{ window.parent.postMessage({brauditScrollTop:true},'*'); }catch(e){}
+  }}
 function pushScreen(id){history.pushState({screen:id},'','#'+id);renderScreen(id);}
 function renderScreen(id){
   if(id==='results'){
@@ -1933,6 +1944,10 @@ function overlayOn(msg,sub){
     _ovShown=Date.now();
     const d=document.createElement('div');
     d.className='tmh-overlay'; d.id='tmh-overlay';
+    if(window!==window.parent){
+      d.classList.add('embedded');
+      try{ window.parent.postMessage({brauditScrollTop:true},'*'); }catch(e){}
+    }
     document.body.appendChild(d);
     const host=document.createElement('div');
     d.appendChild(host);
