@@ -249,6 +249,10 @@
   .rt-row:first-child{border-top:0}
   .rt-row .mk{font-size:15.5px;font-weight:800;color:var(--ink)}
   .rt-row .ow{color:var(--quiet)}
+  /* Ownership is the lead-capture unlock. Rather than a bare em-dash that
+     reads like missing data, say WHY it's blank and where to get it
+     (Jonathan, 26 Aug). Red, because it's the thing they're missing. */
+  .ow-lock{color:var(--risk-high);font-weight:600}
   .rt-row .ty,.rt-row .st{color:var(--slate)}
   .co{font-size:13px;color:var(--quiet);margin-top:3px}
   .co .dead{color:var(--risk-high);font-weight:700}
@@ -784,11 +788,11 @@ const CONFIG = (function(){
     // it's actually deployed (same open question as this page's own hosting).
     BRAND_AUDIT_URL:'/brand-audit/',
     // "Proceed to application" — the other half of the recommended next
-    // steps. Points at the enquiry route rather than a checkout: an
-    // application still needs a human to check the specification before
-    // anything is filed, and promising otherwise on a free word search
-    // would be the one thing this page must not do.
-    APPLY_URL:'https://www.thetrademarkhelpline.com/make-an-enquiry/' };
+    // steps. Repointed 26 Aug (Jonathan) from the generic enquiry form to
+    // the dedicated application page, which is the route the new Apply for
+    // Trademark flow will use once the Brand Audit is built. Both wizards
+    // read this one constant, so Free Search and Quick Search stay in step.
+    APPLY_URL:'https://www.thetrademarkhelpline.com/apply-for-trademark/' };
 })();
 // The `journey` Edge Function is a sibling of `free-search` (same Supabase
 // project) — swap the last path segment rather than needing a second config
@@ -2435,7 +2439,8 @@ function renderResults(r){const s=r.summary;
     return `<div class="rt-row">
       <span><span class="band ${esc(x.risk).replace(' Risk','')}">${esc(x.risk).replace(' Risk','')}</span></span>
       <span class="mk">${esc(x.mark)}</span>
-      <span class="ow">${esc(x.company_name||x.owner_name||'\u2014')}${co}</span>
+      <span class="ow">${(x.company_name||x.owner_name)?esc(x.company_name||x.owner_name)
+        :'<span class="ow-lock">Request report for owner details</span>'}${co}</span>
       <span class="ty">${esc(x.type)}${cls}</span>
       <span class="st">${esc(x.status)}</span></div>`;}).join('');
   document.getElementById('res-rows').innerHTML=rows||
