@@ -98,19 +98,18 @@ string standalone.tmh_sector_report_lead(string crmAPIRequest)
 	{
 		fields.put("SIC",p.get("sic").toString());
 	}
-	// GDPR basis mirrors the search wizards: ticked box = consent obtained,
-	// otherwise legitimate interests (they asked us to send the report).
-	if(p.get("consent") != null && p.get("consent").toString() == "Yes")
-	{
-		fields.put("Data_Processing_Basis","Obtained");
-	}
-	else
-	{
-		fields.put("Data_Processing_Basis","Legitimate Interests");
-	}
+	// (Data_Processing_Basis is Zoho's GDPR-managed field — read-only to the
+	// API, proven on the search leads — so consent is recorded in the
+	// Description instead.)
 	// The report context the team acts on, as one readable Description.
+	// Deluge string literals cannot express a newline; url-decoding %0A can.
+	nl = zoho.encryption.urlDecode("%0A");
 	dl = List();
 	dl.add("Sector / Industry Trademark Report (" + ev + ")");
+	if(p.get("consent") != null && p.get("consent").toString() != "")
+	{
+		dl.add("Marketing consent: " + p.get("consent").toString());
+	}
 	if(p.get("report_id") != null && p.get("report_id").toString() != "")
 	{
 		dl.add("Report ID: " + p.get("report_id").toString());
@@ -180,7 +179,7 @@ string standalone.tmh_sector_report_lead(string crmAPIRequest)
 	{
 		if(desc != "")
 		{
-			desc = desc + "\n";
+			desc = desc + nl;
 		}
 		desc = desc + dline;
 	}
