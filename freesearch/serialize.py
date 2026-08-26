@@ -179,10 +179,14 @@ def serialize_result(result: FreeSearchResult, *, gated: bool = False,
         'top_results': rows if not gated else rows[:TOP_N],
         # The FULL flagged list for the emailed/linked report page (Jonathan,
         # 21 Aug: "the reports are supposed to have the full results within
-        # them"). Same anonymous field set as the on-screen shortlist — the
-        # ownership unlock stays behind lead capture / the audit — but every
-        # flagged mark, not just the top five.
-        'report_rows': [_shortlist_row(r, gated=False) for r in conflicts],
+        # them"), WITH ownership (26 Aug). The report is only reachable from
+        # the emailed link, i.e. after the address is captured, so it is the
+        # unlock — the on-page shortlist still withholds owners and says so.
+        # NB the anonymous browser receives this array too (it posts the
+        # result into its own session), so treat the gate as a conversion
+        # device, not a security control. Everything in it is public UK IPO
+        # register data.
+        'report_rows': [_shortlist_row(r, gated=True) for r in conflicts],
         'all_results': rows if gated else None,   # full list only when unlocked
         'gated': gated,
         'disclaimers': disclaimers,
