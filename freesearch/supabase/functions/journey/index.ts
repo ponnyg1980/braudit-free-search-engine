@@ -87,6 +87,11 @@ const TENANT_ALLOWLIST = new Set(
   (Deno.env.get("TENANT_ALLOWLIST") ?? "tmh").split(",").map((s) => s.trim()),
 );
 const ZOHO_FLOW_URL = Deno.env.get("ZOHO_FLOW_URL") ?? "";
+// Brand Audits do NOT become Leads (Jonathan, 27 Aug 2026): an audit is
+// buying intent, so it lands as Contact + Account + one Deal per brand via
+// its own CRM function. Falls back to the lead pipe if unset, so deploying
+// this before the env var exists cannot silently drop a submission.
+const ZOHO_AUDIT_URL = Deno.env.get("ZOHO_AUDIT_URL") ?? ZOHO_FLOW_URL;
 const ENGINE_URL = Deno.env.get("ENGINE_URL") ?? "http://localhost:8080";
 
 const admin = createClient(
@@ -1064,8 +1069,10 @@ serve(async (req) => {
     }
 
     if (reqRow) {
-      fireAndForget(ZOHO_FLOW_URL, zohoPayload("brand_audit", {
+      fireAndForget(ZOHO_AUDIT_URL, zohoPayload("brand_audit", {
         request_id, session_id: reqRow.session_id, tenant_id: reqRow.tenant_id,
+        // Chosen on the details screen; decides the deal name in Zoho.
+        audit_variant: String(body.audit_variant ?? "Trademark Audit Only"),
         first_name: reqRow.first_name, last_name: reqRow.last_name,
         email: reqRow.email, phone: reqRow.phone,
         business_name: reqRow.business_name, business_website: reqRow.business_website,
