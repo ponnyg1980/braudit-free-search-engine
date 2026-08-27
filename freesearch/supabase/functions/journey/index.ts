@@ -93,6 +93,15 @@ const ZOHO_FLOW_URL = Deno.env.get("ZOHO_FLOW_URL") ?? "";
 // this before the env var exists cannot silently drop a submission.
 const ZOHO_AUDIT_URL = Deno.env.get("ZOHO_AUDIT_URL") ?? ZOHO_FLOW_URL;
 const ENGINE_URL = Deno.env.get("ENGINE_URL") ?? "http://localhost:8080";
+// Audit checkout (28 Aug). The staged Deluge function that turns the audit
+// journey into Lead -> Contact + Deal -> Account -> Quoted -> Paid.
+const ZOHO_CHECKOUT_URL = Deno.env.get("ZOHO_CHECKOUT_URL") ?? "";
+// Where the audit form lives, for magic links.
+const AUDIT_BASE_URL = Deno.env.get("AUDIT_BASE_URL") ??
+  "https://braudit-free-search.onrender.com/audit";
+// Magic-link signing key. Links never expire (Jonathan, 27 Aug) but they are
+// signed, so an altered or guessed session id is refused.
+const AUDIT_LINK_SECRET = Deno.env.get("AUDIT_LINK_SECRET") ?? "";
 
 const admin = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
@@ -153,6 +162,36 @@ const BRAND_FIELDS = new Set([
   "business_description", "competitor_name", "competitor_website",
   "position",
 ]);
+
+// --- magic link -----------------------------------------------------------
+// HMAC-SHA256 over the session id, truncated to 16 hex chars. Short enough to
+// live comfortably in an email button, long enough that guessing is hopeless
+// (64 bits). No expiry by design: a client who comes back months later still
+// resumes, and staff can reissue by regenerating the same link.
+async function signSession(sessionId: string): Promise<string> {
+  if (!AUDIT_LINK_SECRET) return "";
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(AUDIT_LINK_SECRET),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(sessionId));
+  return [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0"))
+    .join("").slice(0, 16);
+}
+async function auditLink(sessionId: string): Promise<string> {
+  if (!sessionId) return "";
+  const sig = await signSession(sessionId);
+  const base = `${AUDIT_BASE_URL}?s=${encodeURIComponent(sessionId)}`;
+  return sig ? `${base}&sig=${sig}` : base;
+}
+// Constant-time-ish compare; the values are short hex strings.
+async function verifySession(sessionId: string, sig: string): Promise<boolean> {
+  if (!AUDIT_LINK_SECRET) return true;      // unset -> open, as before
+  const want = await signSession(sessionId);
+  if (!want || want.length !== sig.length) return false;
+  let diff = 0;
+  for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0;
+}
 
 function pick(src: Record<string, unknown>, allow: Set<string>) {
   const out: Record<string, unknown> = {};
@@ -570,6 +609,11 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
     Free_Search_Conflicts: typeof summary.total_flagged === "number"
       ? summary.total_flagged : undefined,
     Free_Search_Session: sessionId,
+    // Magic link (28 Aug). Staff and clients open the Brand Audit already
+    // carrying this search — mark, logo, tagline, jurisdictions, classes and
+    // terms — instead of starting again. Signed, no expiry. The value is
+    // filled in by the caller (zohoPayload) because signing is async.
+    Brand_Audit_Link: undefined as string | undefined,
     Free_Search_Tenant: session.tenant_id || "tmh",
     // Zoho datetime fields silently reject ISO strings ending in 'Z' (and
     // the rejection voids the ENTIRE update, not just this field — proven
@@ -769,7 +813,8 @@ serve(async (req) => {
           business_name: session.business_name, business_website: session.business_website,
           trading_now: session.trading_now, planning_to_trade: session.planning_to_trade,
           // Zoho-ready: Flow maps this object straight into the Leads upsert.
-          zoho_fields: zohoLeadFields(session, session_id),
+          zoho_fields: { ...zohoLeadFields(session, session_id),
+            Brand_Audit_Link: await auditLink(session_id) },
           scope: scopeBlk,
           register: String(session.register || "UKIPO"),
           // Class Builder sends: the Deluge upsert emails this back to the
@@ -816,6 +861,7 @@ serve(async (req) => {
               // contact_resolver.py is explicit this is not permission to market.
               Lead_Source: "Search Result Only",
               Email_Source: "Resolver",
+              Brand_Audit_Link: await auditLink(session_id),
               Phone: engineResult.phone || undefined,
               Website: engineResult.website || undefined,
               Company_Number1: engineResult.company_number || undefined,
@@ -1163,6 +1209,72 @@ serve(async (req) => {
     }
 
     return json({ ok: true, ...engineResult }, 200, origin);
+  }
+
+  // --- audit/link -------------------------------------------------------
+  // The signed magic link for a session. Callers already hold the session id,
+  // so this discloses nothing new — it only adds the signature they cannot
+  // compute themselves.
+  if (req.method === "GET" && path === "/audit/link") {
+    const id = url.searchParams.get("id");
+    if (!id) return json({ ok: false, error: "id required" }, 400, origin);
+    return json({ ok: true, url: await auditLink(id) }, 200, origin);
+  }
+
+  // --- audit/prefill ----------------------------------------------------
+  // Session data for a magic-link arrival. Unlike GET /session this REQUIRES
+  // a valid signature, so a forwarded-and-edited link cannot fish for
+  // someone else's search.
+  if (req.method === "POST" && path === "/audit/prefill") {
+    const body = await readJson(req);
+    const id = String(body?.session_id ?? "");
+    const sig = String(body?.sig ?? "");
+    if (!id) return json({ ok: false, error: "session_id required" }, 400, origin);
+    if (!await verifySession(id, sig)) {
+      return json({ ok: false, error: "bad signature" }, 403, origin);
+    }
+    const { data, error } = await admin.from("journey_sessions")
+      .select("*").eq("session_id", id).maybeSingle();
+    if (error || !data) return json({ ok: false, error: "not found" }, 404, origin);
+    return json({ ok: true, session: data }, 200, origin);
+  }
+
+  // --- audit/checkout ---------------------------------------------------
+  // Relay from the audit page to the staged Deluge intake. Server-side so the
+  // function's zapikey never reaches the browser. The response carries the
+  // Zoho ids back so the next stage updates the same records.
+  if (req.method === "POST" && path === "/audit/checkout") {
+    const body = await readJson(req);
+    if (!body || !body.stage) {
+      return json({ ok: false, error: "stage required" }, 400, origin);
+    }
+    if (!ZOHO_CHECKOUT_URL) {
+      return json({ ok: false, error: "checkout not configured" }, 200, origin);
+    }
+    const sid = String(body.session_id ?? "");
+    const payload = { ...body, audit_link: sid ? await auditLink(sid) : "" };
+    // Log it first: the CRM call can fail, the journey record must not.
+    if (sid) {
+      await admin.from("journey_events").insert({
+        session_id: sid, event_type: "audit_checkout_" + String(body.stage),
+        screen: "audit_" + String(body.stage), payload: { relayed: true },
+      });
+    }
+    try {
+      const r = await fetch(ZOHO_CHECKOUT_URL, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const text = await r.text();
+      // Deluge returns its map as a string; hand it back raw when it will not
+      // parse, so the caller can still see what happened.
+      let parsed: unknown = null;
+      try { parsed = JSON.parse(text); } catch { parsed = null; }
+      return json({ ok: r.ok, status: r.status, result: parsed, raw: parsed ? undefined : text },
+        200, origin);
+    } catch (e) {
+      return json({ ok: false, error: String(e) }, 200, origin);
+    }
   }
 
   // --- zoho-linked ---------------------------------------------------------------
