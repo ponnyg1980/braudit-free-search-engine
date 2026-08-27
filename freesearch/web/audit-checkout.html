@@ -604,7 +604,13 @@ function addWorkingDays(date,n){
   while(left>0){ d.setDate(d.getDate()+step); if(isWorkingDay(d)) left--; }
   return d;
 }
-function iso(d){return d.toISOString().slice(0,10);}
+/* Local-date ISO. NOT toISOString(): that converts to UTC, so a date built at
+   local midnight during British Summer Time comes back as the PREVIOUS day —
+   which silently moved every deadline a day earlier (caught 27 Aug). */
+function iso(d){
+  const p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
 function fromIso(s){const [y,m,dd]=String(s).split('-').map(Number);return new Date(y,m-1,dd);}
 function prettyDate(s){
   if(!s) return '';
