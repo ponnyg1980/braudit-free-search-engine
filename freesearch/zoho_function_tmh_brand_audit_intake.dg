@@ -422,10 +422,17 @@ string standalone.tmh_brand_audit_intake(string crmAPIRequest)
 					// be the final word on the record (proven 27 Aug: set it
 					// before the sub-form and the deal lands in the wrong
 					// pipeline).
+					// Pipeline goes on its OWN. Sent alongside Stage, Deluge
+					// silently drops it and the deal keeps the layout's
+					// default pipeline (proven twice, 27 Aug) — Stage exists
+					// in both pipelines so Zoho resolves it to the default.
 					pM = Map();
 					pM.put("Pipeline","Audit and Consultation");
-					pM.put("Stage","Prospect");
 					pu = zoho.crm.updateRecord("Deals",dealId.toLong(),pM);
+					sM = Map();
+					sM.put("Stage","Prospect");
+					su2 = zoho.crm.updateRecord("Deals",dealId.toLong(),sM);
+					info "audit: pipeline set -> " + pu;
 					dealNote = dealNote + ":deal=" + dealId;
 				}
 				else
