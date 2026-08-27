@@ -552,6 +552,10 @@
       <button class="btn primary" onclick="sendToDeal()">Send to the Deal&rsquo;s Classes &amp; Terms</button>
     </div>
 
+    <div id="rv-return-send" class="hidden">
+      <button class="btn primary" onclick="sendToCaller()">Use these classes &amp; terms</button>
+    </div>
+
     <div id="rv-lead-send" class="hidden" style="max-width:560px">
       <h2 style="font-size:20px">Email me my classes &amp; terms</h2>
       <p class="sub">We&rsquo;ll send your selection as a spreadsheet (CSV) you can keep.</p>
@@ -784,6 +788,13 @@ const CONFIG = (function(){
     // completed search's classes & terms onto THAT Deal (and suppresses
     // all lead creation server-side).
     DEAL:q.get('deal')||'',
+    // "Return to caller" mode (27 Aug). The Brand Audit form embeds this
+    // builder per brand so the audit uses the SAME class tools and tiered
+    // terms as Free Search, instead of its own older picker. With ?return=1
+    // the review screen offers "Use these classes & terms", which posts the
+    // selection back to the host page and writes nothing to Zoho — the
+    // audit submits everything itself at the end.
+    RETURN:q.get('return')||'',
     RESUME_NAME:q.get('q')||'',
     // The journey Edge Function. Production default (param-overridable) —
     // relative same-origin calls 404 on the Render engine, which had been
@@ -2296,8 +2307,14 @@ function renderReview(){
       <textarea id="rv-h-${r.n}" rows="2">${esc(r.heading)}</textarea>
       ${termsHtml}
     </div>`;}).join('');
-  document.getElementById('rv-deal-send').classList.toggle('hidden', !CONFIG.DEAL);
-  document.getElementById('rv-lead-send').classList.toggle('hidden', !!CONFIG.DEAL);
+  /* Three exits from Review, mutually exclusive:
+     RETURN -> hand the selection back to the host page (Brand Audit)
+     DEAL   -> write it onto a Zoho Deal
+     else   -> email the visitor a CSV and make a Class Tools lead */
+  const ret=!!CONFIG.RETURN;
+  document.getElementById('rv-return-send').classList.toggle('hidden', !ret);
+  document.getElementById('rv-deal-send').classList.toggle('hidden', ret || !CONFIG.DEAL);
+  document.getElementById('rv-lead-send').classList.toggle('hidden', ret || !!CONFIG.DEAL);
 }
 function rvRemove(n){
   state.review=(state.review||[]).filter(r=>r.n!==n);
@@ -2331,6 +2348,24 @@ function rvDone(msg){
   d.textContent=msg; d.classList.remove('hidden');
   document.getElementById('rv-deal-send').classList.add('hidden');
   document.getElementById('rv-lead-send').classList.add('hidden');
+  const rs=document.getElementById('rv-return-send'); if(rs) rs.classList.add('hidden');
+}
+/* Return-to-caller: hand the reviewed selection to the host page (the Brand
+   Audit form) and write NOTHING to Zoho. The audit owns the submission, so
+   the builder must not create leads or deals on its way through. */
+function sendToCaller(){
+  const rows=collectReview();
+  if(!rows.length){ rvErr('Nothing to send — add at least one class with terms.'); return; }
+  const flat=[];
+  rows.forEach(r=>{ (r.terms||[]).forEach(t=>{ if(flat.indexOf(t)<0) flat.push(t); }); });
+  const msg={brauditClasses:{
+    name:state.name||'',
+    classes:rows.map(r=>r.n),
+    terms:flat,
+    scope:rows,
+    token:CONFIG.RETURN}};
+  try{ window.parent.postMessage(msg,'*'); }catch(e){}
+  rvDone('Added to your brand — you can close this and carry on.');
 }
 function sendToDeal(){
   const rows=collectReview();
