@@ -233,13 +233,13 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		out.put("zoho_account_id",accountId);
 		out.put("zoho_deal_id",dealId);
 	}
-	//
-	// ----------------------------------------------- stage: scope
-	//
-	// Everything the audit will actually search. Written as the client
-	// moves, so an abandoned journey still shows staff what was wanted.
 	else if(stage == "scope" && dealId != "")
 	{
+		//
+		// ----------------------------------------------- stage: scope
+		//
+		// Everything the audit will actually search. Written as the client
+		// moves, so an abandoned journey still shows staff what was wanted.
 		dM = Map();
 		mark = "";
 		if(p.get("mark") != null)
@@ -483,14 +483,14 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		out.put("ok",true);
 	}
-	//
-	// ----------------------------------------------- stage: applicant
-	//
-	// The Details page is where the Account comes from (Jonathan: "Account
-	// is populated from Details Page"). Company number is the dedupe key
-	// when we have one, name otherwise.
 	else if(stage == "applicant")
 	{
+		//
+		// ----------------------------------------------- stage: applicant
+		//
+		// The Details page is where the Account comes from (Jonathan: "Account
+		// is populated from Details Page"). Company number is the dedupe key
+		// when we have one, name otherwise.
 		orgName = "";
 		if(p.get("org_name") != null)
 		{
@@ -576,13 +576,13 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		out.put("zoho_account_id",accountId);
 	}
-	//
-	// ----------------------------------------------- stage: summary
-	//
-	// "Deal Stage is Prospect until page Summary at which point it is at
-	// stage quoted."
 	else if(stage == "summary" && dealId != "")
 	{
+		//
+		// ----------------------------------------------- stage: summary
+		//
+		// "Deal Stage is Prospect until page Summary at which point it is at
+		// stage quoted."
 		dM = Map();
 		dM.put("Stage","Quoted");
 		dM.put("Braudit_Trigger_Status","awaiting_payment");
@@ -613,18 +613,18 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
 		out.put("ok",true);
 	}
-	//
-	// ----------------------------------------------- stage: paid
-	//
-	// "When paid, they move to Paid, Send for Research and an immediate task
-	// is created for admin@ to send for research."
-	//
-	// Stage = Paid with Next_Action = "Send for Research" -- the value
-	// already in live use on paid audits. Braudit_Trigger_Status advances to
-	// awaiting_logo when a logo is still coming (the word context can still
-	// be frozen and sent; a missing logo never delays it), otherwise ready.
 	else if(stage == "paid" && dealId != "")
 	{
+		//
+		// ----------------------------------------------- stage: paid
+		//
+		// "When paid, they move to Paid, Send for Research and an immediate task
+		// is created for admin@ to send for research."
+		//
+		// Stage = Paid with Next_Action = "Send for Research" -- the value
+		// already in live use on paid audits. Braudit_Trigger_Status advances to
+		// awaiting_logo when a logo is still coming (the word context can still
+		// be frozen and sent; a missing logo never delays it), otherwise ready.
 		logoAwaited = false;
 		dealRec = zoho.crm.getRecordById("Deals",dealId.toLong());
 		if(dealRec.get("Logo_Awaited") != null)
@@ -691,13 +691,13 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		]
 		out.put("ok",true);
 	}
-	//
-	// ----------------------------------------------- stage: factfind
-	//
-	// The closing questions. Account Types -> Accounts, Review Type ->
-	// Client Relationships, motivation + free text -> the Deal.
 	else if(stage == "factfind")
 	{
+		//
+		// ----------------------------------------------- stage: factfind
+		//
+		// The closing questions. Account Types -> Accounts, Review Type ->
+		// Client Relationships, motivation + free text -> the Deal.
 		if(dealId != "")
 		{
 			dM = Map();
