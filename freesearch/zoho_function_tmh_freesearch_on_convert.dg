@@ -123,6 +123,10 @@ void automation.tmh_freesearch_on_convert(int dealId)
 				{
 					brandLc = brandLc.getSuffix("free search - ");
 				}
+				if(brandLc.contains("brand audit - "))
+				{
+					brandLc = brandLc.getSuffix("brand audit - ");
+				}
 				if(brandLc != "" && dealNameLc.contains(brandLc))
 				{
 					// Rep named this brand in the conversion deal — hard claim.
@@ -194,6 +198,10 @@ void automation.tmh_freesearch_on_convert(int dealId)
 					if(brand.contains("Free Search - "))
 					{
 						brand = brand.getSuffix("Free Search - ");
+					}
+					if(brand.contains("Brand Audit - "))
+					{
+						brand = brand.getSuffix("Brand Audit - ");
 					}
 					dMap = Map();
 					dMap.put("Deal_Name",brand + " - " + pw);
