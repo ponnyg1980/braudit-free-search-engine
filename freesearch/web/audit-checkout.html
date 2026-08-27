@@ -540,6 +540,10 @@ const CONFIG=(function(){
   return {
     EMBED:q.get('embed')==='1',
     SESSION:q.get('s')||q.get('fs')||'',
+    /* Magic-link signature. Present when the visitor arrived from a link in
+       an email or from the Zoho record; verified server-side before any of
+       their search data is handed back. */
+    SIG:q.get('sig')||'',
     NAME:q.get('q')||'',
     JOURNEY:q.get('journey')||'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey',
     /* Pricing — the Audit Promotion discount is whatever brings the net to £99. */
@@ -646,6 +650,28 @@ async function ensureSession(){
   }catch(e){}
   return state.sessionId;
 }
+/* ---- CRM checkout relay -------------------------------------------------
+   Each milestone posts to the journey function, which calls the staged Deluge
+   intake and hands back the Zoho ids. Ids are remembered so the next stage
+   updates the same Lead/Contact/Deal/Account rather than making new ones.
+   Fire-and-forget by design: a CRM hiccup must never block the client. */
+const zoho={contact:'',account:'',deal:''};
+async function crm(stage,extra){
+  const body=Object.assign({stage:stage,session_id:state.sessionId,
+    zoho_contact_id:zoho.contact||undefined,
+    zoho_account_id:zoho.account||undefined,
+    zoho_deal_id:zoho.deal||undefined},extra||{});
+  try{
+    const r=await fetch(journeyBase()+'/audit/checkout',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    const res=(d&&d.result)||{};
+    if(res.zoho_contact_id)zoho.contact=String(res.zoho_contact_id);
+    if(res.zoho_account_id)zoho.account=String(res.zoho_account_id);
+    if(res.zoho_deal_id)zoho.deal=String(res.zoho_deal_id);
+    return res;
+  }catch(e){return null;}
+}
 function logEvent(type,screen,payload,snapshot){
   const send=id=>{ if(!id) return;
     try{fetch(journeyBase()+'/session/event',{method:'POST',
@@ -691,6 +717,9 @@ function submitContact(){
   logEvent('lead_captured','audit_contact',{via:'audit_checkout'},
     {first_name:c.first,last_name:c.last,email:c.email,phone:c.phone,
      email_source:'report_form',current_screen:'audit_contact'});
+  /* Past the contact step -> Lead, converted to Contact + Deal at Prospect. */
+  crm('contact',{first_name:c.first,last_name:c.last,email:c.email,
+    phone:c.phone,mark:state.name||''});
   go('searches');
 }
 
@@ -984,7 +1013,44 @@ function submitPlatforms(){
   clearErr('p-err');
   logEvent('audit_checkout_platforms','audit_platforms',{platforms:state.platforms},
     {current_screen:'audit_platforms'});
+  pushScope();
   go('consult');
+}
+
+/* Everything the audit will actually search, pushed once the platforms are
+   confirmed: word criteria, search types, jurisdictions, layers, classes and
+   terms (G S Scope + the deal subform), and the client-owned exclusions. */
+function pushScope(){
+  const p=state.platforms;
+  const layers=[];
+  Object.keys(p.ipos).filter(c=>p.ipos[c]).forEach(c=>{
+    layers.push(c==='GB'?'UKIPO (Temmy)':c==='EU'?'EUIPO':c==='US'?'USPTO':'Other IPO');});
+  layers.push('Companies House UK');
+  layers.push('Domain Registers');
+  SOCIALS.forEach(([k,l])=>{if(p.soc[k].on)layers.push(l);});
+  SHOPS.forEach(([k,l])=>{if(p.shop[k].on)layers.push(l);});
+  const exclusions=[];
+  if(p.org&&p.org.number)exclusions.push({type:'Company Number',value:p.org.number,match_mode:'Exact'});
+  if(p.domain)exclusions.push({type:'Domain',value:p.domain,match_mode:'Domain and Subdomains'});
+  SOCIALS.concat(SHOPS).forEach(([k,l])=>{
+    const g=state.platforms.soc[k]?'soc':'shop';
+    const rec=state.platforms[g][k];
+    if(rec&&rec.on&&rec.url)exclusions.push({type:'URL',value:rec.url,match_mode:'Exact'});
+  });
+  const scope=state.scope.map(r=>({n:r.n,heading:r.heading||'',
+    terms_source:r.terms_source||'Approved',terms_text:(r.terms||[]).join('\n')}));
+  const desc=['Brand Audit in progress — captured from the website form.',
+    'Mark: '+state.name,
+    state.tagline?'Tagline: '+state.tagline:'',
+    state.hasLogo?('Logo: '+(state.logoLater?'to follow':(state.logoUrl||'provided'))):'',
+    'Trading now: '+state.now.join(', '),
+    state.plan.length?'Planning to trade: '+state.plan.join(', '):''
+  ].filter(Boolean).join('\n');
+  crm('scope',{mark:state.name,tagline:state.tagline,has_logo:state.hasLogo,
+    logo_later:state.logoLater,logo_url:state.logoUrl,
+    trading_now:state.now,planning_to_trade:state.plan,
+    search_layers:[...new Set(layers)],scope:scope,create_scope_asset:scope.length>0,
+    exclusions:exclusions,description:desc});
 }
 
 /* ================= 6 — CONSULTATION ================= */
@@ -1108,6 +1174,12 @@ function submitApplicant(){
   clearErr('a-err');
   logEvent('audit_checkout_applicant','audit_applicant',{applicant:state.applicant},
     {current_screen:'audit_applicant'});
+  /* The Details page is where the Account comes from. */
+  crm('applicant',{org_name:state.applicant.name,org_id:state.applicant.id,
+    addr1:state.applicant.addr1,addr2:state.applicant.addr2,
+    addr3:state.applicant.addr3,postcode:state.applicant.postcode,
+    country:(state.applicant.kind==='uk_org'||state.applicant.kind==='uk_ind')
+      ?'United Kingdom':''});
   renderSummary();
   go('summary');
 }
@@ -1254,6 +1326,27 @@ function submitOrder(){
   }
   clearErr('sum-err');
   const pr=pricing();
+  const dealName=(state.consult.taken?'Trademark Audit & Consultation - ':'Trademark Audit Only - ')+
+    state.name+(state.hasLogo?' Word, Logo':' Word');
+  /* Summary reached -> Quoted. */
+  crm('summary',{order_ref:invoiceRef(),net_total:pr.net,vat:pr.vat,total:pr.total,
+    deal_name:dealName,
+    description:'Audit quoted from the website form.\nVariant: '+
+      (state.consult.taken?'Trademark Audit & Consultation':'Trademark Audit Only')+
+      '\nOrder ref: '+invoiceRef()+'\nTotal: £'+pr.total.toFixed(2)+
+      (pr.exempt?' (no VAT — outside the UK)':' (incl. VAT)')})
+    .then(()=>{
+      /* Payment taken online is confirmed by Stripe, not by the client
+         clicking. Phone and invoice are confirmed later by staff, so only the
+         online route advances the deal to Paid here — and only once we can
+         see the Stripe session was created. */
+      if(state.payment.method==='online'&&state.payment.stripeUrl){
+        crm('paid',{payment_method:'Online (Stripe)',order_ref:invoiceRef(),
+          paid_on:iso(new Date())});
+      }else if(state.payment.method==='invoice'){
+        crm('summary',{order_ref:invoiceRef(),payment_due:state.payment.payDate});
+      }
+    });
   logEvent('audit_checkout_submitted','audit_summary',{
     order:{
       contact:state.contact,name:state.name,has_logo:state.hasLogo,logo_url:state.logoUrl,
@@ -1319,6 +1412,8 @@ function submitFactFind(){
     primary_motivation:g('ff-motive')||null,  /* Primary Motivation — Deals */
     enquiry_notes:g('ff-notes').trim()||null  /* what prompted your trademark enquiry — Deals */
   },{});
+  crm('factfind',{account_type:g('ff-who')||'',review_type:g('ff-reason')||'',
+    primary_motivation:g('ff-motive')||'',enquiry_notes:g('ff-notes').trim()});
   document.getElementById('ff-done').classList.remove('hidden');
 }
 
@@ -1326,8 +1421,18 @@ function submitFactFind(){
 async function prepopulate(){
   if(!state.sessionId)return;
   try{
-    const r=await fetch(journeyBase()+'/session?id='+encodeURIComponent(state.sessionId));
-    const d=await r.json();
+    /* Magic-link arrivals go through the signed route; same-browser hand-offs
+       from the search wizard read the session directly as before. */
+    let d;
+    if(CONFIG.SIG){
+      const r=await fetch(journeyBase()+'/audit/prefill',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({session_id:state.sessionId,sig:CONFIG.SIG})});
+      d=await r.json();
+    }else{
+      const r=await fetch(journeyBase()+'/session?id='+encodeURIComponent(state.sessionId));
+      d=await r.json();
+    }
     if(!d||!d.ok||!d.session)return;
     const s=d.session;
     if(s.first_name)state.contact.first=s.first_name;
