@@ -76,7 +76,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	//
 	// ----------------------------------------------- stage: contact
 	//
-	if(stg == "contact" && emIn != "")
+	if((stg == "contact") && (emIn != ""))
 	{
 		em = emIn;
 		first = "";
@@ -194,7 +194,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		// 4. The Deal. Created on a stage unique to this pipeline, then
 		//    moved to Prospect (Jonathan: Prospect until Summary).
-		if(dealId == "" && contactId != "")
+		if((dealId == "") && (contactId != ""))
 		{
 			dName = "Trademark Audit";
 			if(mark != "")
@@ -234,7 +234,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		res.put("zoho_account_id",accountId);
 		res.put("zoho_deal_id",dealId);
 	}
-	else if(stg == "scope" && dealId != "")
+	else if((stg == "scope") && (dealId != ""))
 	{
 		//
 		// ----------------------------------------------- stage: scope
@@ -355,7 +355,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			dM.put("Audit_Consultation_Type",p.get("consultation_type").toString());
 		}
-		if(p.get("deadline") != null && p.get("deadline").toString() != "")
+		if(p.get("deadline") != null)
 		{
 			dM.put("Audit_Deadline",p.get("deadline").toString().toDate());
 		}
@@ -392,7 +392,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			zoho.crm.updateRecord("Deals",dealId.toLong(),sfMap);
 		}
 		// G S Scope Asset + class rows (the frozen-scope source of record).
-		if(p.get("scope") != null && p.get("create_scope_asset") != null)
+		if(p.get("scope") != null)
 		{
 			aNm = "Brand Audit - " + mark;
 			if(aNm.length() > 100)
@@ -506,7 +506,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		// (verified 28 Aug -- there is no Company_Number). It is numeric, so
 		// only digits are usable as a dedupe key; SC/NI prefixed numbers fall
 		// through to the name match below.
-		if(accountId == "" && orgId != "")
+		if((accountId == "") && (orgId != ""))
 		{
 			fa = zoho.crm.searchRecords("Accounts","(Company_Registration:equals:" + orgId + ")");
 			if(fa.size() > 0)
@@ -524,7 +524,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		aM = Map();
 		aM.put("Account_Name",orgName);
-		if(orgId != "" && orgId.matches("[0-9]+"))
+		if((orgId != "") && (orgId.matches("[0-9]+")))
 		{
 			aM.put("Company_Registration",orgId.toLong());
 		}
@@ -577,7 +577,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		res.put("zoho_account_id",accountId);
 	}
-	else if(stg == "summary" && dealId != "")
+	else if((stg == "summary") && (dealId != ""))
 	{
 		//
 		// ----------------------------------------------- stage: summary
@@ -614,7 +614,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
 		res.put("ok",true);
 	}
-	else if(stg == "paid" && dealId != "")
+	else if((stg == "paid") && (dealId != ""))
 	{
 		//
 		// ----------------------------------------------- stage: paid
@@ -646,11 +646,11 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			dM.put("Audit_Payment_Method",p.get("payment_method").toString());
 		}
-		if(p.get("paid_on") != null && p.get("paid_on").toString() != "")
+		if(p.get("paid_on") != null)
 		{
 			dM.put("Paid",p.get("paid_on").toString().toDate());
 		}
-		if(p.get("payment_due") != null && p.get("payment_due").toString() != "")
+		if(p.get("payment_due") != null)
 		{
 			dM.put("Payment_Due_Date",p.get("payment_due").toString().toDate());
 		}
@@ -718,7 +718,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		// "Account Types" is Account_Type_2, a MULTI-select (Jonathan, 28 Aug).
 		// The four answers collapse to the two real values; the existing
 		// values on the account are preserved, never replaced.
-		if(accountId != "" && p.get("account_type") != null)
+		if(accountId != "")
 		{
 			ansr = p.get("account_type").toString();
 			want = "Trademark Applicant";
