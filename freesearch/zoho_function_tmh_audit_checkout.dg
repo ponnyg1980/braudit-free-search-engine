@@ -3,25 +3,25 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	// AUDIT CHECKOUT INTAKE -- the client-facing 9-page audit journey.
 	//
 	// Jonathan, 27 Aug 2026:
-	//   "When a Brand Audit begins where we create a Lead, it converts to
+	//   'When a Brand Audit begins where we create a Lead, it converts to
 	//    Contact & Deal or creates contact and deal when they get past
-	//    Contact Stage - Account is populated from Details Page"
-	//   "Deal Stage is Prospect until page Summary at which point it is at
+	//    Contact Stage - Account is populated from Details Page'
+	//   'Deal Stage is Prospect until page Summary at which point it is at
 	//    stage quoted. When paid, they move to Paid, Send for Research and
-	//    an immediate task is created for admin@ to send for research"
+	//    an immediate task is created for admin@ to send for research'
 	//
 	// STAGED, not one-shot. The page calls this at each milestone so the
 	// CRM fills in as the client progresses and an abandoned journey still
 	// leaves a usable record:
 	//
 	//   stg=contact    Lead (source-attributed) -> convert -> Contact +
-	//                    Deal at Prospect in "Audit and Consultation".
+	//                    Deal at Prospect in 'Audit and Consultation'.
 	//   stg=scope      searches, jurisdictions, classes & terms, platforms,
 	//                    consultation -> Deal + G S Scope + exclusions.
 	//   stg=applicant  Account created/matched from the Details page and
 	//                    linked to the Deal and Contact.
 	//   stg=summary    Stage -> Quoted, pricing + order ref recorded.
-	//   stg=paid       Stage -> Paid, Next_Action -> "Send for Research",
+	//   stg=paid       Stage -> Paid, Next_Action -> 'Send for Research',
 	//                    task for Admin Support, email to admin@.
 	//   stg=factfind   the closing questions.
 	//
@@ -30,9 +30,9 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	//
 	// PIPELINE NOTE (proven twice, 27 Aug): the v2 API DERIVES Pipeline from
 	// Stage. Sending Pipeline directly reports success and silently keeps the
-	// layout default. "Prospect" exists in several pipelines, so the deal is
-	// created on a stage unique to Audit and Consultation ("Initial
-	// Conversation") and moved to Prospect immediately afterwards.
+	// layout default. 'Prospect' exists in several pipelines, so the deal is
+	// created on a stage unique to Audit and Consultation ('Initial
+	// Conversation') and moved to Prospect immediately afterwards.
 	reqMap = crmAPIRequest.toMap();
 	bodyRaw = reqMap.get("body");
 	if(bodyRaw == null)
@@ -489,8 +489,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		//
 		// ----------------------------------------------- stage: applicant
 		//
-		// The Details page is where the Account comes from (Jonathan: "Account
-		// is populated from Details Page"). Company number is the dedupe key
+		// The Details page is where the Account comes from (Jonathan: 'Account
+		// is populated from Details Page'). Company number is the dedupe key
 		// when we have one, name otherwise.
 		orgName = "";
 		if(p.get("org_name") != null)
@@ -582,8 +582,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		//
 		// ----------------------------------------------- stage: summary
 		//
-		// "Deal Stage is Prospect until page Summary at which point it is at
-		// stage quoted."
+		// 'Deal Stage is Prospect until page Summary at which point it is at
+		// stage quoted.'
 		dM = Map();
 		dM.put("Stage","Quoted");
 		dM.put("Braudit_Trigger_Status","awaiting_payment");
@@ -619,10 +619,10 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		//
 		// ----------------------------------------------- stage: paid
 		//
-		// "When paid, they move to Paid, Send for Research and an immediate task
-		// is created for admin@ to send for research."
+		// 'When paid, they move to Paid, Send for Research and an immediate task
+		// is created for admin@ to send for research.'
 		//
-		// Stage = Paid with Next_Action = "Send for Research" -- the value
+		// Stage = Paid with Next_Action = 'Send for Research' -- the value
 		// already in live use on paid audits. Braudit_Trigger_Status advances to
 		// awaiting_logo when a logo is still coming (the word context can still
 		// be frozen and sent; a missing logo never delays it), otherwise ready.
@@ -715,7 +715,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
 			}
 		}
-		// "Account Types" is Account_Type_2, a MULTI-select (Jonathan, 28 Aug).
+		// 'Account Types' is Account_Type_2, a MULTI-select (Jonathan, 28 Aug).
 		// The four answers collapse to the two real values; the existing
 		// values on the account are preserved, never replaced.
 		if(accountId != "")
