@@ -795,6 +795,11 @@ const CONFIG = (function(){
     // selection back to the host page and writes nothing to Zoho — the
     // audit submits everything itself at the end.
     RETURN:q.get('return')||'',
+    // Seed the builder with classes the caller ALREADY has (27 Aug). The
+    // Audit Checkout sends ?classes=25,35&screen=review so a visitor who
+    // picked classes during their search reviews the wording rather than
+    // starting the picker again. Ignored outside builder mode.
+    SEED_CLASSES:q.get('classes')||'',
     RESUME_NAME:q.get('q')||'',
     // The journey Edge Function. Production default (param-overridable) —
     // relative same-origin calls 404 on the Render engine, which had been
@@ -2753,7 +2758,35 @@ window.addEventListener('popstate',function(e){
    falling back to the ?q= parameter when there was no session to write to.
    If neither is available we just open on step 1 as normal — a broken
    hand-off should degrade to the ordinary journey, never to a dead end. */
+/* Seeded builder open (27 Aug). ?classes=25,35 (+ optional screen=review)
+   in builder mode: adopt the caller's existing classes and go straight to
+   the review of the official descriptions and terms. Runs BEFORE the
+   search-box resume and takes over rendering when it applies. */
+let SEEDED_BUILDER = false;
+(function seedBuilderClasses(){
+  if(!BUILDER || !CONFIG.SEED_CLASSES) return;
+  const cls = CONFIG.SEED_CLASSES.split(',').map(s=>parseInt(s,10))
+    .filter(n=>n>=1 && n<=45);
+  if(!cls.length) return;
+  SEEDED_BUILDER = true;
+  state.classes = cls;
+  if(CONFIG.RESUME_NAME){
+    state.name = CONFIG.RESUME_NAME;
+    const n=document.getElementById('name'); if(n) n.value=state.name;
+    const wm=document.getElementById('word-mark'); if(wm) wm.value=state.name;
+  }
+  renderBasket();
+  if(CONFIG.RESUME_SCREEN === 'review'){
+    renderScreen('classes');            // so the back button lands somewhere sane
+    history.replaceState({screen:'classes'},'','#classes');
+    goToReview();
+  } else {
+    renderScreen('classes');
+    history.replaceState({screen:'classes'},'','#classes');
+  }
+})();
 (function resumeFromSearchBox(){
+  if(SEEDED_BUILDER) return;                 // already positioned above
   const wanted = CONFIG.RESUME_SCREEN;
   if(!CONFIG.RESUME_SESSION && !CONFIG.RESUME_NAME){ renderScreen('search'); return; }
 
