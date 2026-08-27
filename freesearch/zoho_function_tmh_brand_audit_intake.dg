@@ -335,12 +335,6 @@ string standalone.tmh_brand_audit_intake(string crmAPIRequest)
 				if(nd.get("id") != null)
 				{
 					dealId = nd.get("id").toString();
-					// Zoho ignores Pipeline/Stage on CREATE (layout default
-					// wins) — proven 21 Aug. An UPDATE applies them.
-					pM = Map();
-					pM.put("Pipeline","Audit and Consultation");
-					pM.put("Stage","Prospect");
-					pu = zoho.crm.updateRecord("Deals",dealId.toLong(),pM);
 					made = made + 1;
 					// ----- scope asset + class rows for THIS brand -----
 					amD = Map();
@@ -422,6 +416,16 @@ string standalone.tmh_brand_audit_intake(string crmAPIRequest)
 						sfMap.put("Classes_Terms",subNew);
 						sfU = zoho.crm.updateRecord("Deals",dealId.toLong(),sfMap);
 					}
+					// Pipeline/Stage LAST. Zoho ignores them on CREATE (the
+					// layout default wins — proven 21 Aug), and the sub-form
+					// write above re-applies that default too, so this has to
+					// be the final word on the record (proven 27 Aug: set it
+					// before the sub-form and the deal lands in the wrong
+					// pipeline).
+					pM = Map();
+					pM.put("Pipeline","Audit and Consultation");
+					pM.put("Stage","Prospect");
+					pu = zoho.crm.updateRecord("Deals",dealId.toLong(),pM);
 					dealNote = dealNote + ":deal=" + dealId;
 				}
 				else
