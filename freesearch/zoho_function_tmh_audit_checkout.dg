@@ -66,18 +66,19 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	{
 		accountId = p.get("zoho_account_id").toString();
 	}
+	emIn = "";
+	if(p.get("email") != null)
+	{
+		emIn = p.get("email").toString().trim();
+	}
 	out = Map();
 	out.put("stage",stage);
 	//
 	// ----------------------------------------------- stage: contact
 	//
-	if(stage == "contact" && p.get("email") != null)
+	if(stage == "contact" && emIn != "")
 	{
-		em = "";
-		if(p.get("email") != null)
-		{
-			em = p.get("email").toString().trim();
-		}
+		em = emIn;
 		first = "";
 		if(p.get("first_name") != null)
 		{
