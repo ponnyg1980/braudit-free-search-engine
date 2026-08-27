@@ -86,6 +86,11 @@
   label.fld .req{color:var(--pink)}
   label.fld .opt{color:var(--quiet);font-weight:500;font-size:12.5px}
   .hidden{display:none!important}
+  /* braudit.css fixes the stepper at 5 columns; this journey has nine steps. */
+  .steps{grid-template-columns:repeat(9,1fr);gap:10px}
+  @media(max-width:900px){.steps{grid-template-columns:repeat(5,1fr)}}
+  @media(max-width:560px){.steps{grid-template-columns:repeat(3,1fr)}}
+  .steps b{font-size:11px;letter-spacing:.9px}
 </style>
 </head>
 <body>
@@ -647,8 +652,10 @@ function logEvent(type,screen,payload,snapshot){
 /* ================= NAV ================= */
 function stepsBar(){
   const cur=SCREENS.indexOf(state.screen);
+  /* Same markup as Free Search: a 4px rule over an uppercase label —
+     done = navy, current = pink, future = soft line. */
   document.getElementById('stepper').innerHTML=STEP_LABELS.map((l,i)=>
-    `<div class="s ${i<cur?'done':i===cur?'active':''}">${l}</div>`).join('');
+    `<div class="${i<cur?'done':(i===cur?'now':'')}"><i></i><b>${i+1}. ${l}</b></div>`).join('');
 }
 function renderScreen(id){
   state.screen=id;
