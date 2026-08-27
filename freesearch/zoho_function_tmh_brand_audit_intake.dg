@@ -325,8 +325,17 @@ string standalone.tmh_brand_audit_intake(string crmAPIRequest)
 				}
 				dM = Map();
 				dM.put("Deal_Name",dName);
+				// PIPELINE IS CARRIED BY THE STAGE (proven 27 Aug). Deluge
+				// runs on the v2 API, where Pipeline is derived from Stage
+				// and cannot be set directly — it reports success and
+				// silently keeps the layout default. "Prospect" exists in
+				// BOTH pipelines, so it resolves to the default (UK
+				// Trademark Application). "Initial Conversation" exists ONLY
+				// in Audit and Consultation, so it pulls the deal into the
+				// right pipeline — and it is the correct opening stage for a
+				// fresh audit request anyway.
 				dM.put("Pipeline","Audit and Consultation");
-				dM.put("Stage","Prospect");
+				dM.put("Stage","Initial Conversation");
 				dM.put("Account_Name",accountId.toLong());
 				dM.put("Contact_Name",contactId.toLong());
 				dM.put("Lead_Source","Request Brand Audit Website Form");
@@ -426,13 +435,9 @@ string standalone.tmh_brand_audit_intake(string crmAPIRequest)
 					// silently drops it and the deal keeps the layout's
 					// default pipeline (proven twice, 27 Aug) — Stage exists
 					// in both pipelines so Zoho resolves it to the default.
-					pM = Map();
-					pM.put("Pipeline","Audit and Consultation");
-					pu = zoho.crm.updateRecord("Deals",dealId.toLong(),pM);
 					sM = Map();
-					sM.put("Stage","Prospect");
+					sM.put("Stage","Initial Conversation");
 					su2 = zoho.crm.updateRecord("Deals",dealId.toLong(),sM);
-					info "audit: pipeline set -> " + pu;
 					dealNote = dealNote + ":deal=" + dealId;
 				}
 				else
