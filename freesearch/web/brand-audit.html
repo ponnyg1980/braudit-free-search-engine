@@ -152,21 +152,20 @@
       <label class="fld">Brand / word to protect</label>
       <input type="text" id="bf-name" placeholder="e.g. Momentus" oninput="onBrandFieldChange()">
 
-      <div class="cols">
-        <div>
-          <label class="fld">Classes <span class="opt">search &amp; add</span></label>
-          <input class="cls-search" type="text" id="bf-cls-search" placeholder="Search classes…" oninput="renderClassList()">
-          <div class="listbox" id="bf-cls-list"></div>
-        </div>
-        <div>
-          <div class="group-title">This brand's classes</div>
-          <div class="basket" id="bf-cls-basket"><span class="muted-note">None selected yet.</span></div>
-        </div>
-      </div>
-
-      <label class="fld">Terms you already know <span class="opt">(optional — press Enter to add each)</span></label>
-      <input type="text" id="bf-term-input" placeholder="e.g. bakery products" onkeydown="if(event.key==='Enter'){event.preventDefault();addTerm();}">
-      <div class="basket" id="bf-term-basket" style="margin-top:8px"><span class="muted-note">None added yet.</span></div>
+      <!-- Classes & terms now come from the SAME tools as Free Search and the
+           Class Builder (Jonathan, 27 Aug): four ways in, official class
+           headings, and terms grouped Definitely / Possibly / Unlikely. The
+           builder is embedded rather than re-implemented, so every future
+           improvement to the tools reaches this form for free. -->
+      <label class="fld">Classes &amp; terms</label>
+      <div class="basket" id="bf-cls-basket"><span class="muted-note">None selected yet.</span></div>
+      <div class="basket" id="bf-term-basket" style="margin-top:8px"><span class="muted-note">No terms yet.</span></div>
+      <p style="margin:10px 0 0">
+        <button type="button" class="btn ghost" id="bf-tools-btn" onclick="openClassTools()">
+          Choose classes &amp; terms &rarr;</button>
+        <span class="muted-note" style="margin-left:10px">Use an existing trademark, your company,
+          a description of what you do, or your website.</span>
+      </p>
 
       <div class="tick" id="bf-tick-logo" onclick="toggleBrandTick('logo')">
         <div class="box">✓</div>
@@ -340,7 +339,7 @@ const STEP_LABELS={brands:'Brand(s)',countries:'Countries',details:'Your Details
 let state={
   requestId:null, sessionId:CONFIG.SESSION_ID,
   brands:[],                                   // saved brand cards
-  brandForm:{name:'',classes:[],terms:[],logo:false,logoLater:false,tagline:''},
+  brandForm:{name:'',classes:[],terms:[],scope:null,logo:false,logoLater:false,tagline:''},
   now:{mode:'uk',codes:[]}, plan:{mode:'none',codes:[]},
   details:{first_name:'',last_name:'',email:'',phone:'',business_name:'',business_website:'',consent:false}
 };
@@ -388,6 +387,10 @@ function saveBrandRemote(brand){
   fetch(journeyBase()+'/audit/brand',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({request_id:state.requestId,brand_id:brand.remoteId||null,
       brand_name:brand.name,classes:brand.classes,terms:brand.terms,
+      // class_source carries the reviewed per-class detail (official heading
+      // + that class's own terms) from the Class Builder, so Zoho can write
+      // a proper row per class instead of the same flat term list on each.
+      class_source:brand.scope?{route:'class_tools',application_scope:brand.scope}:null,
       logo_flag:brand.logo,logo_later:brand.logoLater,tagline:brand.tagline,
       website_url:brand.website||null,business_description:brand.desc||null,
       competitor_name:brand.compName||null,competitor_website:brand.compSite||null,
@@ -396,10 +399,9 @@ function saveBrandRemote(brand){
 }
 
 /* ── Step 1: Brands ───────────────────────────────────────────────────── */
-function renderClassList(){const q=(document.getElementById('bf-cls-search').value||'').toLowerCase();
-  const rows=Object.entries(NICE).filter(([n,l])=>!q||l.toLowerCase().includes(q)||('class '+n).includes(q))
-    .map(([n,l])=>`<div class="row" onclick="addBrandClass(${n})"><span class="n">${n}</span><span>${l}</span></div>`).join('');
-  document.getElementById('bf-cls-list').innerHTML=rows||'<div class="row"><span>No match</span></div>';}
+/* The inline class list was replaced by the shared Class Builder overlay
+   (27 Aug). Kept as a no-op so older call sites cannot throw. */
+function renderClassList(){}
 /* ── Class & term suggestion ─────────────────────────────────────────────
    Calls POST /suggest-classes — the same endpoint Free Search and the staff
    tool use. Nothing about classification lives here; this page just asks and
@@ -562,9 +564,59 @@ function removeBrandClass(n){n=+n;state.brandForm.classes=state.brandForm.classe
 function renderTermBasket(){const b=document.getElementById('bf-term-basket');
   b.innerHTML=state.brandForm.terms.length?state.brandForm.terms.map((t,i)=>
     `<span class="chip">${esc(t)} <span class="x" onclick="removeTerm(${i})">×</span></span>`).join('')
-    :'<span class="muted-note">None added yet.</span>';}
-function addTerm(){const el=document.getElementById('bf-term-input');const v=(el.value||'').trim();
+    :'<span class="muted-note">No terms yet.</span>';}
+function addTerm(){const el=document.getElementById('bf-term-input');if(!el)return;const v=(el.value||'').trim();
   if(!v)return; state.brandForm.terms.push(v); el.value=''; renderTermBasket(); onBrandFieldChange();}
+
+/* ── Class tools (27 Aug) ──────────────────────────────────────────────
+   The audit no longer carries its own class picker. It opens the released
+   Class Builder — same four tools and the same Definitely / Possibly /
+   Unlikely term grouping the Free Searches use — in an overlay, and takes
+   the selection back by postMessage. Same origin (both pages are served by
+   the engine), so nothing here is cross-site. The builder writes nothing to
+   Zoho in this mode; the audit submits everything at the end. */
+let _toolsTok='';
+function openClassTools(){
+  const nm=(document.getElementById('bf-name').value||'').trim();
+  _toolsTok='t'+Date.now();
+  const src=engineBase()+'/class-builder?screen=classes&return='+encodeURIComponent(_toolsTok)+
+    (nm?('&q='+encodeURIComponent(nm)):'')+
+    '&journey='+encodeURIComponent(journeyBase());
+  const ov=document.createElement('div');
+  ov.id='tools-ov';
+  ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(22,34,46,.55);'+
+    'display:flex;flex-direction:column;padding:18px';
+  ov.innerHTML='<div style="max-width:1040px;width:100%;margin:0 auto;display:flex;'+
+      'flex-direction:column;height:100%;background:#fff;border-radius:16px;overflow:hidden">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;'+
+        'padding:12px 16px;border-bottom:1px solid #e3e8ee">'+
+        '<b style="font-size:15px">Choose classes &amp; terms'+(nm?(' &mdash; '+esc(nm)):'')+'</b>'+
+        '<button type="button" class="btn ghost" onclick="closeClassTools()">Close</button></div>'+
+      '<iframe id="tools-if" src="'+src+'" style="flex:1;width:100%;border:0"></iframe></div>';
+  document.body.appendChild(ov);
+  logAuditEvent('class_tools_opened','brands',{brand:nm},false);
+}
+function closeClassTools(){
+  const ov=document.getElementById('tools-ov'); if(ov) ov.remove();
+}
+window.addEventListener('message',function(e){
+  const d=e.data;
+  if(!d||!d.brauditClasses) return;
+  const p=d.brauditClasses;
+  if(_toolsTok && p.token && p.token!==_toolsTok) return;   // not our overlay
+  if(Array.isArray(p.classes)) state.brandForm.classes=p.classes.map(Number)
+    .filter(n=>n>=1&&n<=45).sort((a,b)=>a-b);
+  if(Array.isArray(p.terms)) state.brandForm.terms=p.terms.map(String);
+  // Keep the full per-class detail (official heading + that class's own
+  // terms) so the audit can send exactly what was reviewed, not a flattened
+  // blob — the Zoho rows are written per class.
+  if(Array.isArray(p.scope)) state.brandForm.scope=p.scope;
+  if(!(document.getElementById('bf-name').value||'').trim() && p.name){
+    document.getElementById('bf-name').value=p.name;
+  }
+  renderBrandClassBasket(); renderTermBasket(); onBrandFieldChange();
+  setTimeout(closeClassTools,900);
+});
 function removeTerm(i){state.brandForm.terms.splice(i,1);renderTermBasket();onBrandFieldChange();}
 function toggleBrandTick(k){const el=document.getElementById(k==='logo'?'bf-tick-logo':'bf-tick-tag');el.classList.toggle('on');
   if(k==='logo')state.brandForm.logo=el.classList.contains('on');
@@ -598,12 +650,11 @@ function readBrandForm(){
   state.brandForm.compSite=document.getElementById('bf-comp-site').value.trim();
 }
 function clearBrandForm(){
-  state.brandForm={name:'',classes:[],terms:[],logo:false,logoLater:false,tagline:'',
+  state.brandForm={name:'',classes:[],terms:[],scope:null,logo:false,logoLater:false,tagline:'',
     website:'',desc:'',compName:'',compSite:''};
   state._draftBrandRemoteId=null;
   document.getElementById('bf-name').value='';
-  document.getElementById('bf-cls-search').value='';renderClassList();renderBrandClassBasket();
-  document.getElementById('bf-term-input').value='';renderTermBasket();
+  renderBrandClassBasket();renderTermBasket();
   document.getElementById('bf-tick-logo').classList.remove('on');
   document.getElementById('bf-tick-tag').classList.remove('on');
   document.getElementById('bf-logo-later').checked=false;
