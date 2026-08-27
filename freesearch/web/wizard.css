@@ -1,0 +1,92 @@
+/* wizard.css — shared wizard styles, copied VERBATIM from free-search.html's
+   local <style> block on 27 Aug 2026 so the Audit Checkout looks identical to
+   Free Search. If free-search.html's styling changes, re-copy the affected
+   rules here (the wizard pages are the only consumers).
+   Generated subset: seg, pop, listbox, basket, cls-grid, drop/later/skip,
+   juris-block, reveal, jhead, eu-note, done-mark, muted-note, cols, loader. */
+.tmh-loader{display:inline-flex;gap:9px;align-items:center}
+.tmh-loader i{width:20px;height:23px;display:block;
+    clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    animation:tmh-hexpulse 1.15s ease-in-out infinite}
+.tmh-loader i:nth-child(1){background:#E0004D}
+.tmh-loader i:nth-child(2){background:#2D455A;animation-delay:.16s}
+.tmh-loader i:nth-child(3){background:#E0004D;animation-delay:.32s}
+.tmh-busy{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:12px;padding:26px 0}
+.tmh-busy .msg{font-size:14px;color:var(--muted)}
+.q{margin:0 0 14px}
+.q .qt{font-size:13.5px;font-weight:700;color:var(--navy);margin:0 0 5px;line-height:1.4}
+.q .qh{font-size:12px;color:var(--muted);margin:0 0 6px;line-height:1.45}
+.q input[type=text],.q input[type=url],.q textarea{width:100%;padding:9px 11px;border:1px solid var(--line);
+    border-radius:9px;font-family:var(--font);font-size:13.5px;color:var(--ink)}
+.q textarea{min-height:58px;resize:vertical}
+.q input:focus,.q textarea:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 3px rgba(229,22,82,.12)}
+.q .opt{font-weight:400;color:var(--muted)}
+.txt{width:100%;padding:11px 13px;border:1.5px solid var(--line,#d9dee4);border-radius:9px;
+       font:inherit;font-size:15px;box-sizing:border-box}
+.rv-block{border:1.5px solid var(--line,#d9dee4);border-radius:12px;padding:16px 18px;margin:0 0 14px}
+.rv-block h3{margin:0 0 2px;font-size:17px}
+.rv-block .rv-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.rv-block .rv-x{background:none;border:0;color:#c0392b;font-weight:700;cursor:pointer;font-size:13px}
+.rv-block label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;
+       letter-spacing:.4px;color:var(--muted);margin:12px 0 4px}
+.rv-block textarea{width:100%;box-sizing:border-box;font:inherit;font-size:14px;
+       border:1.5px solid var(--line,#d9dee4);border-radius:9px;padding:10px 12px;resize:vertical}
+.muted-note{color:var(--muted);font-size:13px;margin-top:8px}
+.juris-block{padding-top:6px}
+.reveal{border-top:1px dashed var(--line);margin-top:22px;padding-top:20px}
+.seg{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.seg .opt{padding:11px 16px;border:1.5px solid var(--line);border-radius:10px;cursor:pointer;
+    font-weight:700;color:var(--navy);background:#fff}
+.seg .opt.on{border-color:var(--pink);background:var(--pink);color:#fff}
+.pop{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
+.pop .c{padding:9px 14px;border:1.5px solid var(--line);border-radius:999px;cursor:pointer;
+    font-weight:600;font-size:14px;color:var(--navy);background:#fff}
+.pop .c.on{border-color:var(--pink);background:#fef4f7;color:var(--pink)}
+.pop .c small{color:var(--muted);font-weight:500}
+.done-mark{width:64px;height:64px;border-radius:50%;background:var(--r-low);color:#2f6b23;display:grid;
+    place-items:center;font-size:34px;margin:0 auto 14px}
+.tag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:3px 8px;border-radius:999px;background:#eef2f4;color:var(--muted)}
+.tag.best{background:var(--pink);color:#fff}
+.tag.free{background:var(--r-low);color:#2f6b23}
+.tag.ai{background:#e7ddff;color:#5b3fb0}
+.name-in{max-width:420px;padding:13px 15px;font-weight:600}
+.drop{border:1.5px dashed var(--pink-line);border-radius:var(--r-md);background:#fff;
+    padding:20px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.drop b{font-size:15.5px;font-weight:800;color:var(--navy)}
+.skip{background:none;border:0;padding:10px 0 0;font-size:14.5px;font-weight:700;
+    color:var(--pink);text-decoration:underline;cursor:pointer;font-family:inherit}
+.skip:hover{color:var(--pink-hover)}
+.later{border:1px solid var(--line);border-radius:var(--r-md);background:#fff;
+    padding:18px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    font-size:15px;color:var(--slate)}
+.juris-block{margin-bottom:30px}
+.jhead{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.jhead h3{font-size:19px;letter-spacing:-.3px;margin:0}
+.eu-note{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px}
+.listbox .row span:first-child:empty{display:none}
+.cls-grid{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+.cls-search{margin-bottom:12px}
+.listbox{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;
+    max-height:330px;overflow-y:auto;background:#fff}
+.listbox .row{display:grid;grid-template-columns:44px 1fr 22px;gap:8px;align-items:center;
+    width:100%;border:0;border-top:1px solid var(--line);padding:14px 16px;cursor:pointer;
+    text-align:left;font-family:inherit;background:#fff;font-size:16px}
+.listbox .row:first-child{border-top:0}
+.listbox .row.on{background:var(--pink-tint)}
+.listbox .row.on span:nth-child(2){font-weight:700}
+.listbox .row .n{font-family:var(--font-display);font-size:13px;font-weight:800;
+    color:var(--pink)}
+.listbox .row .g{color:var(--pink);font-size:16px;font-weight:800;text-align:right}
+.basket{border:1px solid var(--line);border-radius:var(--r-md);padding:18px;
+    min-height:110px;display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;
+    background:var(--panel)}
+.tool-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.tool-h h4{margin:0;font-size:20px;letter-spacing:-.4px}
+.badge{font-family:var(--font-display);font-size:10.5px;font-weight:800;letter-spacing:1px;
+    text-transform:uppercase;color:#fff;background:var(--navy);border-radius:var(--r-pill);
+    padding:5px 10px}
+.badge.ai{background:var(--pink)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cls-grid{grid-template-columns:1fr}
+.cols{grid-template-columns:1fr}
