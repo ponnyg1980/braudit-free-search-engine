@@ -288,14 +288,16 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		jur = List();
 		if(p.get("trading_now") != null)
 		{
-			for each  c in p.get("trading_now").toList()
+			lst_c = p.get("trading_now").toList();
+			for each c in lst_c
 			{
 				jur.add(c.toString());
 			}
 		}
 		if(p.get("planning_to_trade") != null)
 		{
-			for each  c in p.get("planning_to_trade").toList()
+			lst_c = p.get("planning_to_trade").toList();
+			for each c in lst_c
 			{
 				if(jur.contains(c.toString()) == false)
 				{
@@ -311,7 +313,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		if(p.get("search_layers") != null)
 		{
 			layers = List();
-			for each  l in p.get("search_layers").toList()
+			lst_l = p.get("search_layers").toList();
+			for each l in lst_l
 			{
 				layers.add(l.toString());
 			}
@@ -326,7 +329,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		if(p.get("scope") != null)
 		{
 			clsList = List();
-			for each  row in p.get("scope").toList()
+			lst_row = p.get("scope").toList();
+			for each row in lst_row
 			{
 				rm = row.toMap();
 				n = rm.get("n").toLong();
@@ -376,14 +380,16 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			existing = dealRec.get("Classes_Terms");
 			if(existing != null)
 			{
-				for each  r in existing.toList()
+				lst_r = existing.toList();
+				for each r in lst_r
 				{
 					keep = Map();
 					keep.put("id",r.get("id"));
 					merged.add(keep);
 				}
 			}
-			for each  k in ourCls.keys()
+			lst_k = ourCls.keys();
+			for each k in lst_k
 			{
 				merged.add(ourCls.get(k));
 			}
@@ -413,7 +419,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			if(caD.get("id") != null)
 			{
 				assetId = caD.get("id").toString();
-				for each  row in p.get("scope").toList()
+				lst_row = p.get("scope").toList();
+				for each row in lst_row
 				{
 					rm = row.toMap();
 					cn = rm.get("n").toLong();
@@ -450,7 +457,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		// never come back as conflicts.
 		if(p.get("exclusions") != null)
 		{
-			for each  ex in p.get("exclusions").toList()
+			lst_ex = p.get("exclusions").toList();
+			for each ex in lst_ex
 			{
 				exm = ex.toMap();
 				val = "";
@@ -730,7 +738,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			typs = List();
 			if(accRec.get("Account_Type_2") != null)
 			{
-				for each  t in accRec.get("Account_Type_2").toList()
+				lst_t = accRec.get("Account_Type_2").toList();
+				for each t in lst_t
 				{
 					typs.add(t.toString());
 				}
