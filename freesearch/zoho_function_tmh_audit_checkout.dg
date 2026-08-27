@@ -1,6 +1,6 @@
 string standalone.tmh_audit_checkout(string crmAPIRequest)
 {
-	// AUDIT CHECKOUT INTAKE — the client-facing 9-page audit journey.
+	// AUDIT CHECKOUT INTAKE -- the client-facing 9-page audit journey.
 	//
 	// Jonathan, 27 Aug 2026:
 	//   "When a Brand Audit begins where we create a Lead, it converts to
@@ -37,7 +37,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	bodyRaw = reqMap.get("body");
 	if(bodyRaw == null)
 	{
-		return "no body";
+		return "{\"ok\":false,\"error\":\"no body\"}";
 	}
 	p = bodyRaw.toString().toMap();
 	nl = zoho.encryption.urlDecode("%0A");
@@ -69,18 +69,14 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	out = Map();
 	out.put("stage",stage);
 	//
-	// ─────────────────────────────────────────────── stage: contact
+	// ----------------------------------------------- stage: contact
 	//
-	if(stage == "contact")
+	if(stage == "contact" && p.get("email") != null)
 	{
 		em = "";
 		if(p.get("email") != null)
 		{
 			em = p.get("email").toString().trim();
-		}
-		if(em == "" || em.contains("@") == false)
-		{
-			return "no email";
 		}
 		first = "";
 		if(p.get("first_name") != null)
@@ -111,7 +107,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			auditLink = p.get("audit_link").toString();
 		}
-		// 1. Existing contact wins — a returning client is never re-led.
+		// 1. Existing contact wins -- a returning client is never re-led.
 		foundC = zoho.crm.searchRecords("Contacts","(Email:equals:" + em + ")");
 		if(foundC.size() > 0)
 		{
@@ -123,7 +119,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			}
 		}
 		// 2. No contact: create the Lead (attribution lives here), then
-		//    convert it at once — the client has passed the contact step.
+		//    convert it at once -- the client has passed the contact step.
 		if(contactId == "")
 		{
 			leadId = "";
@@ -177,7 +173,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				}
 			}
 		}
-		// 3. Still no contact (conversion refused) — create one directly so
+		// 3. Still no contact (conversion refused) -- create one directly so
 		//    the journey is never blocked by CRM plumbing.
 		if(contactId == "")
 		{
@@ -223,7 +219,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			{
 				dM.put("Free_Search_Session",sessionId);
 			}
-			dM.put("Description","Brand Audit in progress — started at the contact step.");
+			dM.put("Description","Brand Audit in progress -- started at the contact step.");
 			nd = zoho.crm.createRecord("Deals",dM);
 			if(nd.get("id") != null)
 			{
@@ -236,19 +232,14 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		out.put("zoho_contact_id",contactId);
 		out.put("zoho_account_id",accountId);
 		out.put("zoho_deal_id",dealId);
-		return out.toString();
 	}
 	//
-	// ─────────────────────────────────────────────── stage: scope
+	// ----------------------------------------------- stage: scope
 	//
 	// Everything the audit will actually search. Written as the client
 	// moves, so an abandoned journey still shows staff what was wanted.
-	if(stage == "scope")
+	else if(stage == "scope" && dealId != "")
 	{
-		if(dealId == "")
-		{
-			return "no deal";
-		}
 		dM = Map();
 		mark = "";
 		if(p.get("mark") != null)
@@ -260,7 +251,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			tagline = p.get("tagline").toString().trim();
 		}
-		// Word criteria (intake fields — the frozen scope is the record of
+		// Word criteria (intake fields -- the frozen scope is the record of
 		// record; these remain the operator-facing intake per the
 		// retirement map).
 		if(mark != "")
@@ -292,7 +283,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		dM.put("Braudit_Search_Types",types);
 		dM.put("Logo_Awaited",logoLater);
-		// Jurisdictions — trading now + planned, ISO codes.
+		// Jurisdictions -- trading now + planned, ISO codes.
 		jur = List();
 		if(p.get("trading_now") != null)
 		{
@@ -375,7 +366,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
 		}
-		// Classes & Terms subform — merge, never replace: rows omitted from
+		// Classes & Terms subform -- merge, never replace: rows omitted from
 		// an update are DELETED by Zoho, so existing rows are re-sent by id.
 		if(ourCls.size() > 0)
 		{
@@ -435,7 +426,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 					rM.put("Scope_Asset",assetId.toLong());
 					rM.put("Nice_Class_Number_Snapshot",cn);
 					// The Nice class reference records are consecutive ids
-					// seeded 1..45 — same arithmetic the brand-audit intake
+					// seeded 1..45 -- same arithmetic the brand-audit intake
 					// uses (proven in production).
 					rM.put("Nice_Class_Reference",1964745000114603017 + cn);
 					rM.put("Register_Snapshot","UKIPO");
@@ -491,15 +482,14 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			}
 		}
 		out.put("ok",true);
-		return out.toString();
 	}
 	//
-	// ─────────────────────────────────────────────── stage: applicant
+	// ----------------------------------------------- stage: applicant
 	//
 	// The Details page is where the Account comes from (Jonathan: "Account
 	// is populated from Details Page"). Company number is the dedupe key
 	// when we have one, name otherwise.
-	if(stage == "applicant")
+	else if(stage == "applicant")
 	{
 		orgName = "";
 		if(p.get("org_name") != null)
@@ -511,12 +501,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			orgId = p.get("org_id").toString().trim();
 		}
-		if(orgName == "")
-		{
-			return "no org name";
-		}
 		// Company_Registration is the live company-number field on Accounts
-		// (verified 28 Aug — there is no Company_Number). It is numeric, so
+		// (verified 28 Aug -- there is no Company_Number). It is numeric, so
 		// only digits are usable as a dedupe key; SC/NI prefixed numbers fall
 		// through to the name match below.
 		if(accountId == "" && orgId != "")
@@ -589,19 +575,14 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			}
 		}
 		out.put("zoho_account_id",accountId);
-		return out.toString();
 	}
 	//
-	// ─────────────────────────────────────────────── stage: summary
+	// ----------------------------------------------- stage: summary
 	//
 	// "Deal Stage is Prospect until page Summary at which point it is at
 	// stage quoted."
-	if(stage == "summary")
+	else if(stage == "summary" && dealId != "")
 	{
-		if(dealId == "")
-		{
-			return "no deal";
-		}
 		dM = Map();
 		dM.put("Stage","Quoted");
 		dM.put("Braudit_Trigger_Status","awaiting_payment");
@@ -631,24 +612,19 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
 		out.put("ok",true);
-		return out.toString();
 	}
 	//
-	// ─────────────────────────────────────────────── stage: paid
+	// ----------------------------------------------- stage: paid
 	//
 	// "When paid, they move to Paid, Send for Research and an immediate task
 	// is created for admin@ to send for research."
 	//
-	// Stage = Paid with Next_Action = "Send for Research" — the value
+	// Stage = Paid with Next_Action = "Send for Research" -- the value
 	// already in live use on paid audits. Braudit_Trigger_Status advances to
 	// awaiting_logo when a logo is still coming (the word context can still
 	// be frozen and sent; a missing logo never delays it), otherwise ready.
-	if(stage == "paid")
+	else if(stage == "paid" && dealId != "")
 	{
-		if(dealId == "")
-		{
-			return "no deal";
-		}
 		logoAwaited = false;
 		dealRec = zoho.crm.getRecordById("Deals",dealId.toLong());
 		if(dealRec.get("Logo_Awaited") != null)
@@ -682,7 +658,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			dM.put("Audit_Order_Ref",p.get("order_ref").toString());
 		}
 		zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
-		// The immediate admin task. Owner = Admin Support (support@) — there
+		// The immediate admin task. Owner = Admin Support (support@) -- there
 		// is no admin@ CRM user; the shared inbox is notified by email below.
 		dn = "this audit";
 		if(dealRec.get("Deal_Name") != null)
@@ -690,38 +666,37 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			dn = dealRec.get("Deal_Name").toString();
 		}
 		tM = Map();
-		tM.put("Subject","Send for Research — " + dn);
+		tM.put("Subject","Send for Research -- " + dn);
 		tM.put("Status","Not Started");
 		tM.put("Priority","High");
 		tM.put("Due_Date",zoho.currentdate);
 		tM.put("What_Id",dealId);
 		tM.put("$se_module","Deals");
 		tM.put("Owner","1964745000036444001");
-		tM.put("Description","Audit paid — send for research." + nl + "Deal: " + dn + nl + "Order ref: " + p.get("order_ref").toString() + nl + "Deadline: " + dealRec.get("Audit_Deadline").toString());
+		tM.put("Description","Audit paid -- send for research." + nl + "Deal: " + dn + nl + "Order ref: " + p.get("order_ref").toString() + nl + "Deadline: " + dealRec.get("Audit_Deadline").toString());
 		tr = zoho.crm.createRecord("Tasks",tM);
 		if(tr.get("id") != null)
 		{
 			out.put("task_id",tr.get("id").toString());
 		}
 		// Shared-inbox nudge. sendmail's from-line only accepts the CRM
-		// login/admin user (documented 26 Aug) — the reply-to carries the
+		// login/admin user (documented 26 Aug) -- the reply-to carries the
 		// team address instead.
 		sendmail
 		[
 			from :zoho.loginuserid
 			to :"admin@thetrademarkhelpline.com"
-			subject :"Audit paid — send for research: " + dn
+			subject :"Audit paid -- send for research: " + dn
 			message :"<p>A Trademark Audit has been paid and is ready to send for research.</p><p><b>Deal:</b> " + dn + "<br><b>Order ref:</b> " + p.get("order_ref").toString() + "<br><b>Deadline:</b> " + dealRec.get("Audit_Deadline").toString() + "</p><p><a href=\"https://crm.zoho.com/crm/org628887698/tab/Potentials/" + dealId + "\">Open the deal in Zoho</a></p>"
 		]
 		out.put("ok",true);
-		return out.toString();
 	}
 	//
-	// ─────────────────────────────────────────────── stage: factfind
+	// ----------------------------------------------- stage: factfind
 	//
 	// The closing questions. Account Types -> Accounts, Review Type ->
 	// Client Relationships, motivation + free text -> the Deal.
-	if(stage == "factfind")
+	else if(stage == "factfind")
 	{
 		if(dealId != "")
 		{
@@ -768,7 +743,6 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			}
 		}
 		out.put("ok",true);
-		return out.toString();
 	}
-	return "unknown stage";
+	return out.toString();
 }
