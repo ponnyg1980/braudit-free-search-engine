@@ -1,0 +1,774 @@
+string standalone.tmh_audit_checkout(string crmAPIRequest)
+{
+	// AUDIT CHECKOUT INTAKE — the client-facing 9-page audit journey.
+	//
+	// Jonathan, 27 Aug 2026:
+	//   "When a Brand Audit begins where we create a Lead, it converts to
+	//    Contact & Deal or creates contact and deal when they get past
+	//    Contact Stage - Account is populated from Details Page"
+	//   "Deal Stage is Prospect until page Summary at which point it is at
+	//    stage quoted. When paid, they move to Paid, Send for Research and
+	//    an immediate task is created for admin@ to send for research"
+	//
+	// STAGED, not one-shot. The page calls this at each milestone so the
+	// CRM fills in as the client progresses and an abandoned journey still
+	// leaves a usable record:
+	//
+	//   stage=contact    Lead (source-attributed) -> convert -> Contact +
+	//                    Deal at Prospect in "Audit and Consultation".
+	//   stage=scope      searches, jurisdictions, classes & terms, platforms,
+	//                    consultation -> Deal + G S Scope + exclusions.
+	//   stage=applicant  Account created/matched from the Details page and
+	//                    linked to the Deal and Contact.
+	//   stage=summary    Stage -> Quoted, pricing + order ref recorded.
+	//   stage=paid       Stage -> Paid, Next_Action -> "Send for Research",
+	//                    task for Admin Support, email to admin@.
+	//   stage=factfind   the closing questions.
+	//
+	// Every stage is idempotent: the caller passes zoho_deal_id once it has
+	// one, so re-entry updates rather than duplicates.
+	//
+	// PIPELINE NOTE (proven twice, 27 Aug): the v2 API DERIVES Pipeline from
+	// Stage. Sending Pipeline directly reports success and silently keeps the
+	// layout default. "Prospect" exists in several pipelines, so the deal is
+	// created on a stage unique to Audit and Consultation ("Initial
+	// Conversation") and moved to Prospect immediately afterwards.
+	reqMap = crmAPIRequest.toMap();
+	bodyRaw = reqMap.get("body");
+	if(bodyRaw == null)
+	{
+		return "no body";
+	}
+	p = bodyRaw.toString().toMap();
+	nl = zoho.encryption.urlDecode("%0A");
+	stage = "";
+	if(p.get("stage") != null)
+	{
+		stage = p.get("stage").toString().trim().toLowerCase();
+	}
+	sessionId = "";
+	if(p.get("session_id") != null)
+	{
+		sessionId = p.get("session_id").toString();
+	}
+	dealId = "";
+	if(p.get("zoho_deal_id") != null)
+	{
+		dealId = p.get("zoho_deal_id").toString();
+	}
+	contactId = "";
+	if(p.get("zoho_contact_id") != null)
+	{
+		contactId = p.get("zoho_contact_id").toString();
+	}
+	accountId = "";
+	if(p.get("zoho_account_id") != null)
+	{
+		accountId = p.get("zoho_account_id").toString();
+	}
+	out = Map();
+	out.put("stage",stage);
+	//
+	// ─────────────────────────────────────────────── stage: contact
+	//
+	if(stage == "contact")
+	{
+		em = "";
+		if(p.get("email") != null)
+		{
+			em = p.get("email").toString().trim();
+		}
+		if(em == "" || em.contains("@") == false)
+		{
+			return "no email";
+		}
+		first = "";
+		if(p.get("first_name") != null)
+		{
+			first = p.get("first_name").toString().trim();
+		}
+		last = "";
+		if(p.get("last_name") != null)
+		{
+			last = p.get("last_name").toString().trim();
+		}
+		if(last == "")
+		{
+			last = em;
+		}
+		phone = "";
+		if(p.get("phone") != null)
+		{
+			phone = p.get("phone").toString().trim();
+		}
+		mark = "";
+		if(p.get("mark") != null)
+		{
+			mark = p.get("mark").toString().trim();
+		}
+		auditLink = "";
+		if(p.get("audit_link") != null)
+		{
+			auditLink = p.get("audit_link").toString();
+		}
+		// 1. Existing contact wins — a returning client is never re-led.
+		foundC = zoho.crm.searchRecords("Contacts","(Email:equals:" + em + ")");
+		if(foundC.size() > 0)
+		{
+			contactId = foundC.get(0).get("id").toString();
+			acc = foundC.get(0).get("Account_Name");
+			if(acc != null)
+			{
+				accountId = acc.get("id").toString();
+			}
+		}
+		// 2. No contact: create the Lead (attribution lives here), then
+		//    convert it at once — the client has passed the contact step.
+		if(contactId == "")
+		{
+			leadId = "";
+			foundL = zoho.crm.searchRecords("Leads","(Email:equals:" + em + ")");
+			if(foundL.size() > 0)
+			{
+				leadId = foundL.get(0).get("id").toString();
+			}
+			if(leadId == "")
+			{
+				lM = Map();
+				lM.put("First_Name",first);
+				lM.put("Last_Name",last);
+				lM.put("Email",em);
+				if(phone != "")
+				{
+					lM.put("Phone",phone);
+				}
+				lM.put("Company",last);
+				lM.put("Lead_Source","Request Brand Audit Website Form");
+				lM.put("Lead_Status","New Enquiry");
+				if(auditLink != "")
+				{
+					lM.put("Brand_Audit_Link",auditLink);
+				}
+				if(sessionId != "")
+				{
+					lM.put("Free_Search_Session",sessionId);
+				}
+				lM.put("Description","Brand Audit started on the website." + nl + "Mark: " + mark);
+				nl2 = zoho.crm.createRecord("Leads",lM);
+				if(nl2.get("id") != null)
+				{
+					leadId = nl2.get("id").toString();
+				}
+			}
+			if(leadId != "")
+			{
+				cMap = Map();
+				cMap.put("overwrite",false);
+				cMap.put("notify_lead_owner",false);
+				cMap.put("notify_new_entity_owner",false);
+				cv = zoho.crm.convertLead(leadId.toLong(),cMap);
+				if(cv.get("Contacts") != null)
+				{
+					contactId = cv.get("Contacts").toString();
+				}
+				if(cv.get("Accounts") != null)
+				{
+					accountId = cv.get("Accounts").toString();
+				}
+			}
+		}
+		// 3. Still no contact (conversion refused) — create one directly so
+		//    the journey is never blocked by CRM plumbing.
+		if(contactId == "")
+		{
+			cM = Map();
+			cM.put("First_Name",first);
+			cM.put("Last_Name",last);
+			cM.put("Email",em);
+			if(phone != "")
+			{
+				cM.put("Phone",phone);
+			}
+			cr = zoho.crm.createRecord("Contacts",cM);
+			if(cr.get("id") != null)
+			{
+				contactId = cr.get("id").toString();
+			}
+		}
+		// 4. The Deal. Created on a stage unique to this pipeline, then
+		//    moved to Prospect (Jonathan: Prospect until Summary).
+		if(dealId == "" && contactId != "")
+		{
+			dName = "Trademark Audit";
+			if(mark != "")
+			{
+				dName = "Trademark Audit - " + mark;
+			}
+			dM = Map();
+			dM.put("Deal_Name",dName);
+			dM.put("Stage","Initial Conversation");
+			dM.put("Contact_Name",contactId);
+			if(accountId != "")
+			{
+				dM.put("Account_Name",accountId);
+			}
+			dM.put("Lead_Source","Request Brand Audit Website Form");
+			dM.put("Closing_Date",zoho.currentdate.addDay(30));
+			dM.put("Braudit_Trigger_Status","not_ready");
+			if(auditLink != "")
+			{
+				dM.put("Brand_Audit_Link",auditLink);
+			}
+			if(sessionId != "")
+			{
+				dM.put("Free_Search_Session",sessionId);
+			}
+			dM.put("Description","Brand Audit in progress — started at the contact step.");
+			nd = zoho.crm.createRecord("Deals",dM);
+			if(nd.get("id") != null)
+			{
+				dealId = nd.get("id").toString();
+				pM = Map();
+				pM.put("Stage","Prospect");
+				zoho.crm.updateRecord("Deals",dealId.toLong(),pM);
+			}
+		}
+		out.put("zoho_contact_id",contactId);
+		out.put("zoho_account_id",accountId);
+		out.put("zoho_deal_id",dealId);
+		return out.toString();
+	}
+	//
+	// ─────────────────────────────────────────────── stage: scope
+	//
+	// Everything the audit will actually search. Written as the client
+	// moves, so an abandoned journey still shows staff what was wanted.
+	if(stage == "scope")
+	{
+		if(dealId == "")
+		{
+			return "no deal";
+		}
+		dM = Map();
+		mark = "";
+		if(p.get("mark") != null)
+		{
+			mark = p.get("mark").toString().trim();
+		}
+		tagline = "";
+		if(p.get("tagline") != null)
+		{
+			tagline = p.get("tagline").toString().trim();
+		}
+		// Word criteria (intake fields — the frozen scope is the record of
+		// record; these remain the operator-facing intake per the
+		// retirement map).
+		if(mark != "")
+		{
+			dM.put("Search_Word_1",mark);
+			dM.put("Search_Operator_1","Exact Match");
+		}
+		if(tagline != "")
+		{
+			dM.put("Search_Word_2",tagline);
+			dM.put("Search_Operator_2","Exact Match");
+		}
+		// Search types: word always; image when a logo exists or is coming.
+		types = List();
+		types.add("word");
+		hasLogo = false;
+		if(p.get("has_logo") != null)
+		{
+			hasLogo = p.get("has_logo").toString().equalsIgnoreCase("true");
+		}
+		logoLater = false;
+		if(p.get("logo_later") != null)
+		{
+			logoLater = p.get("logo_later").toString().equalsIgnoreCase("true");
+		}
+		if(hasLogo)
+		{
+			types.add("image");
+		}
+		dM.put("Braudit_Search_Types",types);
+		dM.put("Logo_Awaited",logoLater);
+		// Jurisdictions — trading now + planned, ISO codes.
+		jur = List();
+		if(p.get("trading_now") != null)
+		{
+			for each  c in p.get("trading_now").toList()
+			{
+				jur.add(c.toString());
+			}
+		}
+		if(p.get("planning_to_trade") != null)
+		{
+			for each  c in p.get("planning_to_trade").toList()
+			{
+				if(jur.contains(c.toString()) == false)
+				{
+					jur.add(c.toString());
+				}
+			}
+		}
+		if(jur.size() > 0)
+		{
+			dM.put("Trademark_Jurisdictions",jur);
+		}
+		// Platform confirms -> the layers the Braudit order will carry.
+		if(p.get("search_layers") != null)
+		{
+			layers = List();
+			for each  l in p.get("search_layers").toList()
+			{
+				layers.add(l.toString());
+			}
+			if(layers.size() > 0)
+			{
+				dM.put("Audit_Search_Layers",layers);
+			}
+		}
+		// Classes on the deal itself (the subform mirror follows below).
+		clsPick = {1:"1 - Chemicals",2:"2 - Paints",3:"3 - Cosmetics & Cleaning",4:"4 - Lubricants & Fuels",5:"5 - Pharmaceuticals",6:"6 - Metal Goods",7:"7 - Machinery",8:"8 - Hand Tools",9:"9 - Scientific Devices",10:"10 - Medical Apparatus",11:"11 - Environmental Control",12:"12 - Vehicles",13:"13 - Firearms",14:"14 - Jewellery",15:"15 - Musical Instruments",16:"16 - Paper Goods",17:"17 - Rubber Goods",18:"18 - Leather Goods",19:"19 - Building Materials",20:"20 - Furniture",21:"21 - Household Utensils",22:"22 - Ropes & Textiles",23:"23 - Yarns & Threads",24:"24 - Fabrics",25:"25 - Clothing",26:"26 - Lace & Embroidery",27:"27 - Floor Coverings",28:"28 - Toys & Sports",29:"29 - Meat & Processed Foods",30:"30 - Staple Foods",31:"31 - Natural Agricultural",32:"32 - Light Beverages",33:"33 - Wines & Spirits",34:"34 - Smokers Articles",35:"35 - Advertising & Business",36:"36 - Insurance & Finance",37:"37 - Construction & Repair",38:"38 - Telecommunications",39:"39 - Transportation",40:"40 - Treatment of Materials",41:"41 - Education & Entertainment",42:"42 - Computer & Scientific",43:"43 - Hotels & Restaurants",44:"44 - Medical & Beauty",45:"45 - Legal & Security"};
+		ourCls = Map();
+		if(p.get("scope") != null)
+		{
+			clsList = List();
+			for each  row in p.get("scope").toList()
+			{
+				rm = row.toMap();
+				n = rm.get("n").toLong();
+				lbl = clsPick.get(n);
+				if(lbl != null)
+				{
+					clsList.add(lbl);
+				}
+				tmpRw = Map();
+				tx = "";
+				if(rm.get("terms_text") != null)
+				{
+					tx = rm.get("terms_text").toString();
+				}
+				tmpRw.put("Classes",{lbl});
+				tmpRw.put("Terms1",tx);
+				ourCls.put(n,tmpRw);
+			}
+			if(clsList.size() > 0)
+			{
+				dM.put("Classes",clsList);
+			}
+		}
+		// Consultation + deadline.
+		if(p.get("consultation_type") != null)
+		{
+			dM.put("Audit_Consultation_Type",p.get("consultation_type").toString());
+		}
+		if(p.get("deadline") != null && p.get("deadline").toString() != "")
+		{
+			dM.put("Audit_Deadline",p.get("deadline").toString().toDate());
+		}
+		if(p.get("description") != null)
+		{
+			dM.put("Description",p.get("description").toString());
+		}
+		if(dM.size() > 0)
+		{
+			zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
+		}
+		// Classes & Terms subform — merge, never replace: rows omitted from
+		// an update are DELETED by Zoho, so existing rows are re-sent by id.
+		if(ourCls.size() > 0)
+		{
+			dealRec = zoho.crm.getRecordById("Deals",dealId.toLong());
+			merged = List();
+			existing = dealRec.get("Classes_Terms");
+			if(existing != null)
+			{
+				for each  r in existing.toList()
+				{
+					keep = Map();
+					keep.put("id",r.get("id"));
+					merged.add(keep);
+				}
+			}
+			for each  k in ourCls.keys()
+			{
+				merged.add(ourCls.get(k));
+			}
+			sfMap = Map();
+			sfMap.put("Classes_Terms",merged);
+			zoho.crm.updateRecord("Deals",dealId.toLong(),sfMap);
+		}
+		// G S Scope Asset + class rows (the frozen-scope source of record).
+		if(p.get("scope") != null && p.get("create_scope_asset") != null)
+		{
+			aNm = "Brand Audit - " + mark;
+			if(aNm.length() > 100)
+			{
+				aNm = aNm.subString(0,100);
+			}
+			amD = Map();
+			amD.put("Name",aNm);
+			amD.put("Deal",dealId.toLong());
+			amD.put("Asset_Type","Deal Search");
+			amD.put("Asset_Status","Active");
+			amD.put("Register","UKIPO");
+			if(accountId != "")
+			{
+				amD.put("Account",accountId.toLong());
+			}
+			caD = zoho.crm.createRecord("G_S_Scope_Assets",amD);
+			if(caD.get("id") != null)
+			{
+				assetId = caD.get("id").toString();
+				for each  row in p.get("scope").toList()
+				{
+					rm = row.toMap();
+					cn = rm.get("n").toLong();
+					nnD = cn.toString();
+					if(cn < 10)
+					{
+						nnD = "0" + nnD;
+					}
+					rM = Map();
+					rM.put("Name","Class " + nnD + " - " + mark);
+					rM.put("Scope_Asset",assetId.toLong());
+					rM.put("Nice_Class_Number_Snapshot",cn);
+					// The Nice class reference records are consecutive ids
+					// seeded 1..45 — same arithmetic the brand-audit intake
+					// uses (proven in production).
+					rM.put("Nice_Class_Reference",1964745000114603017 + cn);
+					rM.put("Register_Snapshot","UKIPO");
+					src = "Approved";
+					if(rm.get("terms_source") != null)
+					{
+						src = rm.get("terms_source").toString();
+					}
+					rM.put("Terms_Source",src);
+					if(rm.get("terms_text") != null)
+					{
+						rM.put("Specific_Terms",rm.get("terms_text").toString());
+					}
+					zoho.crm.createRecord("G_S_Scope_Classes_Terms",rM);
+				}
+				out.put("scope_asset_id",assetId);
+			}
+		}
+		// Client-owned exclusions: their own company number and domain must
+		// never come back as conflicts.
+		if(p.get("exclusions") != null)
+		{
+			for each  ex in p.get("exclusions").toList()
+			{
+				exm = ex.toMap();
+				val = "";
+				if(exm.get("value") != null)
+				{
+					val = exm.get("value").toString().trim();
+				}
+				if(val != "")
+				{
+					xM = Map();
+					xM.put("Name",val);
+					xM.put("Exclusion_Value",val);
+					xM.put("Target_Type",exm.get("type").toString());
+					mm = "Exact";
+					if(exm.get("match_mode") != null)
+					{
+						mm = exm.get("match_mode").toString();
+					}
+					xM.put("Match_Mode",mm);
+					xM.put("Reason","Client-Owned");
+					xM.put("Active",true);
+					xM.put("Source_Type","Client Declared");
+					if(accountId != "")
+					{
+						xM.put("Account",accountId);
+					}
+					xM.put("Exclusion_Notes","Declared in the Brand Audit form, deal " + dealId);
+					zoho.crm.createRecord("Client_Search_Exclusions",xM);
+				}
+			}
+		}
+		out.put("ok",true);
+		return out.toString();
+	}
+	//
+	// ─────────────────────────────────────────────── stage: applicant
+	//
+	// The Details page is where the Account comes from (Jonathan: "Account
+	// is populated from Details Page"). Company number is the dedupe key
+	// when we have one, name otherwise.
+	if(stage == "applicant")
+	{
+		orgName = "";
+		if(p.get("org_name") != null)
+		{
+			orgName = p.get("org_name").toString().trim();
+		}
+		orgId = "";
+		if(p.get("org_id") != null)
+		{
+			orgId = p.get("org_id").toString().trim();
+		}
+		if(orgName == "")
+		{
+			return "no org name";
+		}
+		// Company_Registration is the live company-number field on Accounts
+		// (verified 28 Aug — there is no Company_Number). It is numeric, so
+		// only digits are usable as a dedupe key; SC/NI prefixed numbers fall
+		// through to the name match below.
+		if(accountId == "" && orgId != "")
+		{
+			fa = zoho.crm.searchRecords("Accounts","(Company_Registration:equals:" + orgId + ")");
+			if(fa.size() > 0)
+			{
+				accountId = fa.get(0).get("id").toString();
+			}
+		}
+		if(accountId == "")
+		{
+			fa2 = zoho.crm.searchRecords("Accounts","(Account_Name:equals:" + orgName + ")");
+			if(fa2.size() > 0)
+			{
+				accountId = fa2.get(0).get("id").toString();
+			}
+		}
+		aM = Map();
+		aM.put("Account_Name",orgName);
+		if(orgId != "" && orgId.matches("[0-9]+"))
+		{
+			aM.put("Company_Registration",orgId.toLong());
+		}
+		if(p.get("addr1") != null)
+		{
+			aM.put("Billing_Street",p.get("addr1").toString());
+		}
+		if(p.get("addr2") != null)
+		{
+			aM.put("Billing_City",p.get("addr2").toString());
+		}
+		if(p.get("addr3") != null)
+		{
+			aM.put("Billing_State",p.get("addr3").toString());
+		}
+		if(p.get("postcode") != null)
+		{
+			aM.put("Billing_Code",p.get("postcode").toString());
+		}
+		if(p.get("country") != null)
+		{
+			aM.put("Billing_Country",p.get("country").toString());
+		}
+		if(accountId == "")
+		{
+			ar = zoho.crm.createRecord("Accounts",aM);
+			if(ar.get("id") != null)
+			{
+				accountId = ar.get("id").toString();
+			}
+		}
+		else
+		{
+			zoho.crm.updateRecord("Accounts",accountId.toLong(),aM);
+		}
+		if(accountId != "")
+		{
+			if(contactId != "")
+			{
+				cU = Map();
+				cU.put("Account_Name",accountId);
+				zoho.crm.updateRecord("Contacts",contactId.toLong(),cU);
+			}
+			if(dealId != "")
+			{
+				dU = Map();
+				dU.put("Account_Name",accountId);
+				zoho.crm.updateRecord("Deals",dealId.toLong(),dU);
+			}
+		}
+		out.put("zoho_account_id",accountId);
+		return out.toString();
+	}
+	//
+	// ─────────────────────────────────────────────── stage: summary
+	//
+	// "Deal Stage is Prospect until page Summary at which point it is at
+	// stage quoted."
+	if(stage == "summary")
+	{
+		if(dealId == "")
+		{
+			return "no deal";
+		}
+		dM = Map();
+		dM.put("Stage","Quoted");
+		dM.put("Braudit_Trigger_Status","awaiting_payment");
+		if(p.get("order_ref") != null)
+		{
+			dM.put("Audit_Order_Ref",p.get("order_ref").toString());
+		}
+		if(p.get("net_total") != null)
+		{
+			dM.put("Amount",p.get("net_total").toDecimal());
+		}
+		if(p.get("vat") != null)
+		{
+			dM.put("VAT",p.get("vat").toDecimal());
+		}
+		if(p.get("total") != null)
+		{
+			dM.put("Order_Total",p.get("total").toDecimal());
+		}
+		if(p.get("deal_name") != null)
+		{
+			dM.put("Deal_Name",p.get("deal_name").toString());
+		}
+		if(p.get("description") != null)
+		{
+			dM.put("Description",p.get("description").toString());
+		}
+		zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
+		out.put("ok",true);
+		return out.toString();
+	}
+	//
+	// ─────────────────────────────────────────────── stage: paid
+	//
+	// "When paid, they move to Paid, Send for Research and an immediate task
+	// is created for admin@ to send for research."
+	//
+	// Stage = Paid with Next_Action = "Send for Research" — the value
+	// already in live use on paid audits. Braudit_Trigger_Status advances to
+	// awaiting_logo when a logo is still coming (the word context can still
+	// be frozen and sent; a missing logo never delays it), otherwise ready.
+	if(stage == "paid")
+	{
+		if(dealId == "")
+		{
+			return "no deal";
+		}
+		logoAwaited = false;
+		dealRec = zoho.crm.getRecordById("Deals",dealId.toLong());
+		if(dealRec.get("Logo_Awaited") != null)
+		{
+			logoAwaited = dealRec.get("Logo_Awaited").toString().equalsIgnoreCase("true");
+		}
+		trig = "ready";
+		if(logoAwaited)
+		{
+			trig = "awaiting_logo";
+		}
+		dM = Map();
+		dM.put("Stage","Paid");
+		dM.put("Next_Action","Send for Research");
+		dM.put("Next_Action_Date",zoho.currentdate);
+		dM.put("Braudit_Trigger_Status",trig);
+		if(p.get("payment_method") != null)
+		{
+			dM.put("Audit_Payment_Method",p.get("payment_method").toString());
+		}
+		if(p.get("paid_on") != null && p.get("paid_on").toString() != "")
+		{
+			dM.put("Paid",p.get("paid_on").toString().toDate());
+		}
+		if(p.get("payment_due") != null && p.get("payment_due").toString() != "")
+		{
+			dM.put("Payment_Due_Date",p.get("payment_due").toString().toDate());
+		}
+		if(p.get("order_ref") != null)
+		{
+			dM.put("Audit_Order_Ref",p.get("order_ref").toString());
+		}
+		zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
+		// The immediate admin task. Owner = Admin Support (support@) — there
+		// is no admin@ CRM user; the shared inbox is notified by email below.
+		dn = "this audit";
+		if(dealRec.get("Deal_Name") != null)
+		{
+			dn = dealRec.get("Deal_Name").toString();
+		}
+		tM = Map();
+		tM.put("Subject","Send for Research — " + dn);
+		tM.put("Status","Not Started");
+		tM.put("Priority","High");
+		tM.put("Due_Date",zoho.currentdate);
+		tM.put("What_Id",dealId);
+		tM.put("$se_module","Deals");
+		tM.put("Owner","1964745000036444001");
+		tM.put("Description","Audit paid — send for research." + nl + "Deal: " + dn + nl + "Order ref: " + p.get("order_ref").toString() + nl + "Deadline: " + dealRec.get("Audit_Deadline").toString());
+		tr = zoho.crm.createRecord("Tasks",tM);
+		if(tr.get("id") != null)
+		{
+			out.put("task_id",tr.get("id").toString());
+		}
+		// Shared-inbox nudge. sendmail's from-line only accepts the CRM
+		// login/admin user (documented 26 Aug) — the reply-to carries the
+		// team address instead.
+		sendmail
+		[
+			from :zoho.loginuserid
+			to :"admin@thetrademarkhelpline.com"
+			subject :"Audit paid — send for research: " + dn
+			message :"<p>A Trademark Audit has been paid and is ready to send for research.</p><p><b>Deal:</b> " + dn + "<br><b>Order ref:</b> " + p.get("order_ref").toString() + "<br><b>Deadline:</b> " + dealRec.get("Audit_Deadline").toString() + "</p><p><a href=\"https://crm.zoho.com/crm/org628887698/tab/Potentials/" + dealId + "\">Open the deal in Zoho</a></p>"
+		]
+		out.put("ok",true);
+		return out.toString();
+	}
+	//
+	// ─────────────────────────────────────────────── stage: factfind
+	//
+	// The closing questions. Account Types -> Accounts, Review Type ->
+	// Client Relationships, motivation + free text -> the Deal.
+	if(stage == "factfind")
+	{
+		if(dealId != "")
+		{
+			dM = Map();
+			if(p.get("primary_motivation") != null)
+			{
+				dM.put("Main_Reason",p.get("primary_motivation").toString());
+			}
+			if(p.get("enquiry_notes") != null)
+			{
+				dM.put("What_prompted_Trademark_App_or_Enquiry",p.get("enquiry_notes").toString());
+			}
+			if(dM.size() > 0)
+			{
+				zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
+			}
+		}
+		// "Account Types" is Account_Type_2, a MULTI-select (Jonathan, 28 Aug).
+		// The four answers collapse to the two real values; the existing
+		// values on the account are preserved, never replaced.
+		if(accountId != "" && p.get("account_type") != null)
+		{
+			ansr = p.get("account_type").toString();
+			want = "Trademark Applicant";
+			if(ansr.containsIgnoreCase("client I represent"))
+			{
+				want = "White Label Partner (Billing Account & Contact)";
+			}
+			accRec = zoho.crm.getRecordById("Accounts",accountId.toLong());
+			typs = List();
+			if(accRec.get("Account_Type_2") != null)
+			{
+				for each  t in accRec.get("Account_Type_2").toList()
+				{
+					typs.add(t.toString());
+				}
+			}
+			if(typs.contains(want) == false)
+			{
+				typs.add(want);
+				aM = Map();
+				aM.put("Account_Type_2",typs);
+				zoho.crm.updateRecord("Accounts",accountId.toLong(),aM);
+			}
+		}
+		out.put("ok",true);
+		return out.toString();
+	}
+	return "unknown stage";
+}
