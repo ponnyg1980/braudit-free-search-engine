@@ -263,6 +263,16 @@
     <input type="text" id="d-company" onblur="onDetailsFieldChange()">
     <label class="fld">Company website <span class="opt">(optional)</span></label>
     <input type="url" id="d-website" onblur="onDetailsFieldChange()">
+    <!-- Audit variant (Jonathan, 27 Aug): decides the deal name in Zoho —
+         "Trademark Audit Only" vs "Trademark Audit & Consultation". Asked
+         here rather than assumed, so the visitor tells us what they want. -->
+    <label class="fld" style="margin-top:14px">What would you like?</label>
+    <div class="pop" id="d-variant" style="display:flex;gap:9px;flex-wrap:wrap">
+      <div class="c on" data-v="Trademark Audit Only"
+           onclick="pickVariant(this)">Audit only</div>
+      <div class="c" data-v="Trademark Audit &amp; Consultation"
+           onclick="pickVariant(this)">Audit + a consultation with an adviser</div>
+    </div>
     <label style="display:flex;gap:9px;align-items:flex-start;margin-top:14px;font-size:12.5px;color:var(--muted);cursor:pointer">
       <input type="checkbox" id="d-consent" style="margin-top:3px" onchange="onDetailsFieldChange()">
       <span>I'm happy for The Trademark Helpline to contact me about this audit and occasional brand-protection tips. Unsubscribe anytime.</span>
@@ -695,6 +705,16 @@ function onDetailsFieldChange(){
   state.details.consent=document.getElementById('d-consent').checked;
   logAuditEvent('field_commit','details',{},true);
 }
+/* Audit variant picker — one choice, defaults to "Audit only". */
+function pickVariant(el){
+  document.querySelectorAll('#d-variant .c').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  logAuditEvent('audit_variant_picked','details',{variant:el.dataset.v},false);
+}
+function auditVariant(){
+  const on=document.querySelector('#d-variant .c.on');
+  return on?on.dataset.v:'Trademark Audit Only';
+}
 function submitAudit(){
   onDetailsFieldChange();
   const d=state.details;
@@ -708,6 +728,7 @@ function submitAudit(){
     body:JSON.stringify({request_id:state.requestId,first_name:d.first_name,last_name:d.last_name,
       email:d.email,phone:d.phone,business_name:d.business_name||null,
       business_website:d.business_website||null,consent_marketing:d.consent,
+      audit_variant:auditVariant(),
       trading_now:nowCodes(),planning_to_trade:planCodes()})})
     .then(r=>r.json()).then(function(res){
       document.getElementById('done-msg').textContent=
