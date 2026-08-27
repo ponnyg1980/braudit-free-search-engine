@@ -390,9 +390,68 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		parameters : cb.toString()
 		headers : {"Content-Type":"application/json"}
 	];
+	// ------- Brand Audit: many brands in one payload (27 Aug) -------
+	// The audit form captures SEVERAL brands, each with its own classes and
+	// terms, and pushes them as payload.brands. Search sends one brand as
+	// payload.scope. Rather than a second code path, fold brands[] into the
+	// same single-brand shape and let the proven block below handle each in
+	// turn — so audit brands get the same assets, rows, Register and
+	// Terms_Source, and inherit the conversion fan-out and Deal sub-form
+	// mirror for free.
+	nlA = zoho.encryption.urlDecode("%0A");
+	brandsIn = payload.get("brands");
+	scopeList = List();
+	if(brandsIn != null)
+	{
+		for each bi in brandsIn
+		{
+			bn = "";
+			if(bi.get("brand_name") != null)
+			{
+				bn = bi.get("brand_name").toString();
+			}
+			if(bn != "")
+			{
+				clsL = List();
+				if(bi.get("classes") != null)
+				{
+					for each cn in bi.get("classes")
+					{
+						tt = "";
+						if(bi.get("terms") != null)
+						{
+							for each tm in bi.get("terms")
+							{
+								if(tt != "")
+								{
+									tt = tt + nlA;
+								}
+								tt = tt + tm.toString();
+							}
+						}
+						cRow = Map();
+						cRow.put("n",cn);
+						cRow.put("terms_text",tt);
+						clsL.add(cRow);
+					}
+				}
+				sMapB = Map();
+				sMapB.put("mark",bn);
+				sMapB.put("classes",clsL);
+				sMapB.put("audit",true);
+				scopeList.add(sMapB);
+			}
+		}
+	}
 	// ------- G S Scope capture (optional, idempotent) -------
 	scope = payload.get("scope");
+	if(scope != null)
+	{
+		scopeList.add(scope);
+	}
 	scopeNote = "";
+	for each scope in scopeList
+	{
 	if(scope != null)
 	{
 		mark = "";
@@ -400,7 +459,13 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		{
 			mark = scope.get("mark").toString();
 		}
+		// Audit brands are labelled so a rep can see at a glance which route
+		// the classes came from; on_convert strips either prefix.
 		assetName = "Free Search - " + mark;
+		if(scope.get("audit") != null)
+		{
+			assetName = "Brand Audit - " + mark;
+		}
 		if(assetName.length() > 100)
 		{
 			assetName = assetName.subString(0,100);
@@ -549,8 +614,9 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 					}
 				}
 			}
-			scopeNote = ":scope=" + assetId + ":rows+" + madeRows;
+			scopeNote = scopeNote + ":scope=" + assetId + ":rows+" + madeRows;
 		}
+	}
 	}
 	// ------- Class Builder: email the visitor their selection (21 Aug) ----
 	// "I would send them an email with a csv" — the journey pre-builds the
