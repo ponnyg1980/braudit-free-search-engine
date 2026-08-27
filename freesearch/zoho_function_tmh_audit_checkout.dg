@@ -37,7 +37,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	bodyRaw = reqMap.get("body");
 	if(bodyRaw == null)
 	{
-		return "{\"ok\":false,\"error\":\"no body\"}";
+		return "no body";
 	}
 	p = bodyRaw.toString().toMap();
 	nl = zoho.encryption.urlDecode("%0A");
@@ -688,7 +688,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			from :zoho.loginuserid
 			to :"admin@thetrademarkhelpline.com"
 			subject :"Audit paid -- send for research: " + dn
-			message :"<p>A Trademark Audit has been paid and is ready to send for research.</p><p><b>Deal:</b> " + dn + "<br><b>Order ref:</b> " + p.get("order_ref").toString() + "<br><b>Deadline:</b> " + dealRec.get("Audit_Deadline").toString() + "</p><p><a href=\"https://crm.zoho.com/crm/org628887698/tab/Potentials/" + dealId + "\">Open the deal in Zoho</a></p>"
+			message :"<p>A Trademark Audit has been paid and is ready to send for research.</p><p><b>Deal:</b> " + dn + "<br><b>Order ref:</b> " + p.get("order_ref").toString() + "<br><b>Deadline:</b> " + dealRec.get("Audit_Deadline").toString() + "</p><p><a href='https://crm.zoho.com/crm/org628887698/tab/Potentials/" + dealId + "'>Open the deal in Zoho</a></p>"
 		]
 		res.put("ok",true);
 	}
