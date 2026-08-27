@@ -802,7 +802,11 @@ const CONFIG = (function(){
     JOURNEY:q.get('journey')||'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey',
     // Where the new standalone Brand Audit page lives — point this at wherever
     // it's actually deployed (same open question as this page's own hosting).
-    BRAND_AUDIT_URL:'/brand-audit/',
+    // Repointed 27 Aug (Jonathan): the client-facing audit is now the
+    // 9-page checkout at /audit (audit-checkout.html), pre-populated from
+    // the journey session via ?s=. The multi-brand tool stays parked at
+    // /brand-audit for internal revival.
+    BRAND_AUDIT_URL:'/audit',
     // "Proceed to application" — the other half of the recommended next
     // steps. Repointed 26 Aug (Jonathan) from the generic enquiry form to
     // the dedicated application page, which is the route the new Apply for
