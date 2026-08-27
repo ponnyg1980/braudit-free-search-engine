@@ -235,6 +235,7 @@ _EMBED_JS = """(function(){
 #   * unknown extensions are refused rather than served as octet-stream, so a
 #     stray .py or .env in web/ can never be downloaded
 _ASSET_DIRS = {'/braudit.css': ('', 'braudit.css'),
+               '/wizard.css': ('', 'wizard.css'),
                '/brand/': ('brand', None),
                '/fonts/': ('fonts', None)}
 _ASSET_TYPES = {
@@ -252,8 +253,8 @@ def _static(path: str):
     None  -> not a static route at all, let the caller carry on routing.
     (None, ct) -> it IS a static route but the file isn't there: a real 404.
     """
-    if path == '/braudit.css':
-        rel = 'braudit.css'
+    if path in ('/braudit.css', '/wizard.css'):
+        rel = path.lstrip('/')
     elif path.startswith('/brand/') or path.startswith('/fonts/'):
         rel = path.lstrip('/')
     else:
