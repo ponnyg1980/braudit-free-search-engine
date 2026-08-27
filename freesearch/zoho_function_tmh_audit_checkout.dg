@@ -14,16 +14,16 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	// CRM fills in as the client progresses and an abandoned journey still
 	// leaves a usable record:
 	//
-	//   stage=contact    Lead (source-attributed) -> convert -> Contact +
+	//   stg=contact    Lead (source-attributed) -> convert -> Contact +
 	//                    Deal at Prospect in "Audit and Consultation".
-	//   stage=scope      searches, jurisdictions, classes & terms, platforms,
+	//   stg=scope      searches, jurisdictions, classes & terms, platforms,
 	//                    consultation -> Deal + G S Scope + exclusions.
-	//   stage=applicant  Account created/matched from the Details page and
+	//   stg=applicant  Account created/matched from the Details page and
 	//                    linked to the Deal and Contact.
-	//   stage=summary    Stage -> Quoted, pricing + order ref recorded.
-	//   stage=paid       Stage -> Paid, Next_Action -> "Send for Research",
+	//   stg=summary    Stage -> Quoted, pricing + order ref recorded.
+	//   stg=paid       Stage -> Paid, Next_Action -> "Send for Research",
 	//                    task for Admin Support, email to admin@.
-	//   stage=factfind   the closing questions.
+	//   stg=factfind   the closing questions.
 	//
 	// Every stage is idempotent: the caller passes zoho_deal_id once it has
 	// one, so re-entry updates rather than duplicates.
@@ -41,10 +41,10 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	}
 	p = bodyRaw.toString().toMap();
 	nl = zoho.encryption.urlDecode("%0A");
-	stage = "";
+	stg = "";
 	if(p.get("stage") != null)
 	{
-		stage = p.get("stage").toString().trim().toLowerCase();
+		stg = p.get("stage").toString().trim().toLowerCase();
 	}
 	sessionId = "";
 	if(p.get("session_id") != null)
@@ -71,12 +71,12 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	{
 		emIn = p.get("email").toString().trim();
 	}
-	out = Map();
-	out.put("stage",stage);
+	res = Map();
+	res.put("stage",stg);
 	//
 	// ----------------------------------------------- stage: contact
 	//
-	if(stage == "contact" && emIn != "")
+	if(stg == "contact" && emIn != "")
 	{
 		em = emIn;
 		first = "";
@@ -230,11 +230,11 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				zoho.crm.updateRecord("Deals",dealId.toLong(),pM);
 			}
 		}
-		out.put("zoho_contact_id",contactId);
-		out.put("zoho_account_id",accountId);
-		out.put("zoho_deal_id",dealId);
+		res.put("zoho_contact_id",contactId);
+		res.put("zoho_account_id",accountId);
+		res.put("zoho_deal_id",dealId);
 	}
-	else if(stage == "scope" && dealId != "")
+	else if(stg == "scope" && dealId != "")
 	{
 		//
 		// ----------------------------------------------- stage: scope
@@ -443,7 +443,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 					}
 					zoho.crm.createRecord("G_S_Scope_Classes_Terms",rM);
 				}
-				out.put("scope_asset_id",assetId);
+				res.put("scope_asset_id",assetId);
 			}
 		}
 		// Client-owned exclusions: their own company number and domain must
@@ -482,9 +482,9 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				}
 			}
 		}
-		out.put("ok",true);
+		res.put("ok",true);
 	}
-	else if(stage == "applicant")
+	else if(stg == "applicant")
 	{
 		//
 		// ----------------------------------------------- stage: applicant
@@ -575,9 +575,9 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				zoho.crm.updateRecord("Deals",dealId.toLong(),dU);
 			}
 		}
-		out.put("zoho_account_id",accountId);
+		res.put("zoho_account_id",accountId);
 	}
-	else if(stage == "summary" && dealId != "")
+	else if(stg == "summary" && dealId != "")
 	{
 		//
 		// ----------------------------------------------- stage: summary
@@ -612,9 +612,9 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			dM.put("Description",p.get("description").toString());
 		}
 		zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
-		out.put("ok",true);
+		res.put("ok",true);
 	}
-	else if(stage == "paid" && dealId != "")
+	else if(stg == "paid" && dealId != "")
 	{
 		//
 		// ----------------------------------------------- stage: paid
@@ -678,7 +678,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		tr = zoho.crm.createRecord("Tasks",tM);
 		if(tr.get("id") != null)
 		{
-			out.put("task_id",tr.get("id").toString());
+			res.put("task_id",tr.get("id").toString());
 		}
 		// Shared-inbox nudge. sendmail's from-line only accepts the CRM
 		// login/admin user (documented 26 Aug) -- the reply-to carries the
@@ -690,9 +690,9 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			subject :"Audit paid -- send for research: " + dn
 			message :"<p>A Trademark Audit has been paid and is ready to send for research.</p><p><b>Deal:</b> " + dn + "<br><b>Order ref:</b> " + p.get("order_ref").toString() + "<br><b>Deadline:</b> " + dealRec.get("Audit_Deadline").toString() + "</p><p><a href=\"https://crm.zoho.com/crm/org628887698/tab/Potentials/" + dealId + "\">Open the deal in Zoho</a></p>"
 		]
-		out.put("ok",true);
+		res.put("ok",true);
 	}
-	else if(stage == "factfind")
+	else if(stg == "factfind")
 	{
 		//
 		// ----------------------------------------------- stage: factfind
@@ -743,7 +743,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				zoho.crm.updateRecord("Accounts",accountId.toLong(),aM);
 			}
 		}
-		out.put("ok",true);
+		res.put("ok",true);
 	}
-	return out.toString();
+	return res.toString();
 }
