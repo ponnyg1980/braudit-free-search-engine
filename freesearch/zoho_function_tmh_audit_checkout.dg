@@ -599,6 +599,18 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			dM.put("Audit_Order_Ref",p.get("order_ref").toString());
 		}
+		// Payment intent is known at quote time for the invoice route: the
+		// client has chosen the method and the date the invoice must be paid
+		// by (2 working days before their deadline). Recorded now so staff can
+		// chase it without waiting for the payment itself.
+		if(p.get("payment_method") != null)
+		{
+			dM.put("Audit_Payment_Method",p.get("payment_method").toString());
+		}
+		if(p.get("payment_due") != null)
+		{
+			dM.put("Payment_Due_Date",p.get("payment_due").toString().toDate());
+		}
 		if(p.get("net_total") != null)
 		{
 			dM.put("Amount",p.get("net_total").toDecimal());
