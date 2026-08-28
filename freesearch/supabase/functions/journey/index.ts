@@ -1266,11 +1266,19 @@ serve(async (req) => {
         body: JSON.stringify(payload),
       });
       const text = await r.text();
-      // Deluge returns its map as a string; hand it back raw when it will not
-      // parse, so the caller can still see what happened.
-      let parsed: unknown = null;
+      // Zoho wraps the function's return value twice: an envelope, whose
+      // details.output is the Deluge map re-encoded AS A STRING. Unwrap both
+      // so the caller gets {zoho_contact_id, zoho_deal_id, …} directly and
+      // never has to know the shape of a Zoho reply.
+      let parsed: Record<string, unknown> | null = null;
       try { parsed = JSON.parse(text); } catch { parsed = null; }
-      return json({ ok: r.ok, status: r.status, result: parsed, raw: parsed ? undefined : text },
+      let result: unknown = parsed;
+      const details = parsed?.details as Record<string, unknown> | undefined;
+      if (typeof details?.output === "string") {
+        try { result = JSON.parse(details.output as string); }
+        catch { result = { raw_output: details.output }; }
+      }
+      return json({ ok: r.ok, status: r.status, result, raw: parsed ? undefined : text },
         200, origin);
     } catch (e) {
       return json({ ok: false, error: String(e) }, 200, origin);
