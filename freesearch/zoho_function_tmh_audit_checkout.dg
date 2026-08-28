@@ -110,7 +110,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		// 1. Existing contact wins -- a returning client is never re-led.
 		foundC = zoho.crm.searchRecords("Contacts","(Email:equals:" + em + ")");
-		if(foundC != null)
+		hitC = foundC.toString();
+		if(hitC.contains("id"))
 		{
 			fc0 = foundC.get(0);
 			if(fc0 != null)
@@ -132,7 +133,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			leadId = "";
 			foundL = zoho.crm.searchRecords("Leads","(Email:equals:" + em + ")");
-			if(foundL != null)
+			hitL = foundL.toString();
+			if(hitL.contains("id"))
 			{
 				fl0 = foundL.get(0);
 				if(fl0 != null)
@@ -532,7 +534,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		if((accountId == "") && (orgId != ""))
 		{
 			fa = zoho.crm.searchRecords("Accounts","(Company_URN:equals:" + orgId + ")");
-			if(fa != null)
+			hitA = fa.toString();
+			if(hitA.contains("id"))
 			{
 				fa0 = fa.get(0);
 				if(fa0 != null)
@@ -547,7 +550,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		if(accountId == "")
 		{
 			fa2 = zoho.crm.searchRecords("Accounts","(Account_Name:equals:" + orgName + ")");
-			if(fa2 != null)
+			hitB = fa2.toString();
+			if(hitB.contains("id"))
 			{
 				fb0 = fa2.get(0);
 				if(fb0 != null)
