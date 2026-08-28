@@ -1104,6 +1104,10 @@ function submitConsult(){
   clearErr('con-err');
   logEvent('audit_checkout_consult','audit_consult',{consult:state.consult},
     {current_screen:'audit_consult'});
+  /* Consultation type and the deadline everything hangs off are only known
+     now — the scope push happened a page earlier. */
+  crm('scope',{consultation_type:state.consult.taken?state.consult.type:'None taken',
+    deadline:deadlineIso()});
   go('applicant');
 }
 
@@ -1329,8 +1333,11 @@ function submitOrder(){
   const dealName=(state.consult.taken?'Trademark Audit & Consultation - ':'Trademark Audit Only - ')+
     state.name+(state.hasLogo?' Word, Logo':' Word');
   /* Summary reached -> Quoted. */
+  const payLabel={online:'Online (Stripe)',phone_now:'Phone',invoice:'Invoice'}[state.payment.method];
   crm('summary',{order_ref:invoiceRef(),net_total:pr.net,vat:pr.vat,total:pr.total,
     deal_name:dealName,
+    payment_method:payLabel,
+    payment_due:state.payment.method==='invoice'?state.payment.payDate:undefined,
     description:'Audit quoted from the website form.\nVariant: '+
       (state.consult.taken?'Trademark Audit & Consultation':'Trademark Audit Only')+
       '\nOrder ref: '+invoiceRef()+'\nTotal: £'+pr.total.toFixed(2)+
@@ -1343,8 +1350,6 @@ function submitOrder(){
       if(state.payment.method==='online'&&state.payment.stripeUrl){
         crm('paid',{payment_method:'Online (Stripe)',order_ref:invoiceRef(),
           paid_on:iso(new Date())});
-      }else if(state.payment.method==='invoice'){
-        crm('summary',{order_ref:invoiceRef(),payment_due:state.payment.payDate});
       }
     });
   logEvent('audit_checkout_submitted','audit_summary',{
