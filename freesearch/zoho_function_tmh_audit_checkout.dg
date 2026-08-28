@@ -110,13 +110,20 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		// 1. Existing contact wins -- a returning client is never re-led.
 		foundC = zoho.crm.searchRecords("Contacts","(Email:equals:" + em + ")");
-		if(foundC.size() > 0)
+		if(foundC != null)
 		{
-			contactId = foundC.get(0).get("id").toString();
-			acc = foundC.get(0).get("Account_Name");
-			if(acc != null)
+			fc0 = foundC.get(0);
+			if(fc0 != null)
 			{
-				accountId = acc.get("id").toString();
+				if(fc0.get("id") != null)
+				{
+					contactId = fc0.get("id").toString();
+					acc = fc0.get("Account_Name");
+					if(acc != null)
+					{
+						accountId = acc.get("id").toString();
+					}
+				}
 			}
 		}
 		// 2. No contact: create the Lead (attribution lives here), then
@@ -125,9 +132,16 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			leadId = "";
 			foundL = zoho.crm.searchRecords("Leads","(Email:equals:" + em + ")");
-			if(foundL.size() > 0)
+			if(foundL != null)
 			{
-				leadId = foundL.get(0).get("id").toString();
+				fl0 = foundL.get(0);
+				if(fl0 != null)
+				{
+					if(fl0.get("id") != null)
+					{
+						leadId = fl0.get("id").toString();
+					}
+				}
 			}
 			if(leadId == "")
 			{
@@ -518,17 +532,31 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		if((accountId == "") && (orgId != ""))
 		{
 			fa = zoho.crm.searchRecords("Accounts","(Company_URN:equals:" + orgId + ")");
-			if(fa.size() > 0)
+			if(fa != null)
 			{
-				accountId = fa.get(0).get("id").toString();
+				fa0 = fa.get(0);
+				if(fa0 != null)
+				{
+					if(fa0.get("id") != null)
+					{
+						accountId = fa0.get("id").toString();
+					}
+				}
 			}
 		}
 		if(accountId == "")
 		{
 			fa2 = zoho.crm.searchRecords("Accounts","(Account_Name:equals:" + orgName + ")");
-			if(fa2.size() > 0)
+			if(fa2 != null)
 			{
-				accountId = fa2.get(0).get("id").toString();
+				fb0 = fa2.get(0);
+				if(fb0 != null)
+				{
+					if(fb0.get("id") != null)
+					{
+						accountId = fb0.get("id").toString();
+					}
+				}
 			}
 		}
 		aM = Map();
