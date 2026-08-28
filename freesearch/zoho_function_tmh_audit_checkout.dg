@@ -510,13 +510,14 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			orgId = p.get("org_id").toString().trim();
 		}
-		// Company_Registration is the live company-number field on Accounts
-		// (verified 28 Aug -- there is no Company_Number). It is numeric, so
-		// only digits are usable as a dedupe key; SC/NI prefixed numbers fall
-		// through to the name match below.
+		// Company URN is the TEXT company-number field Jonathan added on
+		// 28 Aug. Text, so it holds SC/NI/OC prefixes and leading zeroes
+		// exactly as Companies House issues them -- the numeric
+		// Company_Registration field mangles both, which is why the dedupe
+		// key moved here.
 		if((accountId == "") && (orgId != ""))
 		{
-			fa = zoho.crm.searchRecords("Accounts","(Company_Registration:equals:" + orgId + ")");
+			fa = zoho.crm.searchRecords("Accounts","(Company_URN:equals:" + orgId + ")");
 			if(fa.size() > 0)
 			{
 				accountId = fa.get(0).get("id").toString();
@@ -532,9 +533,9 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		aM = Map();
 		aM.put("Account_Name",orgName);
-		if((orgId != "") && (orgId.matches("[0-9]+")))
+		if(orgId != "")
 		{
-			aM.put("Company_Registration",orgId.toLong());
+			aM.put("Company_URN",orgId);
 		}
 		if(p.get("addr1") != null)
 		{
