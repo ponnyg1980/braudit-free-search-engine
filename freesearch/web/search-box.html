@@ -130,6 +130,18 @@ if (VARIANT === 'quick') {
   document.querySelector('p.lead').textContent =
     'Check the UK trademark register in seconds \u2014 just your name and your classes.';
 }
+
+function journeyBase(){
+  if(CONFIG.JOURNEY) return CONFIG.JOURNEY.replace(/\/$/,'');
+  return ''; // relative — dev/mock only
+}
+
+const elQ = document.getElementById('q');
+const elGo = document.getElementById('go');
+const elErr = document.getElementById('err');
+
+function fail(msg){ elErr.textContent = msg; elErr.classList.add('on'); }
+
 if (VARIANT === 'audit') {
   document.title = 'Full Brand Audit \u2014 The Trademark Helpline';
   document.querySelector('.wrap h2').textContent = 'Full Brand Audit';
@@ -145,16 +157,6 @@ if (VARIANT === 'audit') {
   document.querySelector('.row').classList.add('audit');
 }
 
-function journeyBase(){
-  if(CONFIG.JOURNEY) return CONFIG.JOURNEY.replace(/\/$/,'');
-  return ''; // relative — dev/mock only
-}
-
-const elQ = document.getElementById('q');
-const elGo = document.getElementById('go');
-const elErr = document.getElementById('err');
-
-function fail(msg){ elErr.textContent = msg; elErr.classList.add('on'); }
 
 /* Hand over to the wizard. Inside an iframe we must navigate the PARENT,
    not ourselves — see the header comment. */
