@@ -209,20 +209,26 @@ def _select_tiers(class_no: int, context: list[str],
         tier.append(v)
         seen.add(v.lower())
 
-    # No signal at all (self-picked class, no description): an honest draft —
-    # broad anchors plus the class's most-registered terms as "possible".
+    # No signal at all (self-picked class, no description).
+    #
+    # Changed 28 Aug 2026 (Jonathan): we used to pad this out with the class's
+    # most-registered terms as "possible". That reads as advice when it is
+    # really just a popularity list — and a generic spec makes almost every
+    # mark in the class look like a conflict, which is exactly the wrong
+    # answer for an audit. So return ONLY the official heading anchors and
+    # flag needs_context, which the review screen turns into a one-line
+    # "tell us what you sell" prompt. One sentence, and the description-aware
+    # path below does the real work.
     if not bag and not ctx:
         for i, v in enumerate(vocab):
             if v.lower() in seen:
                 continue
             if i < ANCHOR_N:
                 put(definite, v)
-            elif len(definite) + len(possible) < MIN_TERMS + ANCHOR_N:
-                put(possible, v)
             else:
                 break
         return {'definite': definite, 'possible': possible,
-                'unlikely': unlikely}
+                'unlikely': unlikely, 'needs_context': True}
 
     # 1. The route's own terms that ARE registered vocabulary — strongest
     #    possible signal, searched over the FULL vocabulary, never capped.
@@ -293,5 +299,9 @@ def build_application_scope(classes, class_source) -> list[dict]:
             'heading': NICE_HEADINGS.get(n, ''),
             'terms': tiers['definite'] + tiers['possible'] + tiers['unlikely'],
             'term_tiers': tiers,
+            # True when the class was picked with no description to work
+            # from: the UI asks for one line about the business rather than
+            # presenting a popularity list as if it were advice.
+            'needs_context': bool(tiers.get('needs_context')),
         })
     return rows
