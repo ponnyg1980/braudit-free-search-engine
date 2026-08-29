@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TMH embeddable widgets — test page</title>
+<link rel="stylesheet" href="/braudit.css">
+<style>
+  /* A deliberately PLAIN host page. The point is to see each widget as a
+     third-party site would — dropped into ordinary page furniture, with no
+     help from our own stylesheet beyond the design tokens. */
+  body{margin:0;font-family:var(--font);color:var(--ink);background:#eef1f4;line-height:1.55}
+  .page{max-width:1000px;margin:0 auto;padding:28px 20px 80px}
+  header.top{background:var(--navy);color:#fff;padding:26px 20px;margin-bottom:26px}
+  header.top .in{max-width:1000px;margin:0 auto}
+  header.top h1{margin:0 0 6px;font-size:24px}
+  header.top p{margin:0;opacity:.85;font-size:15px}
+  .w{background:#fff;border:1px solid #dbe2e8;border-radius:14px;padding:22px;margin-bottom:26px}
+  .w h2{margin:0 0 4px;font-size:19px;color:var(--navy)}
+  .w .what{color:#5b6b7a;font-size:14.5px;margin:0 0 4px}
+  .w .use{color:#5b6b7a;font-size:13.5px;margin:0 0 14px}
+  .w .use b{color:var(--navy)}
+  .snippet{background:#1c2d3b;color:#dbe7f0;border-radius:10px;padding:12px 14px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow-x:auto;margin:14px 0 0;white-space:pre}
+  .host{border:2px dashed #c9d4de;border-radius:12px;padding:16px;background:#fbfcfd}
+  .hostlbl{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    color:#8a9aa8;margin-bottom:10px}
+  .nav{background:#fff;border:1px solid #dbe2e8;border-radius:14px;padding:16px 22px;margin-bottom:26px}
+  .nav a{color:var(--pink);font-weight:700;text-decoration:none;margin-right:18px;font-size:14px}
+  .nav a:hover{text-decoration:underline}
+  .note{background:#fff6f2;border:1px solid #f5c6b0;border-radius:10px;padding:12px 14px;
+    color:#8a3b12;font-size:13.5px;margin-top:14px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="in">
+    <h1>Embeddable widgets — test page</h1>
+    <p>Every widget below is embedded the same way a partner site would do it: one script tag.
+      They are live, so anything you type creates real journey records.</p>
+  </div>
+</header>
+
+<div class="page">
+  <div class="nav">
+    <a href="#box-free">1. Search box — Free</a>
+    <a href="#box-quick">2. Search box — Quick</a>
+    <a href="#box-bar">3. Search box — bar style</a>
+    <a href="#wizard">4. Full wizard</a>
+    <a href="#assistant">5. Class assistant</a>
+    <a href="#lookup">6. Trademark / owner lookup</a>
+  </div>
+
+  <!-- 1 -->
+  <section class="w" id="box-free">
+    <h2>1. Search box &mdash; Free Search variant</h2>
+    <p class="what">The compact entry point. Takes the name, mints the journey session, then hands
+      the visitor to the full Free Search wizard on step 2 (logo &amp; tagline).</p>
+    <p class="use"><b>Use it on:</b> the home page, service pages, blog sidebars &mdash; anywhere
+      you want the search to start without sending someone to another page first.</p>
+    <div class="host">
+      <div class="hostlbl">As it appears on your page</div>
+      <script src="https://braudit-free-search.onrender.com/embed.js"
+              data-widget="search-box" data-variant="free" data-tenant="tmh" async></script>
+    </div>
+    <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="search-box" data-variant="free" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="w" id="box-quick">
+    <h2>2. Search box &mdash; Quick Search variant</h2>
+    <p class="what">Same box, different journey: straight to classes, then results. Lands in Zoho
+      as Lead Source <b>Quick Search</b> rather than Free Search, so the split test stays honest.</p>
+    <p class="use"><b>Use it on:</b> paid landing pages and anywhere you want the shortest path to
+      a result.</p>
+    <div class="host">
+      <div class="hostlbl">As it appears on your page</div>
+      <script src="https://braudit-free-search.onrender.com/embed.js"
+              data-widget="search-box" data-variant="quick" data-tenant="tmh" async></script>
+    </div>
+    <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="search-box" data-variant="quick" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+  </section>
+
+  <!-- 3 -->
+  <section class="w" id="box-bar">
+    <h2>3. Search box &mdash; bar style</h2>
+    <p class="what">The same widget in a single-line treatment: no heading, no supporting copy,
+      just the field and the button.</p>
+    <p class="use"><b>Use it on:</b> headers, footers, sticky bars &mdash; places where a full
+      panel would be too heavy.</p>
+    <div class="host">
+      <div class="hostlbl">As it appears on your page</div>
+      <script src="https://braudit-free-search.onrender.com/embed.js"
+              data-widget="search-box" data-variant="free" data-style="bar" data-tenant="tmh" async></script>
+    </div>
+    <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="search-box" data-variant="free" data-style="bar" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+  </section>
+
+  <!-- 4 -->
+  <section class="w" id="wizard">
+    <h2>4. Full search wizard, embedded</h2>
+    <p class="what">The entire Free Search journey inside your page &mdash; name, logo and tagline,
+      territories, classes and terms, results. The widget reports its own height, so the page grows
+      with it and the footer never jumps.</p>
+    <p class="use"><b>Use it on:</b> your Free Search page itself, or a partner&rsquo;s site that
+      wants the whole tool rather than a link to it.</p>
+    <div class="host">
+      <div class="hostlbl">As it appears on your page</div>
+      <script src="https://braudit-free-search.onrender.com/embed.js"
+              data-widget="free-search" data-tenant="tmh" async></script>
+    </div>
+    <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="free-search" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+    <div class="note">This one is tall by design. Swap <code>data-widget</code> for
+      <code>brand-audit</code> to embed the audit form the same way.</div>
+  </section>
+
+  <!-- 5 -->
+  <section class="w" id="assistant">
+    <h2>5. Class assistant</h2>
+    <p class="what">Helps someone work out which classes they need &mdash; from a competitor&rsquo;s
+      trademark, their own company, or a description of what they sell.</p>
+    <p class="use"><b>Use it on:</b> guidance and &ldquo;which class am I?&rdquo; pages, where the
+      question is classification rather than availability.</p>
+    <div class="host">
+      <div class="hostlbl">As it appears on your page</div>
+      <script src="https://braudit-free-search.onrender.com/embed.js"
+              data-widget="class-assistant" data-tenant="tmh" async></script>
+    </div>
+    <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="class-assistant" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+  </section>
+
+  <!-- 6 -->
+  <section class="w" id="lookup">
+    <h2>6. Trademark / owner lookup bar</h2>
+    <p class="what">A register lookup with three purposes, switchable at the top of the widget:
+      pull classes and terms from a competitor&rsquo;s mark, check a trademark&rsquo;s status, or
+      find the IDs behind a portfolio.</p>
+    <p class="use"><b>Use it on:</b> internal tools and staff pages first &mdash; it exposes
+      register detail rather than selling a search.</p>
+    <div class="host">
+      <div class="hostlbl">As it appears on your page</div>
+      <script src="https://braudit-free-search.onrender.com/embed.js"
+              data-widget="search-bar" data-tenant="tmh" async></script>
+    </div>
+    <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="search-bar" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+  </section>
+</div>
+</body>
+</html>
