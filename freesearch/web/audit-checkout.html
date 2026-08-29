@@ -1496,14 +1496,22 @@ async function prepopulate(){
 }
 
 /* ================= EMBED ================= */
+/* Height is measured from the CONTENT (.wrap), never from
+   documentElement/body scrollHeight. Those equal the IFRAME's own height once
+   the content is shorter than the frame, so every report fed the next one and
+   the widget grew forever, 8px at a time (Jonathan spotted it on the /widgets
+   page, 28 Aug). Measuring the content breaks the loop: a shorter screen now
+   SHRINKS the frame instead of ratcheting it up. */
 (function reportHeight(){
   if(window.parent===window)return;
   document.body.classList.add('embedded');
+  const wrap=document.querySelector('.wrap');
   let last=0;
-  const send=()=>{const h=Math.ceil(document.documentElement.scrollHeight)+8;
-    if(Math.abs(h-last)<4)return;last=h;
+  const send=()=>{
+    const h=Math.ceil(wrap.getBoundingClientRect().height)+24;
+    if(Math.abs(h-last)<8)return; last=h;
     try{window.parent.postMessage({brauditHeight:h},'*');}catch(e){}};
-  new ResizeObserver(send).observe(document.body);
+  new ResizeObserver(send).observe(wrap);
   send();
   try{window.parent.postMessage({brauditReady:true},'*');}catch(e){}
 })();
