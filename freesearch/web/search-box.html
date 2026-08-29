@@ -58,9 +58,18 @@
   p.lead{margin:0 0 14px;font-size:.9rem;color:var(--muted);line-height:1.45}
   .row{display:flex;gap:8px;flex-wrap:wrap}
   .row.audit button{flex:0 0 auto;white-space:nowrap}
-  input[type=text]{flex:1 1 240px;min-width:0;padding:12px 14px;font-size:1rem;
-    font-family:var(--font);border:1px solid var(--line);border-radius:10px;color:var(--ink)}
-  input[type=text]:focus{outline:2px solid var(--navy);outline-offset:1px;border-color:var(--navy)}
+  /* The field is the whole point of this widget, so it is drawn to be
+     obviously typeable: a 2px navy-tinted border, a soft inner lift, and a
+     pink ring the moment it takes focus (Jonathan, 28 Aug — 'make it pop').
+     The hairline 1px border read as decoration on a busy host page. */
+  input[type=text]{flex:1 1 240px;min-width:0;padding:14px 16px;font-size:1.02rem;
+    font-family:var(--font);border:2px solid #a9b8c5;border-radius:10px;
+    color:var(--ink);background:#fff;font-weight:500;
+    box-shadow:inset 0 1px 2px rgba(28,45,59,.06);transition:border-color .15s,box-shadow .15s}
+  input[type=text]::placeholder{color:#8a9aa8;font-weight:400}
+  input[type=text]:hover{border-color:var(--navy)}
+  input[type=text]:focus{outline:none;border-color:var(--pink);
+    box-shadow:0 0 0 4px rgba(229,22,82,.14)}
   button{flex:0 0 auto;padding:12px 22px;font-size:1rem;font-family:var(--font);font-weight:600;
     color:#fff;background:var(--pink);border:0;border-radius:10px;cursor:pointer}
   button:hover{background:var(--pink-dark)}
