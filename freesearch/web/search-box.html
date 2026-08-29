@@ -57,6 +57,7 @@
   h2{margin:0 0 4px;font-size:1.15rem;color:var(--navy)}
   p.lead{margin:0 0 14px;font-size:.9rem;color:var(--muted);line-height:1.45}
   .row{display:flex;gap:8px;flex-wrap:wrap}
+  .row.audit button{flex:0 0 auto;white-space:nowrap}
   input[type=text]{flex:1 1 240px;min-width:0;padding:12px 14px;font-size:1rem;
     font-family:var(--font);border:1px solid var(--line);border-radius:10px;color:var(--ink)}
   input[type=text]:focus{outline:2px solid var(--navy);outline-offset:1px;border-color:var(--navy)}
@@ -101,17 +102,24 @@ const P = new URLSearchParams(location.search);
    "Free Search" / "Quick Search"), the hand-off screen, and the default
    wizard URL. Everything else is identical, which is what makes the A/B
    comparison honest. */
-const VARIANT = P.get('variant') === 'quick' ? 'quick' : 'free';
+/* Third variant added 28 Aug (Jonathan): 'audit' sends the visitor into the
+   full Brand Audit rather than a register search. Same box, same hand-off
+   mechanics; only the copy, the journey source and the destination differ. */
+const V_RAW = P.get('variant');
+const VARIANT = (V_RAW === 'quick' || V_RAW === 'audit') ? V_RAW : 'free';
 if (P.get('style') === 'bar') document.body.classList.add('bar');
 const CONFIG = {
   TENANT_ID: P.get('tenant') || 'tmh',
   EMBED:     P.get('embed') === '1',
   VARIANT:   VARIANT,
-  SOURCE:    VARIANT === 'quick' ? 'quick_search' : 'free_search',
-  SCREEN:    VARIANT === 'quick' ? 'classes' : 'marks',
-  // Where the full wizard lives. Defaults to this host's own copy.
+  SOURCE:    VARIANT === 'quick' ? 'quick_search'
+             : VARIANT === 'audit' ? 'brand_audit_direct' : 'free_search',
+  SCREEN:    VARIANT === 'quick' ? 'classes'
+             : VARIANT === 'audit' ? 'contact' : 'marks',
+  // Where the full journey lives. Defaults to this host's own copy.
   TARGET:    P.get('target') || (location.origin +
-             (VARIANT === 'quick' ? '/uk-trademark-quick-search' : '/free-search')),
+             (VARIANT === 'quick' ? '/uk-trademark-quick-search'
+              : VARIANT === 'audit' ? '/audit' : '/free-search')),
   // The journey Edge Function. Defaults to production so an embedded box
   // logs the search term even when the embedding page passes nothing.
   JOURNEY:   P.get('journey') || 'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey'
@@ -121,6 +129,20 @@ if (VARIANT === 'quick') {
   document.querySelector('.wrap h2').textContent = 'UK Trademark Quick Search';
   document.querySelector('p.lead').textContent =
     'Check the UK trademark register in seconds \u2014 just your name and your classes.';
+}
+if (VARIANT === 'audit') {
+  document.title = 'Full Brand Audit \u2014 The Trademark Helpline';
+  document.querySelector('.wrap h2').textContent = 'Full Brand Audit';
+  document.querySelector('p.lead').textContent =
+    'Check your name, logo or tagline against global trademark registers, ' +
+    'Companies House, domain names, social media and online marketplaces.';
+  document.querySelector('p.note').textContent =
+    'Takes less than two minutes to set up. Worth doing if you\u2019re thinking about ' +
+    'applying for a trademark, or you\u2019re concerned about others competing for your ' +
+    'brand in search, damaging your reputation, or trading on your goodwill.';
+  elQ.placeholder = 'Type your brand name here';
+  elGo.textContent = 'Start my audit';
+  document.querySelector('.row').classList.add('audit');
 }
 
 function journeyBase(){
@@ -152,7 +174,8 @@ function submit(){
   const name = (elQ.value || '').trim();
   if(!name){ elQ.focus(); fail('Please enter a brand name to search.'); return; }
   elErr.classList.remove('on');
-  elGo.disabled = true; elGo.textContent = 'Searching…';
+  elGo.disabled = true;
+  elGo.textContent = VARIANT === 'audit' ? 'Setting up…' : 'Searching…';
 
   // Log FIRST, navigate second. If the session call fails we still hand the
   // visitor over — a lost log is annoying, a dead search box is worse.
