@@ -202,6 +202,12 @@ _EMBED_JS = """(function(){
   s.parentNode.insertBefore(wrap, s);
   window.addEventListener('message', function(e){
     if(!e.data) return;
+    // ONLY listen to our own iframe. Each embed registers its own listener on
+    // the shared window, so without this check a page carrying two widgets
+    // has every listener acting on every message — the tall wizard's height
+    // report stretched the compact search boxes to match it (found on the
+    // /widgets test page, 28 Aug). Same for navigation and scroll requests.
+    if(e.source !== f.contentWindow) return;
     // The first height report is the app saying "I have rendered" — replace
     // the loading panel at once, never prolong it (spec: never delay merely
     // to display all messages).
