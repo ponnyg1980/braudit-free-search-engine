@@ -545,6 +545,23 @@
     <p class="lead">These are the official class descriptions and the specific terms drawn from
       marks already registered at the UKIPO. Edit anything &mdash; remove classes, delete or
       reword terms &mdash; then send. What you send is exactly what we file against.</p>
+    <!-- Shown when the classes were self-picked with nothing to tailor the
+         terms to (Jonathan, 28 Aug). Rather than presenting the class's most
+         popular terms as if they were advice, we ask for one line about the
+         business and re-run the description-aware builder. -->
+    <div id="rv-ctx" class="hidden panel" style="display:block;margin-bottom:20px">
+      <b>Tell us what you sell and we&rsquo;ll tailor these terms</b>
+      <p class="sub" style="margin:6px 0 12px">You&rsquo;ve picked your classes yourself, so all
+        we can show is the official class wording. One line about what you actually sell lets us
+        suggest the specific terms other businesses like yours have registered.</p>
+      <input type="text" id="rv-ctx-in" placeholder="e.g. We roast and sell speciality coffee"
+             style="width:100%;padding:13px 15px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;font-family:inherit">
+      <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <button class="btn primary" onclick="rvApplyContext()">Tailor my terms</button>
+        <button class="link" onclick="rvSkipContext()">No thanks &mdash; the class wording is enough</button>
+      </div>
+    </div>
+
     <div id="rv-list"></div>
     <p style="margin:14px 0 26px"><button class="btn ghost" onclick="history.back()">+ Add or change classes</button></p>
 
@@ -2291,6 +2308,32 @@ async function goToReview(){
   logEvent('screen_enter','review',{classes:state.classes},true);
   pushScreen('review');
 }
+/* One line about the business turns the official-wording-only draft into a
+   real suggestion: it is fed back through /class-scope as a route-1
+   description, which is the same path the AI description tool uses. */
+async function rvApplyContext(){
+  const v=(document.getElementById('rv-ctx-in').value||'').trim();
+  if(!v){ document.getElementById('rv-ctx-in').focus(); return; }
+  state.classSource={route:'1', value:v};
+  state.ctxAsked=true;
+  const base=(CONFIG.SEARCH_BASE||CONFIG.API_BASE||'').replace(/\/$/,'');
+  overlayOn('Tailoring your terms…','Matching what you sell against terms already on the register.');
+  try{
+    const r=await fetch(base+'/class-scope',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:state.name,classes:state.classes,class_source:state.classSource})});
+    const out=await r.json();
+    if(out&&out.ok&&Array.isArray(out.application_scope)) state.review=out.application_scope;
+  }catch(e){}
+  finally{ await overlayOff(); }
+  renderReview();
+  logEvent('class_context_given','review',{chars:v.length},true);
+}
+function rvSkipContext(){
+  state.ctxAsked=true;
+  renderReview();
+  logEvent('class_context_declined','review',{},false);
+}
 function renderReview(){
   const host=document.getElementById('rv-list');
   const esc=s=>String(s||'').replace(/</g,'&lt;');
@@ -2320,6 +2363,12 @@ function renderReview(){
      RETURN -> hand the selection back to the host page (Brand Audit)
      DEAL   -> write it onto a Zoho Deal
      else   -> email the visitor a CSV and make a Class Tools lead */
+  /* The nudge, when the engine says these terms had nothing to work from.
+     Suppressed once the visitor has answered or declined. */
+  const needsCtx=(state.review||[]).some(r=>r.needs_context) && !state.ctxAsked;
+  const ctxBox=document.getElementById('rv-ctx');
+  if(ctxBox) ctxBox.classList.toggle('hidden', !needsCtx);
+
   const ret=!!CONFIG.RETURN;
   document.getElementById('rv-return-send').classList.toggle('hidden', !ret);
   document.getElementById('rv-deal-send').classList.toggle('hidden', ret || !CONFIG.DEAL);
