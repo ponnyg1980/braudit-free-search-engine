@@ -96,6 +96,10 @@ _PAGES = {
     # Standalone staff tool over POST /suggest-classes (Jonathan, 10 Aug).
     # Same endpoint Free Search and Brand Audit call — one agent, three UIs.
     '/class-agent': 'class-agent.html',
+    # One page showing every embeddable widget as a partner site would see it
+    # (Jonathan, 28 Aug) — each one dropped in via embed.js, with the exact
+    # script tag to copy underneath it.
+    '/widgets': 'widgets.html',
 }
 
 # Partners drop this one line into their page:
