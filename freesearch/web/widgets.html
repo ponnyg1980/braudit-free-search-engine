@@ -47,8 +47,10 @@
     <a href="#box-quick">2. Search box — Quick</a>
     <a href="#box-bar">3. Search box — bar style</a>
     <a href="#wizard">4. Full wizard</a>
-    <a href="#assistant">5. Class assistant</a>
-    <a href="#lookup">6. Trademark / owner lookup</a>
+    <a href="#box-audit">5. Brand Audit box</a>
+    <a href="#audit-form">6. Brand Audit form</a>
+    <a href="#assistant">7. Class assistant</a>
+    <a href="#lookup">8. Trademark / owner lookup</a>
   </div>
 
   <!-- 1 -->
@@ -114,13 +116,49 @@
     </div>
     <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
         data-widget="free-search" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
-    <div class="note">This one is tall by design. Swap <code>data-widget</code> for
-      <code>brand-audit</code> to embed the audit form the same way.</div>
+    <div class="note">This one is tall by design &mdash; it reports its own height as the visitor
+      moves through the steps.</div>
   </section>
 
   <!-- 5 -->
+  <section class="w" id="box-audit">
+    <h2>5. Brand Audit box &mdash; the paid journey</h2>
+    <p class="what">The same box as #1, pointed at the Brand Audit instead of a register search.
+      Takes the brand name, opens the audit already carrying it, and lands in Zoho against the
+      audit pipeline rather than a search lead.</p>
+    <p class="use"><b>Use it on:</b> the Brand Audit page, service pages, and anywhere you are
+      selling the audit rather than offering a free search.</p>
+    <div class="host">
+      <div class="hostlbl">As it appears on your page</div>
+      <script src="https://braudit-free-search.onrender.com/embed.js"
+              data-widget="search-box" data-variant="audit" data-tenant="tmh" async></script>
+    </div>
+    <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="search-box" data-variant="audit" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+  </section>
+
+  <!-- 6 -->
+  <section class="w" id="audit-form">
+    <h2>6. Brand Audit form, embedded</h2>
+    <p class="what">The whole nine-page audit inside your page: contact, searches, territories,
+      classes and terms, platforms, the free consultation, applicant details, summary and payment.
+      Arriving from a search carries everything already given.</p>
+    <p class="use"><b>Use it on:</b> the Request a Brand Audit page. It is the page that takes the
+      order, so give it room.</p>
+    <div class="host">
+      <div class="hostlbl">As it appears on your page</div>
+      <script src="https://braudit-free-search.onrender.com/embed.js"
+              data-widget="audit" data-tenant="tmh" async></script>
+    </div>
+    <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="audit" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+    <div class="note">This one takes payment, so treat anything you enter as a real order &mdash;
+      Stripe is in test mode, but the Zoho records it creates are real.</div>
+  </section>
+
+  <!-- 7 -->
   <section class="w" id="assistant">
-    <h2>5. Class assistant</h2>
+    <h2>7. Class assistant</h2>
     <p class="what">Helps someone work out which classes they need &mdash; from a competitor&rsquo;s
       trademark, their own company, or a description of what they sell.</p>
     <p class="use"><b>Use it on:</b> guidance and &ldquo;which class am I?&rdquo; pages, where the
@@ -134,9 +172,9 @@
         data-widget="class-assistant" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
   </section>
 
-  <!-- 6 -->
+  <!-- 8 -->
   <section class="w" id="lookup">
-    <h2>6. Trademark / owner lookup bar</h2>
+    <h2>8. Trademark / owner lookup bar</h2>
     <p class="what">A register lookup with three purposes, switchable at the top of the widget:
       pull classes and terms from a competitor&rsquo;s mark, check a trademark&rsquo;s status, or
       find the IDs behind a portfolio.</p>
