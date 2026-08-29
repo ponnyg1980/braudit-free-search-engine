@@ -86,11 +86,10 @@
   label.fld .req{color:var(--pink)}
   label.fld .opt{color:var(--quiet);font-weight:500;font-size:12.5px}
   .hidden{display:none!important}
-  /* braudit.css fixes the stepper at 5 columns; this journey has nine steps. */
-  .steps{grid-template-columns:repeat(9,1fr);gap:10px}
-  @media(max-width:900px){.steps{grid-template-columns:repeat(5,1fr)}}
-  @media(max-width:560px){.steps{grid-template-columns:repeat(3,1fr)}}
-  .steps b{font-size:11px;letter-spacing:.9px}
+  /* Four phases, so the 5-column default from braudit.css is close enough —
+     just even them out and keep them on one line at every width. */
+  .steps{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:560px){.steps{gap:8px}.steps b{font-size:10px;letter-spacing:.6px}}
 </style>
 </head>
 <body>
@@ -583,7 +582,16 @@ const SHOPS=[['amazon','Amazon'],['etsy','Etsy'],['temu','Temu'],['tiktokshop','
   ['ebay','eBay'],['alibaba','Alibaba']];
 
 const SCREENS=['contact','searches','jurisdiction','classes','platforms','consult','applicant','summary','done'];
-const STEP_LABELS=['Contact','Searches','Territories','Classes','Platforms','Consultation','Details','Summary','Done'];
+/* Four phases, not nine steps (Jonathan, 28 Aug). Nine segments advertised
+   effort before the client had typed anything — and most of those steps are
+   near-instant when the audit follows a search. The pages are unchanged; the
+   bar just groups them into what a client would recognise as chapters. */
+const PHASES=[
+  {label:'Your brand',  screens:['contact','searches']},
+  {label:'Your market', screens:['jurisdiction','classes','platforms']},
+  {label:'Your audit',  screens:['consult','applicant']},
+  {label:'Checkout',    screens:['summary','done']},
+];
 
 const state={
   sessionId:CONFIG.SESSION||'', screen:'contact',
@@ -684,10 +692,12 @@ function logEvent(type,screen,payload,snapshot){
 /* ================= NAV ================= */
 function stepsBar(){
   const cur=SCREENS.indexOf(state.screen);
+  const phaseOf=i=>PHASES.findIndex(p=>p.screens.includes(SCREENS[i]));
+  const nowPhase=phaseOf(cur);
   /* Same markup as Free Search: a 4px rule over an uppercase label —
      done = navy, current = pink, future = soft line. */
-  document.getElementById('stepper').innerHTML=STEP_LABELS.map((l,i)=>
-    `<div class="${i<cur?'done':(i===cur?'now':'')}"><i></i><b>${i+1}. ${l}</b></div>`).join('');
+  document.getElementById('stepper').innerHTML=PHASES.map((p,i)=>
+    `<div class="${i<nowPhase?'done':(i===nowPhase?'now':'')}"><i></i><b>${i+1}. ${p.label}</b></div>`).join('');
 }
 function renderScreen(id){
   state.screen=id;
