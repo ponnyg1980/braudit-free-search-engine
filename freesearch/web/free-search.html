@@ -157,7 +157,13 @@
     padding:52px 40px 56px}
   .card.s1 h1{font-size:38px;letter-spacing:-1.1px}
   .card.s1 .lead{font-size:17px;max-width:560px}
-  .hero-in{border-radius:var(--r-md);padding:19px 20px;font-size:19px;font-weight:600}
+  /* Step 1's field carries the whole page, so it gets the same treatment as
+     the embeddable search box: heavier border, inner lift, pink focus ring. */
+  .hero-in{border-radius:var(--r-md);padding:19px 20px;font-size:19px;font-weight:600;
+    border:2px solid #a9b8c5;
+    box-shadow:inset 0 1px 2px rgba(28,45,59,.06);transition:border-color .15s,box-shadow .15s}
+  .hero-in:hover{border-color:var(--navy)}
+  .hero-in:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 4px rgba(229,22,82,.14)}
   .s1-owl{width:100%;max-width:200px}
 
   /* step 2 */
@@ -939,10 +945,14 @@ if(BUILDER){
    search box). Screens vary from ~600px to 2000+px, so report continuously. */
 (function reportHeight(){
   if(window.parent===window) return;          // standalone: nothing to do
+  var wrap=document.querySelector('.wrap');
   var last=0;
   function send(){
-    var h=Math.ceil(document.documentElement.scrollHeight)+8;
-    if(Math.abs(h-last)<4) return; last=h;
+    // Content height, NOT documentElement.scrollHeight — see the note on the
+    // second reporter below; measuring the viewport makes the frame grow on
+    // every report once the content is shorter than the frame.
+    var h=Math.ceil(wrap.getBoundingClientRect().height)+24;
+    if(Math.abs(h-last)<8) return; last=h;
     try{ window.parent.postMessage({brauditHeight:h},'*'); }catch(e){}
   }
   new MutationObserver(send).observe(document.documentElement,
@@ -2914,10 +2924,11 @@ document.getElementById('modeflag').textContent =
   : '● LIVE' + (CONFIG.API_BASE ? ': '+CONFIG.API_BASE : '');
 </script>
 <script>
-if (window.parent !== window) {
-  var _pushH=function(){parent.postMessage({brauditHeight:document.body.scrollHeight},'*');};
-  new ResizeObserver(_pushH).observe(document.body); _pushH();
-}
+/* Second reporter REMOVED 28 Aug. It measured document.body.scrollHeight,
+   which is the iframe's own height whenever the content is shorter — so it
+   echoed the height back a little larger each time and the embedded widget
+   expanded without end. The reporter above measures the content instead and
+   is the only one now. */
 </script>
 </body>
 </html>
