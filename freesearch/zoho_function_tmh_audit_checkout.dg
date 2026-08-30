@@ -128,16 +128,22 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		hitC = foundC.toString();
 		if(hitC.contains("id"))
 		{
-			fc0 = foundC.get(0);
-			if(fc0 != null)
+			// starts_with is only the NET -- every candidate is verified
+			// against the full address, or a prefix-sharing sibling
+			// (dominateteam1980+a vs +b) matches the wrong person. Proven
+			// 28 Aug: the first prefix match was somebody else entirely.
+			for each  fcrow in foundC
 			{
-				if(fc0.get("id") != null)
+				if((contactId == "") && (fcrow.get("Email") != null))
 				{
-					contactId = fc0.get("id").toString();
-					acc = fc0.get("Account_Name");
-					if(acc != null)
+					if(fcrow.get("Email").toString().equalsIgnoreCase(emIn))
 					{
-						accountId = acc.get("id").toString();
+						contactId = fcrow.get("id").toString();
+						acc = fcrow.get("Account_Name");
+						if(acc != null)
+						{
+							accountId = acc.get("id").toString();
+						}
 					}
 				}
 			}
@@ -151,12 +157,14 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			hitL = foundL.toString();
 			if(hitL.contains("id"))
 			{
-				fl0 = foundL.get(0);
-				if(fl0 != null)
+				for each  flrow in foundL
 				{
-					if(fl0.get("id") != null)
+					if((leadId == "") && (flrow.get("Email") != null))
 					{
-						leadId = fl0.get("id").toString();
+						if(flrow.get("Email").toString().equalsIgnoreCase(emIn))
+						{
+							leadId = flrow.get("id").toString();
+						}
 					}
 				}
 			}
