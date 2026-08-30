@@ -914,18 +914,50 @@ serve(async (req) => {
     if (email.endsWith("@thetrademarkhelpline.com")) {
       return json({ ok: true, allowed: true, access_mode: "safe_sender", remaining: -1 }, 200, origin);
     }
+    // The same Zoho call answers three things, so it is made once: is this a
+    // safe sender, is the person currently blocked, and when was their
+    // allowance last reset.
+    //
+    // RESET STAMP (Jonathan, 30 Aug: "when it is unticked, it sends that
+    // unblock straight to the App, the app then just treats it as a new
+    // client effectively unbarring them"). Zoho holds AI Allowance Reset, a
+    // timestamp. Blocking clears it; the next call after an adviser unticks
+    // the box re-stamps it with "now". Everything before that stamp is
+    // ignored below, so unticking really does hand back a full five — no
+    // event deletion, and the audit trail stays intact.
+    let blocked = false;
+    let resetMs = 0;
     if (ZOHO_CHECKOUT_URL) {
       try {
         const sr = await fetch(ZOHO_CHECKOUT_URL, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stage: "ai_safe", email }),
+          // Our clock, not Zoho's: a standalone Deluge function reported a time
+          // eight hours ahead (30 Aug), and a reset stamped in the future would
+          // silently grant an unlimited allowance, since no use is ever after it.
+          body: JSON.stringify({
+            stage: "ai_safe", email,
+            now: new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00"),
+          }),
         });
         const st = await sr.text();
         let sp: Record<string, unknown> | null = null;
         try { sp = JSON.parse(st); } catch { sp = null; }
         const out = (sp?.details as Record<string, unknown> | undefined)?.output;
-        if (typeof out === "string" && out.includes('"safe":true')) {
-          return json({ ok: true, allowed: true, access_mode: "safe_sender", remaining: -1 }, 200, origin);
+        if (typeof out === "string") {
+          let o: Record<string, unknown> | null = null;
+          try { o = JSON.parse(out); } catch { o = null; }
+          if (o?.safe === true || out.includes('"safe":true')) {
+            return json({ ok: true, allowed: true, access_mode: "safe_sender", remaining: -1 }, 200, origin);
+          }
+          blocked = o?.blocked === true;
+          // just_reset means Zoho stamped the reset during THIS call (a fresh
+          // email, or one an adviser has just unblocked) — so the allowance
+          // starts here and nothing earlier counts. Otherwise parse the stored
+          // stamp; it is ISO-8601 with an offset, which Date.parse handles.
+          if (o?.just_reset === true) resetMs = Date.now();
+          else if (o?.reset) resetMs = Date.parse(String(o.reset)) || 0;
+          // A stamp in the future would mean nothing ever counts; clamp it.
+          if (resetMs > Date.now()) resetMs = Date.now();
         }
       } catch (_e) { /* fail toward the normal allowance */ }
     }
@@ -933,7 +965,8 @@ serve(async (req) => {
     const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
     const allowance = Number(Deno.env.get("AI_ALLOWANCE") ?? "5");
     const windowDays = Number(Deno.env.get("AI_WINDOW_DAYS") ?? "30");
-    const since = new Date(Date.now() - windowDays * 86400 * 1000).toISOString();
+    const windowStart = Date.now() - windowDays * 86400 * 1000;
+    const since = new Date(Math.max(windowStart, resetMs)).toISOString();
     let used = 0;
     try {
       const { count } = await admin.from("journey_events")
@@ -943,13 +976,14 @@ serve(async (req) => {
         .gte("created_at", since);
       used = count ?? 0;
     } catch (_e) { used = 0; }
-    if (used >= allowance) {
+    if (blocked || used >= allowance) {
       // Fair use exhausted: flag the Zoho record so staff can see who is
       // hitting the limit (Jonathan, 28 Aug). The flag is cleared by a human
       // unticking it, never automatically — a heavy user is a conversation,
       // not a lockout. Fire-and-forget: a CRM hiccup must not change what the
-      // visitor is told.
-      if (ZOHO_CHECKOUT_URL) {
+      // visitor is told. Skipped when Zoho already says blocked, so a person
+      // sitting behind the gate is not written to on every attempt.
+      if (ZOHO_CHECKOUT_URL && !blocked) {
         fireAndForget(ZOHO_CHECKOUT_URL, { stage: "ai_block", email });
       }
       return json({
