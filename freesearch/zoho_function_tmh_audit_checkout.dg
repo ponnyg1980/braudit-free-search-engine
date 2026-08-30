@@ -745,6 +745,47 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		]
 		res.put("ok",true);
 	}
+	else if((stg == "ai_block") && (emIn != ""))
+	{
+		//
+		// ----------------------------------------------- stage: ai_block
+		//
+		// Fair-use on the AI class tools is exhausted for this email. Flag the
+		// Lead and/or Contact so staff can see who is hitting the limit and
+		// have the conversation. Cleared by a human unticking the box -- never
+		// automatically (Jonathan, 28 Aug).
+		blk = Map();
+		blk.put("AI_Tools_Blocked",true);
+		fndL = zoho.crm.searchRecords("Leads","(Email:equals:" + emIn + ")");
+		hitBL = fndL.toString();
+		if(hitBL.contains("id"))
+		{
+			bl0 = fndL.get(0);
+			if(bl0 != null)
+			{
+				if(bl0.get("id") != null)
+				{
+					zoho.crm.updateRecord("Leads",bl0.get("id").toString().toLong(),blk);
+					res.put("lead_flagged",bl0.get("id").toString());
+				}
+			}
+		}
+		fndC2 = zoho.crm.searchRecords("Contacts","(Email:equals:" + emIn + ")");
+		hitBC = fndC2.toString();
+		if(hitBC.contains("id"))
+		{
+			bc0 = fndC2.get(0);
+			if(bc0 != null)
+			{
+				if(bc0.get("id") != null)
+				{
+					zoho.crm.updateRecord("Contacts",bc0.get("id").toString().toLong(),blk);
+					res.put("contact_flagged",bc0.get("id").toString());
+				}
+			}
+		}
+		res.put("ok",true);
+	}
 	else if(stg == "factfind")
 	{
 		//
