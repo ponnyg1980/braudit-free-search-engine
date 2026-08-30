@@ -805,6 +805,11 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		// automatically (Jonathan, 28 Aug).
 		blk = Map();
 		blk.put("AI_Tools_Blocked",true);
+		// Clearing the reset stamp is what makes unblocking meaningful: the
+		// next use after staff untick the box re-stamps it (see ai_safe), so
+		// counting starts again from that moment and the person gets a fresh
+		// allowance -- the app simply treats them as new (Jonathan, 30 Aug).
+		blk.put("AI_Allowance_Reset",null);
 		fndL = zoho.crm.searchRecords("Leads","(Email:starts_with:" + emPre + ")");
 		hitBL = fndL.toString();
 		if(hitBL.contains("id"))
@@ -850,6 +855,21 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		// trusted partners. The journey function asks BEFORE counting a use,
 		// so a safe sender is never limited, never blocked, never flagged.
 		safe = false;
+		blocked = false;
+		// The clock comes from the caller, not from here. zoho.currenttime in a
+		// standalone function reported 05:18 on the 31st while the real time was
+		// 21:18 on the 30th (proven 30 Aug), and a reset stamped in the FUTURE
+		// silently grants an unlimited allowance, because no use is ever after
+		// it. The journey sends its own ISO timestamp instead.
+		nowIn = "";
+		if(p.get("now") != null)
+		{
+			nowIn = p.get("now").toString();
+		}
+		resetRaw = "";
+		justReset = false;
+		hitId = "";
+		hitMod = "";
 		sfL = zoho.crm.searchRecords("Leads","(Email:starts_with:" + emPre + ")");
 		hitSL = sfL.toString();
 		if(hitSL.contains("id"))
@@ -860,12 +880,25 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				{
 					if(srow.get("Email").toString().equalsIgnoreCase(emIn))
 					{
+						hitId = srow.get("id").toString();
+						hitMod = "Leads";
 						if(srow.get("AI_Safe_Sender") != null)
 						{
 							if(srow.get("AI_Safe_Sender").toString().equalsIgnoreCase("true"))
 							{
 								safe = true;
 							}
+						}
+						if(srow.get("AI_Tools_Blocked") != null)
+						{
+							if(srow.get("AI_Tools_Blocked").toString().equalsIgnoreCase("true"))
+							{
+								blocked = true;
+							}
+						}
+						if(srow.get("AI_Allowance_Reset") != null)
+						{
+							resetRaw = srow.get("AI_Allowance_Reset").toString();
 						}
 					}
 				}
@@ -881,6 +914,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				{
 					if(scrow.get("Email").toString().equalsIgnoreCase(emIn))
 					{
+						hitId = scrow.get("id").toString();
+						hitMod = "Contacts";
 						if(scrow.get("AI_Safe_Sender") != null)
 						{
 							if(scrow.get("AI_Safe_Sender").toString().equalsIgnoreCase("true"))
@@ -888,11 +923,54 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 								safe = true;
 							}
 						}
+						if(scrow.get("AI_Tools_Blocked") != null)
+						{
+							if(scrow.get("AI_Tools_Blocked").toString().equalsIgnoreCase("true"))
+							{
+								blocked = true;
+							}
+						}
+						if(scrow.get("AI_Allowance_Reset") != null)
+						{
+							resetRaw = scrow.get("AI_Allowance_Reset").toString();
+						}
 					}
 				}
 			}
 		}
+		// Not blocked and no reset stamp yet -> this is either a brand-new
+		// email or one an adviser has just unblocked. Stamp it now; the app
+		// counts only uses AFTER this moment, which is what "treat them as
+		// new" means in practice.
+		if((blocked == false) && (resetRaw == ""))
+		{
+			if(hitId != "")
+			{
+				stampM = Map();
+				// A datetime field wants an ISO-8601 string with an offset; the
+				// bare zoho.currenttime object writes nothing and reports no
+				// error (proven 30 Aug -- the field stayed null while the stage
+				// kept claiming it had stamped, which handed out an endless
+				// allowance). The write is verified before it is believed.
+				if(nowIn != "")
+				{
+					stampM.put("AI_Allowance_Reset",nowIn);
+				}
+				else
+				{
+					stampM.put("AI_Allowance_Reset",zoho.currenttime);
+				}
+				upd = zoho.crm.updateRecord(hitMod,hitId.toLong(),stampM);
+				if(upd.get("id") != null)
+				{
+					justReset = true;
+				}
+			}
+		}
 		res.put("safe",safe);
+		res.put("blocked",blocked);
+		res.put("reset",resetRaw);
+		res.put("just_reset",justReset);
 		res.put("ok",true);
 	}
 	else if(stg == "factfind")
