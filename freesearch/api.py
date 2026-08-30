@@ -82,6 +82,9 @@ _PAGES = {
     # the startswith route in do_GET.
     '/search-report': 'report.html',
     '/class-assistant': 'class-assistant.html',
+    # Same file, AI panel switched on by the pathname (Jonathan, 28 Aug) —
+    # one page, two routes, so the plain and AI tools cannot drift apart.
+    '/class-assistant-ai': 'class-assistant.html',
     '/search-bar': 'search-bar.html',
     '/search-box': 'search-box.html',          # compact drop-anywhere entry point
     # free-search.html's CONFIG.BRAND_AUDIT_URL points at '/brand-audit/', so
