@@ -80,7 +80,7 @@
     <a href="#lookup">8. Trademark / owner lookup</a>
 
     <div class="grp">What the client receives</div>
-    <a href="#report">The emailed search report</a>
+    <a href="#report">The emailed search report — 2 samples</a>
   </div>
 
   <p class="sechead">Widgets 1&ndash;8 &mdash; unchanged numbering</p>
@@ -316,18 +316,36 @@
       to. It is not a widget &mdash; it has its own address, one per search, and it renders the
       complete stored result rather than the shortened version on the results screen. The button at
       the top prints it to PDF.</p>
-    <p class="use"><b>Live sample:</b> a real Quick Search for <b>Northstar Coffee</b> in class 30,
-      run on 22 August. One similar mark was flagged and none scored above low risk, so this is the
-      encouraging end of the range &mdash; the same page carries a very different tone when the
-      register is crowded.</p>
+    <p class="use"><b>Two live samples,</b> one at each end of the range. The page is the same; what
+      changes is what the register gave back, and how bluntly the engine says it.</p>
+
     <div class="host">
-      <div class="hostlbl">As it arrives with the client</div>
+      <div class="hostlbl">1 &middot; Crowded register &mdash; McDonald&rsquo;s, classes 29, 30 &amp; 43</div>
+      <p class="use" style="margin:0 0 12px">24 marks flagged &mdash; 5 high risk, 13 medium &mdash;
+        and the word mark already registered to McDonald&rsquo;s International Property Company. 41%,
+        and the headline says the quiet part out loud: <i>that word mark is already taken &mdash; but
+        the brand may not be</i>. Note what it does <b>not</b> do: it doesn&rsquo;t pretend the name is
+        weak. Distinctiveness still scores 95. It separates the name&rsquo;s own merit from whether
+        somebody got there first, which is the conversation an adviser wants to be having.</p>
       <div class="rpt">
-        <iframe id="rptFrame" title="Sample search report"
+        <iframe id="rptCrowded" title="Sample search report — crowded register"
+                src="/report/bb9832d7-a57b-490d-88ca-e7e4ff5e9789"></iframe>
+      </div>
+      <a class="openfull" target="_blank" rel="noopener"
+         href="/report/bb9832d7-a57b-490d-88ca-e7e4ff5e9789">Open the McDonald&rsquo;s report in a new tab</a>
+    </div>
+
+    <div class="host" style="margin-top:20px">
+      <div class="hostlbl">2 &middot; Clear register &mdash; Northstar Coffee, class 30</div>
+      <p class="use" style="margin:0 0 12px">One similar mark, nothing above low risk, 77% and a
+        verdict of Strong. The engine leads with the application here rather than the audit &mdash;
+        it would be dishonest to push an audit at somebody who doesn&rsquo;t need one.</p>
+      <div class="rpt">
+        <iframe id="rptClear" title="Sample search report — clear register"
                 src="/report/0d9dd4a5-17fc-4f9a-b2e1-e0788708e148"></iframe>
       </div>
       <a class="openfull" target="_blank" rel="noopener"
-         href="/report/0d9dd4a5-17fc-4f9a-b2e1-e0788708e148">Open the full report in a new tab</a>
+         href="/report/0d9dd4a5-17fc-4f9a-b2e1-e0788708e148">Open the Northstar report in a new tab</a>
     </div>
     <div class="snippet">https://www.thetrademarkhelpline.com/search-report/?fs=&lt;session&gt;
 https://braudit-free-search.onrender.com/report/&lt;session&gt;      (same page, engine host)</div>
@@ -349,9 +367,11 @@ https://braudit-free-search.onrender.com/report/&lt;session&gt;      (same page,
   // the same window, and without the check the tallest one would size this frame
   // too (the bug that stretched the compact boxes on 28 Aug).
   window.addEventListener('message', function(e){
-    var f = document.getElementById('rptFrame');
-    if(!f || e.source !== f.contentWindow) return;
-    if(e.data && e.data.brauditHeight) f.style.height = e.data.brauditHeight + 'px';
+    if(!(e.data && e.data.brauditHeight)) return;
+    ['rptCrowded','rptClear'].forEach(function(id){
+      var f = document.getElementById(id);
+      if(f && e.source === f.contentWindow) f.style.height = e.data.brauditHeight + 'px';
+    });
   });
 </script>
 </body>
