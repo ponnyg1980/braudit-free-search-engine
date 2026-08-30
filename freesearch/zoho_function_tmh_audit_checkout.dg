@@ -71,6 +71,15 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	{
 		emIn = p.get("email").toString().trim();
 	}
+	// searchRecords criteria are URL-decoded by Zoho, so a '+' in an address
+	// becomes a space and a plus-addressed email matches nothing at all
+	// (found 28 Aug -- a Contact that existed was invisible to the search).
+	// Every criteria lookup below uses the encoded form.
+	emQ = emIn;
+	if(emIn != "")
+	{
+		emQ = zoho.encryption.urlEncode(emIn);
+	}
 	res = Map();
 	res.put("stage",stg);
 	//
@@ -109,7 +118,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			auditLink = p.get("audit_link").toString();
 		}
 		// 1. Existing contact wins -- a returning client is never re-led.
-		foundC = zoho.crm.searchRecords("Contacts","(Email:equals:" + em + ")");
+		foundC = zoho.crm.searchRecords("Contacts","(Email:equals:" + emQ + ")");
 		hitC = foundC.toString();
 		if(hitC.contains("id"))
 		{
@@ -132,7 +141,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		if(contactId == "")
 		{
 			leadId = "";
-			foundL = zoho.crm.searchRecords("Leads","(Email:equals:" + em + ")");
+			foundL = zoho.crm.searchRecords("Leads","(Email:equals:" + emQ + ")");
 			hitL = foundL.toString();
 			if(hitL.contains("id"))
 			{
@@ -756,7 +765,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		// automatically (Jonathan, 28 Aug).
 		blk = Map();
 		blk.put("AI_Tools_Blocked",true);
-		fndL = zoho.crm.searchRecords("Leads","(Email:equals:" + emIn + ")");
+		fndL = zoho.crm.searchRecords("Leads","(Email:equals:" + emQ + ")");
 		hitBL = fndL.toString();
 		if(hitBL.contains("id"))
 		{
@@ -770,7 +779,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				}
 			}
 		}
-		fndC2 = zoho.crm.searchRecords("Contacts","(Email:equals:" + emIn + ")");
+		fndC2 = zoho.crm.searchRecords("Contacts","(Email:equals:" + emQ + ")");
 		hitBC = fndC2.toString();
 		if(hitBC.contains("id"))
 		{
