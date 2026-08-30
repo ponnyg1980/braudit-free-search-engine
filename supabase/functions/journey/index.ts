@@ -931,7 +931,13 @@ serve(async (req) => {
       try {
         const sr = await fetch(ZOHO_CHECKOUT_URL, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stage: "ai_safe", email }),
+          // Our clock, not Zoho's: a standalone Deluge function reported a time
+          // eight hours ahead (30 Aug), and a reset stamped in the future would
+          // silently grant an unlimited allowance, since no use is ever after it.
+          body: JSON.stringify({
+            stage: "ai_safe", email,
+            now: new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00"),
+          }),
         });
         const st = await sr.text();
         let sp: Record<string, unknown> | null = null;
@@ -950,6 +956,8 @@ serve(async (req) => {
           // stamp; it is ISO-8601 with an offset, which Date.parse handles.
           if (o?.just_reset === true) resetMs = Date.now();
           else if (o?.reset) resetMs = Date.parse(String(o.reset)) || 0;
+          // A stamp in the future would mean nothing ever counts; clamp it.
+          if (resetMs > Date.now()) resetMs = Date.now();
         }
       } catch (_e) { /* fail toward the normal allowance */ }
     }
