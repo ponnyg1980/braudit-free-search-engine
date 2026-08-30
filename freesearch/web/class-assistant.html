@@ -75,12 +75,41 @@ button.route small{display:block;font-weight:400;color:#64748b;margin-top:3px}
   .didyou{padding:10px 13px;margin-bottom:6px;border-radius:10px;
     background:var(--pink-tint);border:1px solid var(--pink-line);
     font-size:13.5px;color:var(--navy);font-weight:600}
+  .head-row{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+  .sel-card h3{display:flex;align-items:center;gap:10px}
+  .sel-count{font-size:12px;font-weight:700;color:#fff;background:var(--pink);border-radius:999px;padding:2px 9px}
+  .sel-chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px;min-height:26px}
+  .sel-chip{display:inline-flex;align-items:center;gap:8px;background:#fef4f7;border:1px solid #f6c9d6;
+    border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;color:var(--navy)}
+  .sel-chip b{color:var(--pink)}
+  .sel-chip .x{cursor:pointer;color:var(--pink);font-weight:800}
+  .sel-empty{color:var(--muted);font-size:13px}
+  .sel-acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+  .lead-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0 14px}
+  @media(max-width:560px){.lead-grid{grid-template-columns:1fr}}
+  .lead-grid input{width:100%;padding:11px 13px;border:2px solid #a9b8c5;border-radius:9px;
+    font-size:15px;font-family:inherit;color:var(--ink)}
+  .lead-grid input:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 3px rgba(229,22,82,.13)}
+  .lbl{display:block;font-weight:700;color:var(--navy);font-size:13px;margin-bottom:5px}
+  .consent{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--muted);line-height:1.5}
+  .consent input{margin-top:3px;width:17px;height:17px;accent-color:var(--pink);flex:none}
+  .err{color:#c0392b;font-size:13px;font-weight:600;margin-top:8px}
+  /* the pick control injected into every result row */
+  .pick{appearance:none;border:1.5px solid var(--line);background:#fff;color:var(--navy);
+    border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+  .pick:hover{border-color:var(--navy)}
+  .pick.on{background:var(--pink);border-color:var(--pink);color:#fff}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Class Assistant</h1>
-  <p class="sub">Suggest Nice classes from a competitor trademark, a company’s portfolio, or SIC codes. All grounded in real UK register data.</p>
+  <div class="head-row">
+    <div>
+      <h1>Class Assistant</h1>
+      <p class="sub">Suggest Nice classes from a competitor trademark, a company’s portfolio, or SIC codes. All grounded in real UK register data.</p>
+    </div>
+    <button class="btn ghost" id="reset-btn" onclick="resetAll()">Start again</button>
+  </div>
 
   <div class="card">
     <div class="tabs">
@@ -132,11 +161,54 @@ button.route small{display:block;font-weight:400;color:#64748b;margin-top:3px}
     <div class="copybar" id="copybar" style="display:none"><code id="copytext"></code></div>
     <div id="out-body"></div>
   </div>
+
+  <!-- Your classes: the visitor's OWN selection, which survives switching
+       between routes. Suggestions are suggestions until someone picks them. -->
+  <div class="card sel-card" id="sel-card" style="display:none">
+    <h3>Your classes <span class="sel-count" id="sel-count"></span></h3>
+    <div class="sel-chips" id="sel-chips"></div>
+    <div class="sel-acts">
+      <button class="btn" onclick="openEmail()">Email me my classes</button>
+      <button class="btn ghost" onclick="copySelected()">Copy numbers</button>
+    </div>
+    <div class="copybar" id="sel-copybar" style="display:none"><code id="sel-copytext"></code></div>
+  </div>
+
+  <!-- Lead capture. Deliberately four fields and a plain consent line: this
+       tool is the low-commitment end of the funnel. -->
+  <div class="card" id="email-card" style="display:none">
+    <h3>Where shall we send them?</h3>
+    <div class="lead-grid">
+      <div><label class="lbl">First name *</label><input id="lf-first" autocomplete="given-name"></div>
+      <div><label class="lbl">Last name *</label><input id="lf-last" autocomplete="family-name"></div>
+      <div><label class="lbl">Email *</label><input id="lf-email" type="email" autocomplete="email"></div>
+      <div><label class="lbl">Phone *</label><input id="lf-phone" type="tel" autocomplete="tel"></div>
+    </div>
+    <label class="consent"><input type="checkbox" id="lf-consent">
+      <span>I agree that The Trademark Helpline may contact me about this class
+      selection and my trademark enquiry, by email or telephone. We do not sell
+      your details, and you can ask us to stop at any time.</span></label>
+    <div class="err" id="lf-err" style="display:none"></div>
+    <div class="sel-acts">
+      <button class="btn" id="lf-go" onclick="sendClasses()">Send my classes</button>
+      <button class="btn ghost" onclick="closeEmail()">Cancel</button>
+    </div>
+    <div id="lf-done" style="display:none;margin-top:10px;color:#2f6b23;font-weight:600">
+      Sent &mdash; check your inbox. One of our advisers may follow up to talk the classes through.</div>
+  </div>
 </div>
 <div class="flag" id="flag"></div>
 
 <script>
-const CONFIG={API_BASE:''};   // set to the engine/Edge URL to go live
+const P_QS=new URLSearchParams(location.search);
+const CONFIG={
+  API_BASE:'',   // set to the engine/Edge URL to go live
+  // The journey Edge Function, so an emailed class list becomes a Zoho lead
+  // the same way every other tool's does.
+  JOURNEY:P_QS.get('journey')||'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey',
+  TENANT:P_QS.get('tenant')||'tmh'
+};
+function journeyBase(){return CONFIG.JOURNEY.replace(/\/$/,'');}
 
 /* The taxonomy is small static reference data, so it ships WITH the widget:
    instant type-ahead, no round-trip, and the demo behaves exactly like live.
@@ -365,6 +437,134 @@ function renderSic(title,r){
      ${(c.terms&&c.terms.length)?`<div class="terms">${c.terms.slice(0,10).map(t=>`<span class="term">${t.text} <b>${(t.label||'')[0]||''}</b></span>`).join('')}</div>`:''}</div>`).join('');}
 function outHead(title){document.getElementById('out').style.display='';document.getElementById('out-title').textContent=title;
   show('copybar',false);}
+
+/* ======================================================================
+   SELECTION, RESET AND EMAIL  (added 28 Aug)
+   The four routes SUGGEST classes; nothing is "yours" until you pick it.
+   The selection survives switching routes, so someone can take class 25 from
+   a competitor's mark and class 35 from their own SIC codes.
+   ====================================================================== */
+const picked=new Map();          // nice_class -> label
+
+function decorateRows(){
+  document.querySelectorAll('#out-body .cls').forEach(row=>{
+    if(row.dataset.decorated)return;
+    const head=row.querySelector('.h span');
+    if(!head)return;
+    const m=(head.textContent||'').match(/Class\s+(\d{1,2})/);
+    if(!m)return;
+    const n=parseInt(m[1],10);
+    if(!(n>=1&&n<=45))return;
+    const label=(head.textContent||'').replace(/^[✓\s]*Class\s+\d{1,2}\s*[·-]?\s*/,'').trim();
+    row.dataset.decorated='1'; row.dataset.cls=String(n); row.dataset.label=label;
+    const b=document.createElement('button');
+    b.className='pick'+(picked.has(n)?' on':'');
+    b.textContent=picked.has(n)?'✓ Added':'+ Add';
+    b.onclick=()=>togglePick(n,label);
+    const h=row.querySelector('.h');
+    if(h) h.appendChild(b);
+  });
+}
+function togglePick(n,label){
+  if(picked.has(n)) picked.delete(n); else picked.set(n,label||'');
+  renderPicked();
+  document.querySelectorAll('#out-body .cls').forEach(r=>{
+    if(Number(r.dataset.cls)!==n)return;
+    const b=r.querySelector('.pick'); if(!b)return;
+    b.classList.toggle('on',picked.has(n));
+    b.textContent=picked.has(n)?'✓ Added':'+ Add';
+  });
+}
+function renderPicked(){
+  const card=document.getElementById('sel-card');
+  const chips=document.getElementById('sel-chips');
+  const count=document.getElementById('sel-count');
+  const nums=[...picked.keys()].sort((a,b)=>a-b);
+  card.style.display = nums.length ? '' : 'none';
+  count.textContent = nums.length ? nums.length+(nums.length===1?' class':' classes') : '';
+  chips.innerHTML = nums.length
+    ? nums.map(n=>`<span class="sel-chip"><b>${n}</b> ${picked.get(n)||''}
+        <span class="x" onclick="togglePick(${n})" title="Remove">&times;</span></span>`).join('')
+    : '<span class="sel-empty">Nothing picked yet.</span>';
+}
+new MutationObserver(decorateRows).observe(document.getElementById('out-body'),
+  {childList:true,subtree:true});
+
+function copySelected(){
+  const txt=[...picked.keys()].sort((a,b)=>a-b).join(', ');
+  document.getElementById('sel-copytext').textContent=txt||'(none)';
+  show('sel-copybar',true);
+  if(navigator.clipboard) navigator.clipboard.writeText(txt);
+}
+
+/* Start again: clears every route's input and result, and the selection. */
+function resetAll(){
+  picked.clear(); renderPicked();
+  ['tx-find','tm-q','ow-q','co-q','sic-q','lf-first','lf-last','lf-email','lf-phone']
+    .forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+  ['tx-find-list','tm-list','ow-list','co-list'].forEach(id=>{
+    const el=document.getElementById(id); if(el){el.innerHTML='';el.style.display='none';}});
+  const act=document.getElementById('tx-act-wrap'); if(act) act.style.display='none';
+  const acts=document.getElementById('tx-acts'); if(acts) acts.innerHTML='';
+  TX.sector=null; TX.bt=null; TX.activities=[];
+  last={classes:[]};
+  document.getElementById('out').style.display='none';
+  document.getElementById('out-body').innerHTML='';
+  show('copybar',false); show('sel-copybar',false);
+  closeEmail();
+  const c=document.getElementById('lf-consent'); if(c) c.checked=false;
+  document.getElementById('lf-done').style.display='none';
+  tab('ind');
+  const f=document.getElementById('tx-find'); if(f) f.focus();
+}
+
+function openEmail(){
+  document.getElementById('email-card').style.display='';
+  document.getElementById('lf-done').style.display='none';
+  document.getElementById('email-card').scrollIntoView({behavior:'smooth',block:'start'});
+  try{window.parent!==window&&window.parent.postMessage({brauditScrollTop:true},'*');}catch(e){}
+}
+function closeEmail(){const el=document.getElementById('email-card'); if(el) el.style.display='none';}
+
+async function sendClasses(){
+  const g=id=>(document.getElementById(id).value||'').trim();
+  const err=document.getElementById('lf-err');
+  const fail=m=>{err.textContent=m;err.style.display='';};
+  const first=g('lf-first'), lastN=g('lf-last'), email=g('lf-email'), phone=g('lf-phone');
+  if(!first||!lastN||!email||!phone) return fail('We need all four fields to send your classes.');
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('That email address doesn’t look right.');
+  if(!document.getElementById('lf-consent').checked)
+    return fail('Please tick the box so we know we may contact you.');
+  err.style.display='none';
+  const btn=document.getElementById('lf-go'); btn.disabled=true; btn.textContent='Sending…';
+
+  const classes=[...picked.keys()].sort((a,b)=>a-b);
+  try{
+    /* Same two calls every other tool makes: start a journey session, then log
+       lead_captured with a snapshot. Zoho's upsert dedupes on the email and
+       flags the record when it already belongs to a contact or account. */
+    const r=await fetch(journeyBase()+'/session/start',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({tenant_id:CONFIG.TENANT,source:'class_tools'})});
+    const d=await r.json();
+    const sid=(d&&d.session_id)||'';
+    if(sid){
+      await fetch(journeyBase()+'/session/event',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({session_id:sid,event_type:'lead_captured',screen:'class_assistant',
+          payload:{tool:'class_assistant',classes:classes},
+          snapshot:{first_name:first,last_name:lastN,email:email,phone:phone,
+                    classes:classes,consent_marketing:true,
+                    email_source:'class_tools',current_screen:'class_assistant'}})});
+    }
+    document.getElementById('lf-done').style.display='';
+    btn.textContent='Sent';
+  }catch(e){
+    fail('We couldn’t send that just now — please try again, or call 0161 833 5400.');
+    btn.disabled=false; btn.textContent='Send my classes';
+  }
+}
+
 function copyClasses(){const txt=(last.classes||[]).join(', ');document.getElementById('copytext').textContent=txt||'(none)';
   show('copybar',true);navigator.clipboard&&navigator.clipboard.writeText(txt);}
 
