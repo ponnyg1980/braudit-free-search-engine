@@ -5,112 +5,159 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>Trademark Search Report — The Trademark Helpline</title>
+
 <!--
   Free / Quick Search full report (Jonathan, 21 Aug 2026): "The reports which
-  are emailed are supposed to have the full results within them. Use the
-  Sector Reports Tailored Search report as a guide for design and layout. We
-  create it as a unique URL to a webpage, which can be downloaded."
+  are emailed are supposed to have the full results within them... We create it
+  as a unique URL to a webpage, which can be downloaded."
 
-  Design lifted from Sample Report - Maple & Birch (Survey 1).html — navy
-  header with the skewed accent, scoreband, numbered pink-eyebrow sections,
-  stat cards, gradient CTA, print stylesheet (Download = browser print-to-PDF).
+  REBUILT 30 Aug 2026. Jonathan, on being shown the live page: "it is not the
+  correct one... We re-designed it to have the percentage chance of success
+  etc. some time ago. The version you are displaying doesn't even have our
+  logos or owls in it."
 
-  The unique URL is the journey session id: /search-report/?fs=<session> (or
-  /report/<session> on this host). Everything renders client-side from the
-  journey session row — the same stored result the visitor saw, so the page,
-  the email and the Zoho record can never disagree.
+  He was right. The page had drifted a long way behind the rest of the estate:
+  it loaded NO stylesheet of ours at all — system fonts, a hand-drawn "TH"
+  square instead of the logo, none of the illustrations — and it reduced the
+  whole viability read to one number in a coloured box, dropping the four
+  dials the engine sends. So the client saw one design on screen and a
+  different, plainer one in the thing they were emailed.
+
+  This version renders the SAME opinion block as the results screen, from the
+  same payload: /braudit.css, the master dial and the four sub-dials, lifted
+  markup and class names so the two cannot drift again. braudit.css says it
+  out loud next to .dial — "the same markup goes into the emailed report".
+
+  Still true, and deliberately so:
+    * the unique URL is the journey session id — /search-report/?fs=<session>,
+      or /report/<session> on the engine host;
+    * everything renders client-side from the stored session row, so the page,
+      the email and the Zoho record cannot disagree;
+    * nothing is recalculated here. Scores, bands, colours and copy all come
+      from the engine. If a number looks wrong, it is wrong upstream.
 -->
+
+<link rel="stylesheet" href="/braudit.css">
 <style>
-  :root{
-    --pink:#E91E63; --navy:#0A1F33; --blue:#1F4E79; --blue2:#2B5C8A;
-    --ink:#16222e; --muted:#5b6b7a; --line:#e3e8ee; --bg:#f4f6f9;
-    --amber:#c0392b; --orange:#c87f0a; --green:#1e8e5a;
-  }
-  *{box-sizing:border-box;}
-  body{margin:0; background:var(--bg);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    color:var(--ink); line-height:1.55; -webkit-font-smoothing:antialiased;}
-  .page{max-width:880px; margin:24px auto; background:#fff; box-shadow:0 6px 30px rgba(10,31,51,.10);}
+  /* Report-specific only. Everything else — colours, type, the dials — comes
+     from braudit.css, which is the same stylesheet the wizard loads. */
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .page{max-width:900px;margin:22px auto 40px;background:#fff;border-radius:var(--r-xl);
+    overflow:hidden;box-shadow:var(--shadow)}
+  .hidden{display:none}
 
-  .dlbar{max-width:880px; margin:18px auto 0; display:flex; justify-content:flex-end; padding:0 4px;}
-  .dlbtn{background:var(--navy); color:#fff; border:0; padding:11px 20px; font-weight:700;
-    font-size:14px; cursor:pointer; transform:skewX(-12deg);}
-  .dlbtn span{display:inline-block; transform:skewX(12deg);}
+  .dlbar{max-width:900px;margin:18px auto 0;display:flex;justify-content:flex-end;padding:0 6px}
+  .dlbtn{background:var(--navy);color:#fff;border:0;border-radius:var(--r-pill);
+    padding:11px 22px;font-weight:800;font-size:14px;cursor:pointer;font-family:var(--font-display)}
+  .dlbtn:hover{background:var(--navy-deep)}
 
-  header{position:relative; background:var(--navy); color:#fff; padding:30px 40px 34px; overflow:hidden;}
-  header:after{content:""; position:absolute; right:-60px; top:0; bottom:0; width:240px;
-    background:linear-gradient(120deg,var(--blue) 0%,var(--blue2) 100%); transform:skewX(-12deg);}
-  .brandrow{display:flex; align-items:center; gap:14px; position:relative; z-index:2;}
-  .mark{display:inline-flex; align-items:center; justify-content:center; width:46px; height:46px;
-    background:var(--pink); color:#fff; font-weight:800; font-size:18px; transform:skewX(-12deg);}
-  .mark span{transform:skewX(12deg);}
-  .brandname{font-weight:700; font-size:15px;}
-  .brandname small{display:block; font-weight:400; opacity:.75; font-size:12px; letter-spacing:.06em; text-transform:uppercase;}
-  .report-title{position:relative; z-index:2; margin-top:22px; font-size:13px; letter-spacing:.18em;
-    text-transform:uppercase; opacity:.85;}
-  .client{position:relative; z-index:2; font-size:30px; font-weight:800; margin:2px 0 0; line-height:1.15;}
-  .client small{display:block; font-size:14px; font-weight:400; opacity:.8; margin-top:6px;}
+  /* ---- masthead ---- */
+  .mast{position:relative;background:var(--navy-deep);color:#fff;padding:30px 40px 34px;overflow:hidden}
+  .mast:after{content:"";position:absolute;right:-70px;top:0;bottom:0;width:250px;
+    background:linear-gradient(120deg,var(--navy) 0%,var(--navy-soft) 100%);transform:skewX(-12deg)}
+  .mast > *{position:relative;z-index:2}
+  .mast .logo{height:44px;width:auto;display:block}
+  .mast .kind{margin-top:22px;font-family:var(--font-display);font-size:11px;font-weight:800;
+    letter-spacing:1.3px;text-transform:uppercase;color:var(--pink-on-navy)}
+  .mast h1{margin:4px 0 0;font-size:32px;line-height:1.14;font-family:var(--font-display);font-weight:800}
+  .mast .who{margin:8px 0 0;font-size:14px;color:var(--on-navy)}
+  .mast .owl{position:absolute;right:34px;bottom:-6px;width:120px;height:auto;opacity:.95;z-index:2}
+  @media(max-width:640px){ .mast{padding:24px 20px 28px} .mast .owl{display:none} .mast h1{font-size:26px} }
 
-  .scoreband{display:flex; align-items:stretch; border-bottom:1px solid var(--line);}
-  .scorebox{flex:0 0 220px; background:var(--amber); color:#fff; padding:22px 26px;
-    display:flex; flex-direction:column; justify-content:center;}
-  .scorebox.green{background:var(--green);} .scorebox.orange{background:var(--orange);}
-  .scorebox .lab{font-size:12px; letter-spacing:.14em; text-transform:uppercase; opacity:.9;}
-  .scorebox .val{font-size:40px; font-weight:800; line-height:1; margin-top:4px;}
-  .scorebox .scale{font-size:12px; opacity:.9; margin-top:8px;}
-  .scoreline{flex:1; padding:22px 28px; display:flex; align-items:center; font-size:16px; font-weight:600;}
+  .body{padding:26px 30px 34px}
+  @media(max-width:640px){ .body{padding:18px 14px 24px} }
+  .rcard{border:1px solid var(--line);border-radius:18px;background:#fff;margin-bottom:22px;overflow:hidden}
+  .rcard .in{padding:26px 28px}
+  @media(max-width:640px){ .rcard .in{padding:20px 16px} }
+  .rcard h2{font-size:22px;margin:0 0 12px;font-family:var(--font-display);font-weight:800;color:var(--ink)}
+  .rcard p{margin:0 0 12px;color:var(--slate)}
+  .rcard p:last-child{margin-bottom:0}
 
-  section{padding:26px 40px; border-bottom:1px solid var(--line);}
-  h2{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--pink); margin:0 0 14px;}
-  h2 .n{color:var(--muted); margin-right:8px;}
-  p{margin:0 0 12px;}
-  .lead{font-size:16px;}
+  /* ---- the opinion block: same markup and classes as the results screen ---- */
+  .op-top{padding:28px 30px;display:grid;grid-template-columns:190px 1fr;gap:28px;align-items:center}
+  .op-master{display:flex;flex-direction:column;align-items:center}
+  .op-say h2{font-size:26px;margin:0 0 10px}
+  .op-say p{font-size:16px;line-height:1.62;color:var(--slate);margin:0 0 10px}
+  .op-say p:last-child{margin-bottom:0}
+  .op-say p.op-caveat{font-size:14.5px;color:var(--muted)}
+  .op-dials{border-top:1px solid var(--line);background:var(--panel-soft);padding:26px 30px;
+    display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+  .subdial{display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center}
+  .subdial .nm{font-size:15.5px;font-weight:800;color:var(--navy)}
+  .subdial .sb{font-size:13.5px;line-height:1.5;color:var(--quiet);max-width:190px}
+  @media(max-width:820px){ .op-dials{grid-template-columns:repeat(2,1fr)}
+    .op-top{grid-template-columns:1fr;justify-items:center;text-align:center} }
 
-  .stats{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:18px;}
-  .stat{flex:1 1 130px; background:var(--bg); border:1px solid var(--line); padding:14px 16px;}
-  .stat .big{font-size:26px; font-weight:800; color:var(--navy);}
-  .stat.hi .big{color:var(--amber);} .stat.med .big{color:var(--orange);} .stat.lo .big{color:var(--green);}
-  .stat .cap{font-size:12.5px; color:var(--muted); margin-top:2px;}
+  /* ---- register findings ---- */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 18px}
+  @media(max-width:640px){ .stats{grid-template-columns:repeat(2,1fr)} }
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;text-align:center}
+  .stat .big{font-family:var(--font-display);font-size:26px;font-weight:800;color:var(--navy);line-height:1}
+  .stat.hi .big{color:var(--risk-high)} .stat.med .big{color:var(--risk-med)} .stat.lo .big{color:var(--risk-low)}
+  .stat .cap{font-size:12.5px;color:var(--muted);margin-top:4px}
 
-  table{width:100%; border-collapse:collapse; font-size:13.5px; margin-top:6px;}
-  th{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
-    text-align:left; padding:8px 10px; border-bottom:2px solid var(--line); background:var(--bg);}
-  td{padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
-  .chip{display:inline-block; font-size:11px; font-weight:800; letter-spacing:.04em; padding:3px 9px;
-    text-transform:uppercase; color:#fff; background:var(--muted); white-space:nowrap;}
-  .chip.hi{background:var(--amber);} .chip.med{background:var(--orange);} .chip.lo{background:var(--green);}
-  .markname{font-weight:700; color:var(--navy);}
-  .quiet{color:var(--muted);}
-  .co{font-size:12px; color:var(--muted); margin-top:2px;}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+  th{font-family:var(--font-display);font-size:11px;text-transform:uppercase;letter-spacing:1.1px;
+    color:var(--muted);text-align:left;padding:9px 10px;border-bottom:1.5px solid var(--line)}
+  td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--slate)}
+  .pill{display:inline-block;font-family:var(--font-display);font-size:11px;font-weight:800;
+    letter-spacing:.4px;padding:4px 11px;border-radius:var(--r-pill);white-space:nowrap;
+    background:var(--pill-neg-bg);color:var(--pill-neg-fg)}
+  .pill.hi{background:var(--pill-high-bg);color:var(--pill-high-fg)}
+  .pill.med{background:var(--pill-med-bg);color:var(--pill-med-fg)}
+  .pill.lo{background:var(--pill-low-bg);color:var(--pill-low-fg)}
+  .markname{font-weight:800;color:var(--navy)}
+  .quiet{color:var(--quiet)}
+  .co{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .trunc{font-size:13px;color:var(--muted);margin-top:12px}
 
-  .clsblock{border:1px solid var(--line); padding:14px 18px; margin:0 0 12px; background:#fff;}
-  .clsblock h3{margin:0 0 4px; font-size:15px; color:var(--navy);}
-  .clsblock .heading{font-size:13px; color:#33424f; margin-bottom:8px;}
-  .terms{font-size:12.5px; color:var(--muted); line-height:1.7;}
+  /* ---- classes & terms ---- */
+  .clsblock{border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin:0 0 12px}
+  .clsblock:last-child{margin-bottom:0}
+  .clsblock h3{margin:0 0 4px;font-size:16px;font-family:var(--font-display);font-weight:800;color:var(--navy)}
+  .clsblock .heading{font-size:13.5px;color:var(--slate);margin-bottom:9px}
+  .terms{display:flex;flex-wrap:wrap;gap:7px}
+  .terms .t{background:var(--pink-badge);border-radius:var(--r-pill);padding:6px 12px;
+    font-size:13.5px;font-weight:600;color:var(--ink)}
 
-  .disc{font-size:12.5px; color:var(--muted); font-style:italic; margin-top:8px;}
+  /* ---- covers / doesn't cover ---- */
+  .covers{display:grid;grid-template-columns:1fr 132px;gap:20px;align-items:start}
+  @media(max-width:640px){ .covers{grid-template-columns:1fr} .covers img{display:none} }
+  .covers p{font-size:14.5px}
 
-  .cta{background:linear-gradient(120deg,var(--navy),var(--blue)); color:#fff; padding:28px 40px; border-bottom:none;}
-  .cta h2{color:#fff; opacity:.85;}
-  .cta h3{margin:0 0 6px; font-size:22px;}
-  .cta p{opacity:.92; max-width:560px;}
-  .btns{display:flex; gap:12px; flex-wrap:wrap; margin-top:16px;}
-  .btn{display:inline-block; padding:13px 22px; font-weight:700; font-size:14.5px; text-decoration:none; transform:skewX(-12deg);}
-  .btn span{display:inline-block; transform:skewX(12deg);}
-  .btn.primary{background:var(--pink); color:#fff;}
-  .btn.ghost{background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.5);}
+  /* ---- next steps ---- */
+  .nexts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){ .nexts{grid-template-columns:1fr} }
+  .next{border:1px solid var(--line);border-radius:16px;padding:22px 22px 24px;background:#fff}
+  .next.lead{border-color:var(--pink);background:var(--pink-tint)}
+  .next h3{margin:0 0 8px;font-size:19px;font-family:var(--font-display);font-weight:800;color:var(--ink)}
+  .next p{font-size:14.5px;color:var(--slate);margin:0 0 10px}
+  .next .note{font-size:13px;color:var(--muted)}
+  .btn{display:inline-block;border-radius:var(--r-pill);padding:12px 22px;font-weight:800;
+    font-size:14.5px;text-decoration:none;font-family:var(--font-display);border:1.5px solid transparent}
+  .btn.primary{background:var(--pink);color:#fff}
+  .btn.primary:hover{background:var(--pink-hover)}
+  .btn.ghost{background:#fff;color:var(--navy);border-color:var(--navy)}
+  .btn.ghost:hover{background:var(--navy);color:#fff}
+  .owlrow{display:flex;align-items:flex-end;justify-content:flex-end;margin-top:-8px}
+  .owlrow img{width:110px;height:auto}
 
-  footer{padding:18px 40px 26px; font-size:11.5px; color:var(--muted); line-height:1.5;}
+  footer{padding:20px 30px 28px;font-size:12px;color:var(--muted);line-height:1.55;
+    border-top:1px solid var(--line)}
 
-  .loading,.errbox{max-width:880px;margin:60px auto;text-align:center;color:var(--muted);font-size:15px;}
-  .hidden{display:none;}
+  .loading,.errbox{max-width:900px;margin:70px auto;text-align:center;color:var(--muted);font-size:15px}
 
   @media print{
-    body{background:#fff;}
-    .page{box-shadow:none; margin:0; max-width:none;}
-    .dlbar{display:none;}
-    a{color:inherit; text-decoration:none;}
-    tr{page-break-inside:avoid;}
+    body{background:#fff}
+    .page{box-shadow:none;margin:0;max-width:none;border-radius:0}
+    .dlbar{display:none}
+    a{color:inherit;text-decoration:none}
+    tr,.rcard,.next,.subdial{page-break-inside:avoid}
+    /* conic-gradient dials print as flat colour in some engines; the number in
+       the middle carries the meaning either way, so nothing is lost. */
+    .dial{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .mast,.pill,.stat,.op-dials{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   }
 </style>
 </head>
@@ -121,74 +168,82 @@
   please use the link from your email, or call us on 0161&nbsp;833&nbsp;5400.</div>
 
 <div class="dlbar hidden" id="dlbar">
-  <button class="dlbtn" onclick="window.print()"><span>Download this report (PDF)</span></button>
+  <button class="dlbtn" onclick="window.print()">Download this report (PDF)</button>
 </div>
 
 <div class="page hidden" id="page">
-  <header>
-    <div class="brandrow">
-      <span class="mark"><span>TH</span></span>
-      <span class="brandname">The Trademark Helpline<small>Search. Register. Protect.</small></span>
-    </div>
-    <div class="report-title" id="rpt-kind">Free Trademark Search Report</div>
-    <h1 class="client" id="rpt-name">&mdash;<small id="rpt-sub"></small></h1>
+  <header class="mast">
+    <img class="logo" src="/brand/logo-white.svg" alt="The Trademark Helpline">
+    <div class="kind" id="rpt-kind">Free Trademark Search Report</div>
+    <h1 id="rpt-name">&mdash;</h1>
+    <p class="who" id="rpt-sub"></p>
+    <img class="owl" src="/brand/owl-magnifier.png" alt="">
   </header>
 
-  <div class="scoreband">
-    <div class="scorebox" id="scorebox">
-      <div class="lab">Registrability</div>
-      <div class="val" id="rpt-score">&mdash;</div>
-      <div class="scale" id="rpt-tier"></div>
-    </div>
-    <div class="scoreline" id="rpt-headline"></div>
+  <div class="body">
+
+    <!-- 1. the viability read — same block, same classes, same payload as the
+         results screen the visitor already saw. -->
+    <section class="rcard" id="sec-opinion">
+      <div class="op-top">
+        <div class="op-master">
+          <div class="dial dial-master" id="op-dial"><span class="val" id="op-val">&mdash;</span><span class="cap">brand strength</span></div>
+          <p class="sub" id="op-cap" style="text-align:center;font-size:13.5px;margin-top:10px;color:var(--quiet)"></p>
+        </div>
+        <div class="op-say">
+          <div class="eyebrow">Our view</div>
+          <h2 id="op-headline"></h2>
+          <div id="op-body"></div>
+        </div>
+      </div>
+      <div class="op-dials" id="op-dials"></div>
+    </section>
+
+    <!-- 2. the register findings — the report's unlock: every flagged mark,
+         with the owners the on-page shortlist withholds. -->
+    <section class="rcard"><div class="in">
+      <h2>What we found on the register</h2>
+      <div class="stats">
+        <div class="stat"><div class="big" id="st-flagged">&mdash;</div><div class="cap">marks flagged</div></div>
+        <div class="stat hi"><div class="big" id="st-high">&mdash;</div><div class="cap">high risk</div></div>
+        <div class="stat med"><div class="big" id="st-med">&mdash;</div><div class="cap">medium risk</div></div>
+        <div class="stat lo"><div class="big" id="st-low">&mdash;</div><div class="cap">low risk</div></div>
+      </div>
+      <p id="rpt-searched"></p>
+      <table id="rpt-table">
+        <thead><tr><th>Risk</th><th>Mark</th><th>Owner</th><th>Type</th><th>Status</th></tr></thead>
+        <tbody id="rpt-rows"></tbody>
+      </table>
+      <p class="trunc hidden" id="rpt-trunc"></p>
+    </div></section>
+
+    <!-- 3. classes and terms -->
+    <section class="rcard hidden" id="sec-classes"><div class="in">
+      <h2>Your classes &amp; specifications</h2>
+      <p>Trademarks are registered against classes of goods and services. These are the classes you
+        chose, with terms drawn from marks already registered at the UKIPO.</p>
+      <div id="rpt-classes"></div>
+    </div></section>
+
+    <!-- 4. scope of the search -->
+    <section class="rcard hidden" id="sec-disc"><div class="in">
+      <h2>What this search does and doesn&rsquo;t cover</h2>
+      <div class="covers">
+        <div id="rpt-disclaimers"></div>
+        <img src="/brand/knowledge-centre-owl.png" alt="">
+      </div>
+    </div></section>
+
+    <!-- 5. next steps — which one leads is the engine's call, not ours. -->
+    <section class="rcard"><div class="in">
+      <h2>Recommended next steps</h2>
+      <div class="nexts" id="rpt-nexts"></div>
+      <div class="owlrow"><img src="/brand/owl-branch.png" alt=""></div>
+    </div></section>
+
   </div>
 
-  <section>
-    <h2><span class="n">01</span> Our opinion</h2>
-    <div id="rpt-opinion"></div>
-  </section>
-
-  <section>
-    <h2><span class="n">02</span> What we found on the register</h2>
-    <div class="stats">
-      <div class="stat"><div class="big" id="st-flagged">&mdash;</div><div class="cap">marks flagged in total</div></div>
-      <div class="stat hi"><div class="big" id="st-high">&mdash;</div><div class="cap">high risk</div></div>
-      <div class="stat med"><div class="big" id="st-med">&mdash;</div><div class="cap">medium risk</div></div>
-      <div class="stat lo"><div class="big" id="st-low">&mdash;</div><div class="cap">low risk</div></div>
-    </div>
-    <p class="lead" id="rpt-searched"></p>
-    <table id="rpt-table">
-      <thead><tr><th>Risk</th><th>Mark</th><th>Owner</th><th>Type</th><th>Status</th></tr></thead>
-      <tbody id="rpt-rows"></tbody>
-    </table>
-    <p class="disc" id="rpt-trunc"></p>
-  </section>
-
-  <section id="sec-classes">
-    <h2><span class="n">03</span> Your classes &amp; specifications</h2>
-    <p>Trademarks are registered against classes of goods and services. These are the classes you
-      chose, with specific terms drawn from marks already registered at the UKIPO.</p>
-    <div id="rpt-classes"></div>
-  </section>
-
-  <section id="sec-disc">
-    <h2><span class="n">04</span> What this search does and doesn&rsquo;t cover</h2>
-    <div id="rpt-disclaimers"></div>
-  </section>
-
-  <div class="cta">
-    <h2>What to do next</h2>
-    <h3 id="cta-head">Turn this search into a plan</h3>
-    <p>A search tells you what is on the register today. A Brand Audit tells you what to do about
-      it &mdash; across marketplaces, social media, domains and the territories that matter to you
-      &mdash; and an application secures the name before someone else does.</p>
-    <div class="btns">
-      <a class="btn primary" href="https://www.thetrademarkhelpline.com/make-an-enquiry/"><span>Request a Brand Audit &mdash; &pound;99 &rarr;</span></a>
-      <a class="btn ghost" href="tel:+441618335400"><span>Call us &mdash; 0161 833 5400</span></a>
-    </div>
-  </div>
-
-  <footer id="rpt-footer">
+  <footer>
     The Trademark Helpline has supported UK businesses since 2008. This report reflects the United
     Kingdom trademark register at the date of the search shown above. It is provided for general
     guidance and is not legal advice; a word-similarity search of this kind is indicative, not
@@ -208,6 +263,7 @@
   new MutationObserver(send).observe(document.documentElement,{childList:true,subtree:true,attributes:true});
   window.addEventListener('load',send); setInterval(send,800);
 })();
+
 (function(){
   var q = new URLSearchParams(location.search);
   var sid = q.get('fs') || q.get('s') || '';
@@ -222,7 +278,13 @@
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   function fail(){ document.getElementById('loading').classList.add('hidden');
     document.getElementById('errbox').classList.remove('hidden'); }
+  function show(id){ document.getElementById(id).classList.remove('hidden'); }
+  function hide(id){ document.getElementById(id).classList.add('hidden'); }
   if(!sid){ fail(); return; }
+
+  /* Same thresholds as the wizard and as _value_colour() in viability.py. A
+     dial carries its own colour in the payload; this is only the fallback. */
+  var OP_COLOUR = function(v){ return v>=70?'#1F8A5B':(v>=45?'#9A7015':'#C0392B'); };
 
   fetch(JOURNEY + '/session?id=' + encodeURIComponent(sid))
     .then(function(r){ return r.json(); })
@@ -239,10 +301,14 @@
     var lr = s.last_result || {};
     var sum = lr.summary || {};
     var vb  = lr.viability || {};
+    var cta = lr.cta || {};
     var quick = s.source === 'quick_search';
+
+    /* ---- masthead ---------------------------------------------------- */
     document.getElementById('rpt-kind').textContent =
       quick ? 'UK Trademark Quick Search Report' : 'Free Trademark Search Report';
     document.title = (s.name ? s.name + ' — ' : '') + 'Trademark Search Report — The Trademark Helpline';
+    document.getElementById('rpt-name').textContent = s.name || 'Your search';
 
     var who = [];
     var person = [s.first_name, s.last_name].filter(Boolean).join(' ');
@@ -251,67 +317,93 @@
     var when = (s.updated_at || s.created_at || '').slice(0,10);
     if(when){ var dt = new Date(when);
       who.push(dt.toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'})); }
-    document.getElementById('rpt-name').firstChild.textContent = s.name || 'Your search';
     document.getElementById('rpt-sub').textContent = who.join(' · ');
 
-    var score = (vb.score != null) ? vb.score + '%' : '—';
-    document.getElementById('rpt-score').textContent = score;
-    var tier = vb.tier ? String(vb.tier) : '';
-    document.getElementById('rpt-tier').textContent = tier ? ('Verdict: ' + tier.charAt(0).toUpperCase()+tier.slice(1)) : '';
-    document.getElementById('rpt-headline').textContent = vb.headline || '';
-    var sb = document.getElementById('scorebox');
-    if(typeof vb.score === 'number'){
-      if(vb.score >= 70) sb.classList.add('green');
-      else if(vb.score >= 45) sb.classList.add('orange');
+    /* ---- the viability read ------------------------------------------ */
+    /* show_score false means the engine has decided a number would mislead on
+       this result — respect it and drop the block rather than inventing one. */
+    if(vb.score == null || vb.show_score === false){
+      hide('sec-opinion');
+    } else {
+      var dial = document.getElementById('op-dial');
+      dial.style.setProperty('--v', vb.score);
+      dial.style.setProperty('--dc', vb.colour || OP_COLOUR(vb.score));
+      document.getElementById('op-val').textContent = vb.score + '%';
+      document.getElementById('op-headline').textContent = vb.headline || '';
+      document.getElementById('op-cap').textContent =
+        vb.caption || 'How strong the name looks in its own right.';
+
+      var body = Array.isArray(vb.body) ? vb.body.filter(function(p){ return typeof p === 'string'; }) : [];
+      /* The last paragraph is always the "not legal advice, book an
+         appointment" line — quieter, so it reads as a footnote rather than as
+         a retraction of everything above it. Same treatment as on screen. */
+      document.getElementById('op-body').innerHTML = body.map(function(p,i){
+        return '<p' + (i===body.length-1 ? ' class="op-caveat"' : '') + '>' + esc(p) + '</p>';
+      }).join('');
+
+      var dials = Array.isArray(vb.dials) ? vb.dials : [];
+      if(dials.length){
+        document.getElementById('op-dials').innerHTML = dials.map(function(x){
+          return '<div class="subdial">' +
+            '<div class="dial dial-sub" style="--v:' + Number(x.value||0) +
+            ';--dc:' + esc(x.colour || OP_COLOUR(x.value)) + '">' +
+            '<span class="val">' + esc(x.value) + '</span></div>' +
+            '<div class="nm">' + esc(x.label) + '</div>' +
+            '<div class="sb">' + esc(x.sub) + '</div></div>';
+        }).join('');
+      } else {
+        document.getElementById('op-dials').classList.add('hidden');
+      }
     }
 
-    var op = document.getElementById('rpt-opinion');
-    (Array.isArray(vb.body) ? vb.body : []).forEach(function(par){
-      if(typeof par !== 'string') return;
-      var p = document.createElement('p'); p.textContent = par; op.appendChild(p);
-    });
-    if(!op.children.length){ var p0=document.createElement('p');
-      p0.textContent='See the register findings below.'; op.appendChild(p0); }
-
+    /* ---- register findings ------------------------------------------- */
     document.getElementById('st-flagged').textContent = sum.total_flagged != null ? sum.total_flagged : '—';
     document.getElementById('st-high').textContent = sum.high != null ? sum.high : '—';
     document.getElementById('st-med').textContent = sum.medium != null ? sum.medium : '—';
     document.getElementById('st-low').textContent = sum.low != null ? sum.low : '—';
 
-    var rows = Array.isArray(lr.report_rows) && lr.report_rows.length ? lr.report_rows
-             : (Array.isArray(lr.all_results) && lr.all_results ? lr.all_results
-             : (Array.isArray(lr.top_results) ? lr.top_results : []));
+    /* report_rows is the full stored list. all_results is checked for LENGTH,
+       not truthiness — an empty array is truthy, and the old code fell into it
+       and rendered a table with no rows on any session that had one. */
+    function pick(){
+      var cands = [lr.report_rows, lr.all_results, lr.top_results];
+      for(var i=0;i<cands.length;i++){ if(Array.isArray(cands[i]) && cands[i].length) return cands[i]; }
+      return [];
+    }
+    var rows = pick();
     var qy = lr.query || {};
     document.getElementById('rpt-searched').textContent =
       'We searched the ' + (lr.searched_office || 'UK IPO') + ' register for “' + (s.name||'') +
       '”' + (Array.isArray(qy.classes) && qy.classes.length ? ' in class' +
       (qy.classes.length>1?'es ':' ') + qy.classes.join(', ') : '') + '. ' +
-      (rows.length ? 'Every flagged mark is listed below.' : 'No conflicting marks were flagged.');
+      (rows.length ? 'Every flagged mark is listed below, with its owner.'
+                   : 'No conflicting marks were flagged.');
 
     var tb = document.getElementById('rpt-rows');
     rows.forEach(function(r){
+      var c = r.company && typeof r.company === 'object' ? r.company : {};
+      var own = r.company_name || r.owner_name || c.name || c.title || '';
+      var meta = [c.status, c.locality].filter(Boolean).map(esc).join(' &middot; ');
       var tr = document.createElement('tr');
-      /* Ownership is the report's unlock — the on-page shortlist withholds
-         it and tells the visitor to request this report to see it. */
-      var own = r.company_name || r.owner_name || '';
-      var co  = r.company && r.company.status
-        ? '<div class="co">' + esc(r.company.status) +
-          (r.company.locality ? ' &middot; ' + esc(r.company.locality) : '') + '</div>'
-        : '';
-      tr.innerHTML = '<td><span class="chip ' + riskCls(r.risk) + '">' + esc(r.risk||'—') +
-        '</span></td><td class="markname">' + esc(r.mark) + '</td><td>' +
-        (own ? esc(own) : '<span class="quiet">Not recorded</span>') + co +
-        '</td><td>' + esc(r.type||'—') +
-        '</td><td>' + esc(r.status||'—') + '</td>';
+      tr.innerHTML =
+        '<td><span class="pill ' + riskCls(r.risk) + '">' + esc(r.risk||'—') + '</span></td>' +
+        '<td><span class="markname">' + esc(r.mark) + '</span></td>' +
+        '<td>' + (own ? esc(own) : '<span class="quiet">Not recorded</span>') +
+        (meta ? '<div class="co">' + meta + '</div>' : '') + '</td>' +
+        '<td>' + esc(r.type||'—') + '</td>' +
+        '<td>' + esc(r.status||'—') + '</td>';
       tb.appendChild(tr);
     });
-    if(!rows.length) document.getElementById('rpt-table').classList.add('hidden');
-    if(sum.total_flagged > rows.length && rows.length){
-      document.getElementById('rpt-trunc').textContent =
-        'Showing the ' + rows.length + ' closest of ' + sum.total_flagged +
-        ' flagged marks (searches run before the full-report upgrade stored only the shortlist — re-run the search for the complete list).';
+    if(!rows.length) hide('rpt-table');
+    if(rows.length && sum.total_flagged > rows.length){
+      var t = document.getElementById('rpt-trunc');
+      t.textContent = 'Showing the ' + rows.length + ' closest of ' + sum.total_flagged +
+        ' flagged marks. Searches run before the full-report upgrade stored only the shortlist — ' +
+        're-run the search for the complete list.';
+      t.classList.remove('hidden');
     }
 
+    /* ---- classes and terms ------------------------------------------- */
     var cls = document.getElementById('rpt-classes');
     var scope = Array.isArray(lr.application_scope) ? lr.application_scope : [];
     if(scope.length){
@@ -320,27 +412,61 @@
         b.innerHTML = '<h3>Class ' + esc(c.n) + '</h3>' +
           (c.heading ? '<div class="heading">' + esc(c.heading) + '</div>' : '') +
           (Array.isArray(c.terms) && c.terms.length
-            ? '<div class="terms">' + c.terms.map(esc).join(' · ') + '</div>' : '');
+            ? '<div class="terms">' + c.terms.map(function(t){
+                return '<span class="t">' + esc(t) + '</span>'; }).join('') + '</div>' : '');
         cls.appendChild(b);
       });
+      show('sec-classes');
     } else if (Array.isArray(s.classes) && s.classes.length){
       var b2 = document.createElement('div'); b2.className='clsblock';
       b2.innerHTML = '<h3>Classes ' + s.classes.map(esc).join(', ') + '</h3>';
       cls.appendChild(b2);
-    } else {
-      document.getElementById('sec-classes').classList.add('hidden');
+      show('sec-classes');
     }
 
-    var dsc = document.getElementById('rpt-disclaimers');
-    var ds = Array.isArray(lr.disclaimers) ? lr.disclaimers : [];
-    if(ds.length){ ds.forEach(function(t){ if(typeof t !== 'string') return;
-      var p = document.createElement('p'); p.className='disc'; p.style.fontStyle='normal';
-      p.style.fontSize='13px'; p.style.color='#33424f'; p.textContent = t; dsc.appendChild(p); }); }
-    else document.getElementById('sec-disc').classList.add('hidden');
+    /* ---- scope of the search ----------------------------------------- */
+    var ds = Array.isArray(lr.disclaimers) ? lr.disclaimers.filter(function(t){
+      return typeof t === 'string'; }) : [];
+    if(ds.length){
+      document.getElementById('rpt-disclaimers').innerHTML =
+        ds.map(function(t){ return '<p>' + esc(t) + '</p>'; }).join('');
+      show('sec-disc');
+    }
 
-    document.getElementById('loading').classList.add('hidden');
-    document.getElementById('dlbar').classList.remove('hidden');
-    document.getElementById('page').classList.remove('hidden');
+    /* ---- next steps --------------------------------------------------- */
+    /* Both options always appear. Which one gets the pink card is cta.lead:
+       a clean result leads with the application because that is what most
+       people want; a messy one leads with the audit because that is the
+       answer that actually saves them a filing fee. */
+    var apply = cta.apply || {};
+    var audit = cta.brand_audit || {};
+    var cards = [
+      { key:'audit', eyebrow: audit.eyebrow || '',
+        head: audit.label || 'Request a Brand Audit — £99',
+        blurb: audit.blurb || audit.offer || '',
+        note: audit.offer && audit.blurb ? audit.offer : '',
+        href: 'https://www.thetrademarkhelpline.com/request-brand-audit/',
+        btn: audit.label || 'Request a Brand Audit — £99', primary:true },
+      { key:'apply', eyebrow: '',
+        head: apply.label || 'Proceed to application',
+        blurb: apply.blurb || '', note: apply.note || '',
+        href: 'https://www.thetrademarkhelpline.com/apply-for-trademark/',
+        btn: apply.label || 'Proceed to application', primary:false }
+    ];
+    if(cta.lead === 'application') cards.reverse();
+    document.getElementById('rpt-nexts').innerHTML = cards.map(function(c,i){
+      return '<div class="next' + (i===0 ? ' lead' : '') + '">' +
+        (c.eyebrow ? '<div class="eyebrow">' + esc(c.eyebrow) + '</div>' : '') +
+        '<h3>' + esc(c.head) + '</h3>' +
+        (c.blurb ? '<p>' + esc(c.blurb) + '</p>' : '') +
+        (c.note ? '<p class="note">' + esc(c.note) + '</p>' : '') +
+        '<a class="btn ' + (i===0 ? 'primary' : 'ghost') + '" href="' + c.href + '">' +
+        esc(c.btn) + '</a></div>';
+    }).join('');
+
+    hide('loading');
+    show('dlbar');
+    show('page');
   }
 })();
 </script>
