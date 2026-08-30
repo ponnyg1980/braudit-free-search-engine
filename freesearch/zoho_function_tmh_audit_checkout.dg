@@ -805,6 +805,62 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		res.put("ok",true);
 	}
+	else if((stg == "ai_safe") && (emIn != ""))
+	{
+		//
+		// ----------------------------------------------- stage: ai_safe
+		//
+		// Safe Email list (Jonathan, 28 Aug): is this email exempt from the
+		// AI fair-use allowance? True when the Lead OR Contact carries
+		// AI Safe Sender -- ticked by staff for introducers, resellers and
+		// trusted partners. The journey function asks BEFORE counting a use,
+		// so a safe sender is never limited, never blocked, never flagged.
+		safe = false;
+		sfL = zoho.crm.searchRecords("Leads","(Email:starts_with:" + emPre + ")");
+		hitSL = sfL.toString();
+		if(hitSL.contains("id"))
+		{
+			for each  srow in sfL
+			{
+				if(srow.get("Email") != null)
+				{
+					if(srow.get("Email").toString().equalsIgnoreCase(emIn))
+					{
+						if(srow.get("AI_Safe_Sender") != null)
+						{
+							if(srow.get("AI_Safe_Sender").toString().equalsIgnoreCase("true"))
+							{
+								safe = true;
+							}
+						}
+					}
+				}
+			}
+		}
+		sfC = zoho.crm.searchRecords("Contacts","(Email:starts_with:" + emPre + ")");
+		hitSC = sfC.toString();
+		if(hitSC.contains("id"))
+		{
+			for each  scrow in sfC
+			{
+				if(scrow.get("Email") != null)
+				{
+					if(scrow.get("Email").toString().equalsIgnoreCase(emIn))
+					{
+						if(scrow.get("AI_Safe_Sender") != null)
+						{
+							if(scrow.get("AI_Safe_Sender").toString().equalsIgnoreCase("true"))
+							{
+								safe = true;
+							}
+						}
+					}
+				}
+			}
+		}
+		res.put("safe",safe);
+		res.put("ok",true);
+	}
 	else if(stg == "factfind")
 	{
 		//
