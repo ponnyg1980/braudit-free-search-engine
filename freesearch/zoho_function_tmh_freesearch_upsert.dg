@@ -57,6 +57,14 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		{
 			sessD = payload.get("session_id").toString();
 		}
+		// Goods or services the visitor said the presented terms did not cover
+		// (28 Aug). Written to the Scope Asset for an adviser to review before
+		// anything is filed -- it is a REQUEST, never an approved term.
+		extraT = "";
+		if(scopeD.get("additional_terms") != null)
+		{
+			extraT = scopeD.get("additional_terms").toString();
+		}
 		// One asset per (deal, mark): re-running the button for the same
 		// mark updates its rows instead of breeding duplicates.
 		assetD = "";
@@ -76,6 +84,10 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 			amD.put("Asset_Type","Deal Search");
 			amD.put("Asset_Status","Active");
 			amD.put("Register",reg);
+			if(extraT != "")
+			{
+				amD.put("Additional_Terms_Request",extraT);
+			}
 			if(sessD != "")
 			{
 				amD.put("Free_Search_Session",sessD);
@@ -445,6 +457,14 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 	}
 	// ------- G S Scope capture (optional, idempotent) -------
 	scope = payload.get("scope");
+	extraT = "";
+	if(scope != null)
+	{
+		if(scope.get("additional_terms") != null)
+		{
+			extraT = scope.get("additional_terms").toString();
+		}
+	}
 	if(scope != null)
 	{
 		scopeList.add(scope);
@@ -496,6 +516,10 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 			aMap.put("Asset_Type","Deal Search");
 			aMap.put("Asset_Status","Draft");
 			aMap.put("Register",reg);
+			if(extraT != "")
+			{
+				aMap.put("Additional_Terms_Request",extraT);
+			}
 			// Survives conversion (plain text, unlike the Lead lookup):
 			// on_convert uses it to gather ALL of this lead's brand assets.
 			aMap.put("Free_Search_Lead_Id",leadId);
