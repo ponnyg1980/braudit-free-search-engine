@@ -433,8 +433,13 @@ function zohoScopeBlock(session: Record<string, unknown>) {
                      terms_source: String(r.terms_source ?? "") }))
       .filter((r) => r.n >= 1 && r.n <= 45);
     if (rows.length) {
+      // Free-text the visitor added when the presented terms did not cover
+      // everything (28 Aug). Travels with the scope so Deluge can write it to
+      // the Scope Asset for an adviser to review.
+      const extra = String((lr.additional_terms ?? "") as string).slice(0, 2000);
       return {
         mark: session.name || "",
+        additional_terms: extra || undefined,
         classes: rows.map((r) => ({
           n: r.n,
           label: r.heading || ZOHO_CLASS[r.n] || `Class ${r.n}`,
