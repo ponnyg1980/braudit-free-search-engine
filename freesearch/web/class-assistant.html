@@ -99,6 +99,10 @@ button.route small{display:block;font-weight:400;color:#64748b;margin-top:3px}
     border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
   .pick:hover{border-color:var(--navy)}
   .pick.on{background:var(--pink);border-color:var(--pink);color:#fff}
+  .ai-card{border:2px solid #ddd0ff;background:#faf8ff}
+  .ai-note{background:#fff;border:1px solid #ddd0ff;border-radius:9px;padding:10px 12px;
+    font-size:13px;color:#5b3fb0;line-height:1.5}
+  .ai-card .bar input{border-color:#c9b8f0}
 </style>
 </head>
 <body>
@@ -160,6 +164,35 @@ button.route small{display:block;font-weight:400;color:#64748b;margin-top:3px}
     <h3><span id="out-title">Suggested classes</span> <button class="btn ghost" onclick="copyClasses()">Copy class numbers</button></h3>
     <div class="copybar" id="copybar" style="display:none"><code id="copytext"></code></div>
     <div id="out-body"></div>
+  </div>
+
+  <!-- AI ROUTES. Shown ONLY on /class-assistant-ai. Deliberately a separate
+       card with its own disclaimer: these routes cost money per call, are
+       rate-limited per email, and are not grounded in the register the way
+       the four routes above are. -->
+  <div class="card ai-card" id="ai-card" style="display:none">
+    <h3>AI Assisted Class Tools</h3>
+    <div class="ai-note">AI Assisted Class Tools require email verification and are
+      subject to our fair use policy. Suggestions are a starting point, not advice &mdash;
+      an adviser should confirm them before you file.</div>
+
+    <div class="bar" style="margin-top:12px">
+      <input id="ai-email" type="email" placeholder="Your email address" autocomplete="email">
+    </div>
+    <div class="hint">We use this to apply the fair use allowance. It is not shared.</div>
+
+    <div style="margin-top:14px">
+      <label class="lbl">Describe what you sell</label>
+      <div class="bar"><input id="ai-desc" placeholder="e.g. We roast and sell speciality coffee, and run barista training">
+        <button class="btn" onclick="aiDescribe()">Suggest classes</button></div>
+    </div>
+    <div style="margin-top:12px">
+      <label class="lbl">Or read my website</label>
+      <div class="bar"><input id="ai-url" placeholder="e.g. yourbusiness.co.uk">
+        <button class="btn" onclick="aiWebsite()">Read &amp; suggest</button></div>
+    </div>
+    <div class="loading" id="ai-load"><span class="tmh-loader" role="status" aria-live="polite" aria-label="Working"><i></i><i></i><i></i></span>Working out your classes&hellip;</div>
+    <div class="err" id="ai-err" style="display:none"></div>
   </div>
 
   <!-- Your classes: the visitor's OWN selection, which survives switching
@@ -563,6 +596,90 @@ async function sendClasses(){
     fail('We couldn’t send that just now — please try again, or call 0161 833 5400.');
     btn.disabled=false; btn.textContent='Send my classes';
   }
+}
+
+
+/* ======================================================================
+   AI MODE  — /class-assistant-ai only (28 Aug)
+   One file, two routes, same as free-search/quick-search: the plain tool
+   stays deliberately AI-free, and this mode bolts a separately-labelled,
+   gated panel on top. The four register routes are untouched either way.
+   ====================================================================== */
+const AI_MODE = /class-assistant-ai/.test(location.pathname) || P_QS.get('ai')==='1';
+if (AI_MODE) {
+  document.title='Class Assistant with AI — The Trademark Helpline';
+  const c=document.getElementById('ai-card'); if(c) c.style.display='';
+  const h=document.querySelector('h1'); if(h) h.textContent='Class Assistant with AI';
+}
+function aiFail(m){const e=document.getElementById('ai-err');e.textContent=m;e.style.display='';}
+function aiBusy(on){document.getElementById('ai-load').classList.toggle('show',on);
+  if(on) document.getElementById('ai-err').style.display='none';}
+
+/* The gate. Server-side per-email allowance — a cleared cookie doesn't reset
+   it. When it's exhausted the journey function also flags the Zoho record so
+   staff can see who's hitting the limit. */
+async function aiGate(){
+  const email=(document.getElementById('ai-email').value||'').trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
+    aiFail('Please enter your email address to use the AI tools.'); return null; }
+  try{
+    const r=await fetch(journeyBase()+'/ai/use',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:email,tool:'class_assistant_ai'})});
+    const d=await r.json();
+    if(d && d.allowed===false){ aiFail(d.message||'You have used your free AI class searches for now.'); return null; }
+  }catch(e){ /* fail open: a gate outage must not block the tool */ }
+  return email;
+}
+function aiApi(){return (CONFIG.API_BASE||'').replace(/\/$/,'');}
+
+async function aiDescribe(){
+  const text=(document.getElementById('ai-desc').value||'').trim();
+  if(text.length<12) return aiFail('Tell us a little more about what you sell — a sentence is plenty.');
+  const email=await aiGate(); if(!email) return;
+  aiBusy(true);
+  try{
+    const r=await fetch(aiApi()+'/suggest-classes',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})});
+    const d=await r.json();
+    aiBusy(false);
+    if(!d||!d.ok||!(d.classes||[]).length) return aiFail(
+      (d&&d.message)||'We couldn’t work that out — try the register routes above.');
+    renderAi('AI suggestion — what you sell', d);
+  }catch(e){ aiBusy(false); aiFail('That didn’t work just now. Please try again.'); }
+}
+
+async function aiWebsite(){
+  let url=(document.getElementById('ai-url').value||'').trim();
+  if(!url) return aiFail('Enter your website address.');
+  if(!/^https?:\/\//i.test(url)) url='https://'+url;
+  const email=await aiGate(); if(!email) return;
+  aiBusy(true);
+  try{
+    const r=await fetch(aiApi()+'/read-website',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})});
+    const d=await r.json();
+    aiBusy(false);
+    if(!d||!d.ok||!(d.classes||[]).length) return aiFail(
+      (d&&d.message)||'We couldn’t read enough from that site — try describing what you sell instead.');
+    renderAi('AI suggestion — from your website', d);
+  }catch(e){ aiBusy(false); aiFail('That didn’t work just now. Please try again.'); }
+}
+
+/* Renders into the SAME results area as every other route, so the Add
+   buttons, the basket and the email form all work unchanged. */
+function renderAi(title,d){
+  last.classes=(d.classes||[]).map(c=>c.nice_class||c.class||c.n).filter(Boolean);
+  outHead(title);
+  document.getElementById('out-body').innerHTML=(d.classes||[]).map(c=>{
+    const n=c.nice_class||c.class||c.n;
+    const terms=(c.terms||[]).slice(0,8).map(t=>
+      `<span class="term">${(t.text||t)}</span>`).join('');
+    return `<div class="cls"><div class="h"><span>Class ${n}${c.class_label?' · '+c.class_label:''}</span>
+      ${c.confidence?`<span class="band">${c.confidence}</span>`:''}</div>
+      ${c.reason?`<div class="heading">${c.reason}</div>`:''}
+      ${c.heading?`<details class="heading"><summary style="cursor:pointer">What this class covers</summary><div style="margin-top:4px">${c.heading}</div></details>`:''}
+      ${terms?`<div class="terms">${terms}</div>`:''}</div>`;}).join('');
 }
 
 function copyClasses(){const txt=(last.classes||[]).join(', ');document.getElementById('copytext').textContent=txt||'(none)';
