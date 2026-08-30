@@ -916,6 +916,14 @@ serve(async (req) => {
       used = count ?? 0;
     } catch (_e) { used = 0; }
     if (used >= allowance) {
+      // Fair use exhausted: flag the Zoho record so staff can see who is
+      // hitting the limit (Jonathan, 28 Aug). The flag is cleared by a human
+      // unticking it, never automatically — a heavy user is a conversation,
+      // not a lockout. Fire-and-forget: a CRM hiccup must not change what the
+      // visitor is told.
+      if (ZOHO_CHECKOUT_URL) {
+        fireAndForget(ZOHO_CHECKOUT_URL, { stage: "ai_block", email });
+      }
       return json({
         ok: true, allowed: false, remaining: 0,
         access_mode: "identified_lead", requires_portal_signup: true,
