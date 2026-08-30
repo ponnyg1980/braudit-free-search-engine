@@ -75,10 +75,15 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	// becomes a space and a plus-addressed email matches nothing at all
 	// (found 28 Aug -- a Contact that existed was invisible to the search).
 	// Every criteria lookup below uses the encoded form.
+	// ONLY the plus is escaped. Zoho URL-decodes the criteria, so a raw '+'
+	// arrives as a space and a plus-addressed email matches nothing; but
+	// urlEncode()ing the whole address also escapes the '@' and breaks the
+	// criteria outright. Both were proven wrong on 28 Aug — this is the
+	// narrow fix.
 	emQ = emIn;
 	if(emIn != "")
 	{
-		emQ = zoho.encryption.urlEncode(emIn);
+		emQ = emIn.replaceAll("+","%2B",true);
 	}
 	res = Map();
 	res.put("stage",stg);
