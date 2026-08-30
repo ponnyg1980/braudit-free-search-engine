@@ -455,8 +455,11 @@
     ];
     if(cta.lead === 'application') cards.reverse();
     document.getElementById('rpt-nexts').innerHTML = cards.map(function(c,i){
+      /* The audit block carries "Our recommended next step" in the payload,
+         which contradicts itself when the engine has led with the application
+         instead — so the eyebrow only ever appears on the card that leads. */
       return '<div class="next' + (i===0 ? ' lead' : '') + '">' +
-        (c.eyebrow ? '<div class="eyebrow">' + esc(c.eyebrow) + '</div>' : '') +
+        (c.eyebrow && i===0 ? '<div class="eyebrow">' + esc(c.eyebrow) + '</div>' : '') +
         '<h3>' + esc(c.head) + '</h3>' +
         (c.blurb ? '<p>' + esc(c.blurb) + '</p>' : '') +
         (c.note ? '<p class="note">' + esc(c.note) + '</p>' : '') +
