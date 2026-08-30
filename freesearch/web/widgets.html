@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TMH embeddable widgets — test page</title>
+<title>TMH embeddable widgets &amp; report — review page</title>
 <link rel="stylesheet" href="/braudit.css">
 <style>
   /* A deliberately PLAIN host page. The point is to see each widget as a
@@ -28,30 +28,62 @@
   .nav{background:#fff;border:1px solid #dbe2e8;border-radius:14px;padding:16px 22px;margin-bottom:26px}
   .nav a{color:var(--pink);font-weight:700;text-decoration:none;margin-right:18px;font-size:14px}
   .nav a:hover{text-decoration:underline}
+  .nav .grp{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    color:#8a9aa8;margin:12px 0 6px}
+  .nav .grp:first-child{margin-top:0}
   .note{background:#fff6f2;border:1px solid #f5c6b0;border-radius:10px;padding:12px 14px;
     color:#8a3b12;font-size:13.5px;margin-top:14px}
+  .tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+    border-radius:999px;padding:3px 9px;vertical-align:middle;margin-left:8px;position:relative;top:-2px}
+  .tag.new{background:#e8f5ee;color:#1F8A5B;border:1px solid #bfe3ce}
+  .tag.staff{background:#eef1f6;color:#41546b;border:1px solid #d3dce6}
+  .rule{height:1px;background:#dbe2e8;border:0;margin:34px 0 26px}
+  .sechead{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+    color:#8a9aa8;margin:0 0 14px}
+  .rpt{border:1px solid #dbe2e8;border-radius:12px;overflow:hidden;background:#fff}
+  .rpt iframe{width:100%;height:1100px;border:0;display:block}
+  .openfull{display:inline-block;margin-top:12px;background:var(--pink);color:#fff;font-weight:700;
+    text-decoration:none;border-radius:8px;padding:9px 16px;font-size:14px}
+  .openfull:hover{opacity:.92}
 </style>
 </head>
 <body>
 <header class="top">
   <div class="in">
-    <h1>Embeddable widgets — test page</h1>
-    <p>Every widget below is embedded the same way a partner site would do it: one script tag.
-      They are live, so anything you type creates real journey records.</p>
+    <h1>Embeddable widgets &amp; the emailed report</h1>
+    <p>One page for reviewing every client-facing element in one sitting. Each widget is embedded
+      exactly as a partner site would do it &mdash; one script tag &mdash; and they are live, so
+      anything typed here creates real journey records.</p>
   </div>
 </header>
 
 <div class="page">
   <div class="nav">
+    <div class="grp">Entry points &mdash; the compact boxes</div>
     <a href="#box-free">1. Search box — Free</a>
     <a href="#box-quick">2. Search box — Quick</a>
     <a href="#box-bar">3. Search box — bar style</a>
-    <a href="#wizard">4. Full wizard</a>
     <a href="#box-audit">5. Brand Audit box</a>
+
+    <div class="grp">Full journeys</div>
+    <a href="#wizard">4. Free Search wizard</a>
+    <a href="#quick-wizard">11. Quick Search wizard</a>
     <a href="#audit-form">6. Brand Audit form</a>
+
+    <div class="grp">Class tools</div>
     <a href="#assistant">7. Class assistant</a>
+    <a href="#assistant-ai">9. Class assistant + AI</a>
+    <a href="#builder">10. Class &amp; Terms Builder</a>
+    <a href="#finder">12. Class &amp; Term Finder</a>
+
+    <div class="grp">Register lookup</div>
     <a href="#lookup">8. Trademark / owner lookup</a>
+
+    <div class="grp">What the client receives</div>
+    <a href="#report">The emailed search report</a>
   </div>
+
+  <p class="sechead">Widgets 1&ndash;8 &mdash; unchanged numbering</p>
 
   <!-- 1 -->
   <section class="w" id="box-free">
@@ -140,9 +172,10 @@
   <!-- 6 -->
   <section class="w" id="audit-form">
     <h2>6. Brand Audit form, embedded</h2>
-    <p class="what">The whole nine-page audit inside your page: contact, searches, territories,
-      classes and terms, platforms, the free consultation, applicant details, summary and payment.
-      Arriving from a search carries everything already given.</p>
+    <p class="what">The whole audit inside your page: contact, searches, territories, classes and
+      terms, platforms, the free consultation, applicant details, summary and payment. Arriving
+      from a search carries everything already given. The steps are grouped into four phases &mdash;
+      your brand, your market, your audit, checkout &mdash; rather than nine numbered steps.</p>
     <p class="use"><b>Use it on:</b> the Request a Brand Audit page. It is the page that takes the
       order, so give it room.</p>
     <div class="host">
@@ -158,9 +191,11 @@
 
   <!-- 7 -->
   <section class="w" id="assistant">
-    <h2>7. Class assistant</h2>
+    <h2>7. Class assistant &mdash; no AI</h2>
     <p class="what">Helps someone work out which classes they need &mdash; from a competitor&rsquo;s
-      trademark, their own company, or a description of what they sell.</p>
+      trademark, their own company, or by picking classes directly. Nothing here calls a model, so
+      there is no email gate and no fair-use limit: reset, select classes, then email the list to
+      yourself.</p>
     <p class="use"><b>Use it on:</b> guidance and &ldquo;which class am I?&rdquo; pages, where the
       question is classification rather than availability.</p>
     <div class="host">
@@ -170,6 +205,8 @@
     </div>
     <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
         data-widget="class-assistant" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+    <div class="note">Emailing the classes creates a Zoho lead with Lead Source <b>Class Tools</b>,
+      deduplicated against existing contacts and leads.</div>
   </section>
 
   <!-- 8 -->
@@ -188,6 +225,129 @@
     <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
         data-widget="search-bar" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
   </section>
+
+  <hr class="rule">
+  <p class="sechead">Added since &mdash; widgets 9&ndash;12</p>
+
+  <!-- 9 -->
+  <section class="w" id="assistant-ai">
+    <h2>9. Class assistant with AI tools <span class="tag new">New</span></h2>
+    <p class="what">The same assistant as #7 with the AI tools grouped in their own panel and
+      labelled as such. Reading a website pre-fills the questionnaire rather than classifying
+      straight off the page, and the questions are written for any trade &mdash; a plumber, a
+      builder or a charity answers them as naturally as a product brand does.</p>
+    <p class="use"><b>Use it on:</b> pages where you want the smarter suggestions and are happy to
+      ask for an email address first.</p>
+    <div class="host">
+      <div class="hostlbl">As it appears on your page</div>
+      <script src="https://braudit-free-search.onrender.com/embed.js"
+              data-widget="class-assistant-ai" data-tenant="tmh" async></script>
+    </div>
+    <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="class-assistant-ai" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+    <div class="note"><b>Fair use.</b> Five AI calls per email address, then the tools close and the
+      person is flagged in Zoho as <b>AI Tools Blocked</b>. An adviser unticking that box hands back
+      a full five on the next call. Anyone on the Safe Email list &mdash; every
+      @thetrademarkhelpline.com address, plus introducers and resellers ticked as
+      <b>AI Safe Sender</b> &mdash; is never counted and never blocked.</div>
+  </section>
+
+  <!-- 10 -->
+  <section class="w" id="builder">
+    <h2>10. Class &amp; Terms Builder &mdash; staff and resellers
+      <span class="tag new">New</span><span class="tag staff">Internal</span></h2>
+    <p class="what">Name, classes, then review and send. No register search and no explaining what
+      the business does: whoever is using it already knows the answer, so it goes straight to the
+      full class list and the UKIPO terms underneath each one. The review screen is where terms are
+      amended, and the closing question &mdash; anything not covered by the terms above? &mdash;
+      writes free text into <b>Additional Terms Requested</b>.</p>
+    <p class="use"><b>Use it on:</b> staff pages and reseller portals. Opened from a Zoho Deal it
+      writes back to that deal&rsquo;s Classes &amp; Terms; opened cold it emails the list as a CSV
+      and creates the lead.</p>
+    <div class="host">
+      <div class="hostlbl">As it appears on your page</div>
+      <script src="https://braudit-free-search.onrender.com/embed.js"
+              data-widget="class-builder" data-tenant="tmh" async></script>
+    </div>
+    <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="class-builder" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+  </section>
+
+  <!-- 11 -->
+  <section class="w" id="quick-wizard">
+    <h2>11. Quick Search wizard, embedded <span class="tag new">New</span></h2>
+    <p class="what">The short journey as a full embed rather than a box: name, classes, results.
+      The same engine and the same report as #4 &mdash; fewer questions on the way in, which is the
+      whole point of the split test.</p>
+    <p class="use"><b>Use it on:</b> paid landing pages, where every extra question costs
+      completions.</p>
+    <div class="host">
+      <div class="hostlbl">As it appears on your page</div>
+      <script src="https://braudit-free-search.onrender.com/embed.js"
+              data-widget="uk-trademark-quick-search" data-tenant="tmh" async></script>
+    </div>
+    <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="uk-trademark-quick-search" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+  </section>
+
+  <!-- 12 -->
+  <section class="w" id="finder">
+    <h2>12. Class &amp; Term Finder <span class="tag staff">Internal</span></h2>
+    <p class="what">The original standalone tool over the same classification endpoint the wizard
+      and the audit call. One agent, three interfaces &mdash; it is here so the three can be
+      compared side by side rather than because it belongs on a public page.</p>
+    <p class="use"><b>Use it on:</b> nothing client-facing. Adviser desks and testing.</p>
+    <div class="host">
+      <div class="hostlbl">As it appears on your page</div>
+      <script src="https://braudit-free-search.onrender.com/embed.js"
+              data-widget="class-agent" data-tenant="tmh" async></script>
+    </div>
+    <div class="snippet">&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+        data-widget="class-agent" data-tenant="tmh" async&gt;&lt;/script&gt;</div>
+  </section>
+
+  <hr class="rule">
+  <p class="sechead">What the client receives</p>
+
+  <!-- report -->
+  <section class="w" id="report">
+    <h2>The emailed search report</h2>
+    <p class="what">Every Free and Quick Search ends with an email, and this is the page it links
+      to. It is not a widget &mdash; it has its own address, one per search, and it renders the
+      complete stored result rather than the shortened version on the results screen. The button at
+      the top prints it to PDF.</p>
+    <p class="use"><b>Live sample:</b> a real Quick Search for <b>Northstar Coffee</b> in class 30,
+      run on 22 August. One similar mark was flagged and none scored above low risk, so this is the
+      encouraging end of the range &mdash; the same page carries a very different tone when the
+      register is crowded.</p>
+    <div class="host">
+      <div class="hostlbl">As it arrives with the client</div>
+      <div class="rpt">
+        <iframe id="rptFrame" title="Sample search report"
+                src="/report/0d9dd4a5-17fc-4f9a-b2e1-e0788708e148"></iframe>
+      </div>
+      <a class="openfull" target="_blank" rel="noopener"
+         href="/report/0d9dd4a5-17fc-4f9a-b2e1-e0788708e148">Open the full report in a new tab</a>
+    </div>
+    <div class="snippet">https://www.thetrademarkhelpline.com/search-report/?fs=&lt;session&gt;
+https://braudit-free-search.onrender.com/report/&lt;session&gt;      (same page, engine host)</div>
+    <div class="note">The address is the journey session id, so the link in the email is unique to
+      that search and keeps working afterwards &mdash; there is nothing to log in to.</div>
+  </section>
 </div>
+
+<script>
+  // The report is a page, not a widget, so it is framed by hand rather than by
+  // embed.js. It still posts its height like the widgets do, so listen for that
+  // and grow the frame to fit — otherwise a long report reviews badly through a
+  // 1100px letterbox. Guarded on e.source: every widget on this page posts to
+  // the same window, and without the check the tallest one would size this frame
+  // too (the bug that stretched the compact boxes on 28 Aug).
+  window.addEventListener('message', function(e){
+    var f = document.getElementById('rptFrame');
+    if(!f || e.source !== f.contentWindow) return;
+    if(e.data && e.data.brauditHeight) f.style.height = e.data.brauditHeight + 'px';
+  });
+</script>
 </body>
 </html>
