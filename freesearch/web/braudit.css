@@ -246,7 +246,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--pink);
   background:var(--hole,#fff);inset:var(--ring,12px)}
 .dial .val,.dial .cap{position:relative;z-index:1;
   font-family:var(--font-display);font-weight:800}
-.dial-master{width:150px;height:150px;--ring:19px;flex-direction:column}
+.dial-master{width:150px;height:150px;--ring:15px;flex-direction:column}
 .dial-master .val{font-size:31px;color:var(--navy);line-height:1}
 /* The hole is 112px across (150 less the 19px ring, twice). "BRAND STRENGTH"
    sets at 116px on one line, so it was spilling out over the ring on both the
@@ -254,7 +254,8 @@ input:focus,textarea:focus,select:focus{border-color:var(--pink);
    instead. Found 30 Aug while rebuilding the report; the defect was on the
    wizard all along. */
 .dial-master .cap{font-size:10px;letter-spacing:1.3px;text-transform:uppercase;
-  color:var(--muted);margin-top:3px;max-width:76px;line-height:1.25;text-align:center}
+  color:var(--muted);margin-top:2px;max-width:66px;line-height:1.25;text-align:center;
+  font-size:9px;letter-spacing:1px}
 .dial-sub{width:78px;height:78px;--ring:10px;--hole:var(--panel-soft)}
 .dial-sub .val{font-size:19px;color:var(--navy)}
 
