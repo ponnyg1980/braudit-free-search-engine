@@ -314,9 +314,15 @@
     var person = [s.first_name, s.last_name].filter(Boolean).join(' ');
     if(person) who.push('Prepared for ' + person);
     if(s.business_name) who.push(s.business_name);
-    var when = (s.updated_at || s.created_at || '').slice(0,10);
-    if(when){ var dt = new Date(when);
-      who.push(dt.toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'})); }
+    /* Format the WHOLE timestamp in London, never the first ten characters of
+       the UTC string. Proven 31 Aug: a search run at 00:00 BST is stored as
+       23:00 the previous day in UTC, and the report dated itself yesterday. */
+    var when = s.updated_at || s.created_at || '';
+    if(when){
+      var dt = new Date(when);
+      if(!isNaN(dt)) who.push(dt.toLocaleDateString('en-GB',
+        {day:'numeric', month:'long', year:'numeric', timeZone:'Europe/London'}));
+    }
     document.getElementById('rpt-sub').textContent = who.join(' · ');
 
     /* ---- the viability read ------------------------------------------ */
