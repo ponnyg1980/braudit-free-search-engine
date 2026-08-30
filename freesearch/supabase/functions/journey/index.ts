@@ -906,6 +906,29 @@ serve(async (req) => {
     const body = await readJson(req);
     const email = String(body?.email ?? "").trim().toLowerCase();
     if (!email) return json({ ok: true, allowed: true, access_mode: "anonymous" }, 200, origin);
+    // Safe Email list (Jonathan, 28 Aug). Two rungs, checked BEFORE the
+    // allowance so a safe sender is never counted, limited or flagged:
+    //   1. anyone @thetrademarkhelpline.com — staff, hard-coded;
+    //   2. a Lead or Contact carrying AI Safe Sender in Zoho — introducers,
+    //      resellers and trusted partners, maintained by staff as a field.
+    if (email.endsWith("@thetrademarkhelpline.com")) {
+      return json({ ok: true, allowed: true, access_mode: "safe_sender", remaining: -1 }, 200, origin);
+    }
+    if (ZOHO_CHECKOUT_URL) {
+      try {
+        const sr = await fetch(ZOHO_CHECKOUT_URL, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stage: "ai_safe", email }),
+        });
+        const st = await sr.text();
+        let sp: Record<string, unknown> | null = null;
+        try { sp = JSON.parse(st); } catch { sp = null; }
+        const out = (sp?.details as Record<string, unknown> | undefined)?.output;
+        if (typeof out === "string" && out.includes('"safe":true')) {
+          return json({ ok: true, allowed: true, access_mode: "safe_sender", remaining: -1 }, 200, origin);
+        }
+      } catch (_e) { /* fail toward the normal allowance */ }
+    }
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(email));
     const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
     const allowance = Number(Deno.env.get("AI_ALLOWANCE") ?? "5");
