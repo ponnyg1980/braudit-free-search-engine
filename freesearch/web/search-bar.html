@@ -347,5 +347,30 @@ document.querySelectorAll('#purpose button').forEach(b=>b.onclick=()=>{
 mount('competitor-terms');
 document.getElementById('modeflag').textContent = CONFIG.apiBase ? '● LIVE: '+CONFIG.apiBase : '● DEMO MODE (built-in mock)';
 </script>
+<script>
+/* Embed reporter (added 28 Aug). Every widget must tell the host page two
+   things: "I have rendered" (brauditReady, which clears embed.js's loading
+   panel) and how tall it is. These two widgets never did — they only looked
+   fine because embed.js used to act on ANY iframe's message, so a neighbour's
+   report cleared their panel for them. Once each embed started listening only
+   to its own frame, both sat on the loading panel until it timed out.
+   Height is measured from the CONTENT, never from the viewport, or the frame
+   feeds its own height back and grows without end. */
+(function(){
+  if(window.parent===window) return;
+  var wrap=document.querySelector('body')||document.body;
+  var last=0;
+  function send(){
+    var h=Math.ceil(wrap.getBoundingClientRect().height)+24;
+    if(Math.abs(h-last)<8) return; last=h;
+    try{ window.parent.postMessage({brauditHeight:h},'*'); }catch(e){}
+  }
+  try{ new ResizeObserver(send).observe(wrap); }catch(e){}
+  new MutationObserver(send).observe(document.body,{childList:true,subtree:true});
+  window.addEventListener('load',send);
+  send();
+  try{ window.parent.postMessage({brauditReady:true},'*'); }catch(e){}
+})();
+</script>
 </body>
 </html>
