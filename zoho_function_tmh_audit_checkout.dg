@@ -856,6 +856,16 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		// so a safe sender is never limited, never blocked, never flagged.
 		safe = false;
 		blocked = false;
+		// The clock comes from the caller, not from here. zoho.currenttime in a
+		// standalone function reported 05:18 on the 31st while the real time was
+		// 21:18 on the 30th (proven 30 Aug), and a reset stamped in the FUTURE
+		// silently grants an unlimited allowance, because no use is ever after
+		// it. The journey sends its own ISO timestamp instead.
+		nowIn = "";
+		if(p.get("now") != null)
+		{
+			nowIn = p.get("now").toString();
+		}
 		resetRaw = "";
 		justReset = false;
 		hitId = "";
@@ -937,9 +947,24 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			if(hitId != "")
 			{
 				stampM = Map();
-				stampM.put("AI_Allowance_Reset",zoho.currenttime);
-				zoho.crm.updateRecord(hitMod,hitId.toLong(),stampM);
-				justReset = true;
+				// A datetime field wants an ISO-8601 string with an offset; the
+				// bare zoho.currenttime object writes nothing and reports no
+				// error (proven 30 Aug -- the field stayed null while the stage
+				// kept claiming it had stamped, which handed out an endless
+				// allowance). The write is verified before it is believed.
+				if(nowIn != "")
+				{
+					stampM.put("AI_Allowance_Reset",nowIn);
+				}
+				else
+				{
+					stampM.put("AI_Allowance_Reset",zoho.currenttime);
+				}
+				upd = zoho.crm.updateRecord(hitMod,hitId.toLong(),stampM);
+				if(upd.get("id") != null)
+				{
+					justReset = true;
+				}
 			}
 		}
 		res.put("safe",safe);
