@@ -75,15 +75,16 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 	// becomes a space and a plus-addressed email matches nothing at all
 	// (found 28 Aug -- a Contact that existed was invisible to the search).
 	// Every criteria lookup below uses the encoded form.
-	// ONLY the plus is escaped. Zoho URL-decodes the criteria, so a raw '+'
-	// arrives as a space and a plus-addressed email matches nothing; but
-	// urlEncode()ing the whole address also escapes the '@' and breaks the
-	// criteria outright. Both were proven wrong on 28 Aug — this is the
-	// narrow fix.
-	emQ = emIn;
-	if(emIn != "")
+	// PLUS-ADDRESSING. Zoho URL-decodes searchRecords criteria, so a raw + 
+	// arrives as a space; urlEncode() escapes the @ as well and breaks the
+	// criteria; and %2B decodes straight back to a space. All three were
+	// proven wrong on 28 Aug. So the search never contains a plus at all:
+	// match on the part BEFORE it with starts_with, then confirm the exact
+	// address in code.
+	emPre = emIn;
+	if(emIn.contains("+"))
 	{
-		emQ = emIn.replaceAll("+","%2B",true);
+		emPre = emIn.getPrefix("+");
 	}
 	res = Map();
 	res.put("stage",stg);
@@ -123,7 +124,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			auditLink = p.get("audit_link").toString();
 		}
 		// 1. Existing contact wins -- a returning client is never re-led.
-		foundC = zoho.crm.searchRecords("Contacts","(Email:equals:" + emQ + ")");
+		foundC = zoho.crm.searchRecords("Contacts","(Email:starts_with:" + emPre + ")");
 		hitC = foundC.toString();
 		if(hitC.contains("id"))
 		{
@@ -146,7 +147,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		if(contactId == "")
 		{
 			leadId = "";
-			foundL = zoho.crm.searchRecords("Leads","(Email:equals:" + emQ + ")");
+			foundL = zoho.crm.searchRecords("Leads","(Email:starts_with:" + emPre + ")");
 			hitL = foundL.toString();
 			if(hitL.contains("id"))
 			{
@@ -770,31 +771,35 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		// automatically (Jonathan, 28 Aug).
 		blk = Map();
 		blk.put("AI_Tools_Blocked",true);
-		fndL = zoho.crm.searchRecords("Leads","(Email:equals:" + emQ + ")");
+		fndL = zoho.crm.searchRecords("Leads","(Email:starts_with:" + emPre + ")");
 		hitBL = fndL.toString();
 		if(hitBL.contains("id"))
 		{
-			bl0 = fndL.get(0);
-			if(bl0 != null)
+			for each  lrow in fndL
 			{
-				if(bl0.get("id") != null)
+				if(lrow.get("Email") != null)
 				{
-					zoho.crm.updateRecord("Leads",bl0.get("id").toString().toLong(),blk);
-					res.put("lead_flagged",bl0.get("id").toString());
+					if(lrow.get("Email").toString().equalsIgnoreCase(emIn))
+					{
+						zoho.crm.updateRecord("Leads",lrow.get("id").toString().toLong(),blk);
+						res.put("lead_flagged",lrow.get("id").toString());
+					}
 				}
 			}
 		}
-		fndC2 = zoho.crm.searchRecords("Contacts","(Email:equals:" + emQ + ")");
+		fndC2 = zoho.crm.searchRecords("Contacts","(Email:starts_with:" + emPre + ")");
 		hitBC = fndC2.toString();
 		if(hitBC.contains("id"))
 		{
-			bc0 = fndC2.get(0);
-			if(bc0 != null)
+			for each  crow in fndC2
 			{
-				if(bc0.get("id") != null)
+				if(crow.get("Email") != null)
 				{
-					zoho.crm.updateRecord("Contacts",bc0.get("id").toString().toLong(),blk);
-					res.put("contact_flagged",bc0.get("id").toString());
+					if(crow.get("Email").toString().equalsIgnoreCase(emIn))
+					{
+						zoho.crm.updateRecord("Contacts",crow.get("id").toString().toLong(),blk);
+						res.put("contact_flagged",crow.get("id").toString());
+					}
 				}
 			}
 		}
