@@ -181,15 +181,43 @@ button.route small{display:block;font-weight:400;color:#64748b;margin-top:3px}
     </div>
     <div class="hint">We use this to apply the fair use allowance. It is not shared.</div>
 
-    <div style="margin-top:14px">
-      <label class="lbl">Describe what you sell</label>
-      <div class="bar"><input id="ai-desc" placeholder="e.g. We roast and sell speciality coffee, and run barista training">
-        <button class="btn" onclick="aiDescribe()">Suggest classes</button></div>
-    </div>
-    <div style="margin-top:12px">
-      <label class="lbl">Or read my website</label>
+    <!-- Same shape as the Class & Term Finder and Free Search's AI route:
+         the website read PRE-FILLS the questionnaire, it never classifies
+         straight off the page — a misread site becomes a visible mistake,
+         not silently wrong classes (Jonathan, 28 Aug). -->
+    <div style="margin-top:16px">
+      <label class="lbl">Start from your website <span style="font-weight:400;color:var(--muted)">&mdash; optional shortcut</span></label>
       <div class="bar"><input id="ai-url" placeholder="e.g. yourbusiness.co.uk">
-        <button class="btn" onclick="aiWebsite()">Read &amp; suggest</button></div>
+        <button class="btn ghost" onclick="aiWebsite()">Read it</button></div>
+      <div class="hint" id="ai-sitenote">Fills in the answers below, which you can then correct.</div>
+    </div>
+
+    <div style="margin-top:14px">
+      <label class="lbl">If somebody asked what your business does, what&rsquo;s the first thing you&rsquo;d say?</label>
+      <textarea id="ai-desc" rows="2" style="width:100%;padding:11px 13px;border:2px solid #c9b8f0;border-radius:9px;font-size:15px;font-family:inherit"
+        placeholder="e.g. We&rsquo;re a plumbing and heating company covering Cheshire"></textarea>
+    </div>
+
+    <div style="margin-top:12px">
+      <label class="lbl">Do you provide&hellip;</label>
+      <div class="tabs" id="ai-prov" style="margin-bottom:0">
+        <div class="t on" data-p="">Not sure</div>
+        <div class="t" data-p="goods">Goods or products</div>
+        <div class="t" data-p="services">Services</div>
+        <div class="t" data-p="both">Both</div>
+      </div>
+    </div>
+    <div id="ai-goods-wrap" style="display:none;margin-top:10px">
+      <label class="lbl">What goods or products?</label>
+      <input id="ai-goods" placeholder="e.g. boilers, radiators, spare parts">
+    </div>
+    <div id="ai-services-wrap" style="display:none;margin-top:10px">
+      <label class="lbl">What services?</label>
+      <input id="ai-services" placeholder="e.g. boiler installation, emergency repairs, servicing plans">
+    </div>
+
+    <div class="sel-acts" style="margin-top:14px">
+      <button class="btn" onclick="aiSuggest()">Suggest my classes</button>
     </div>
     <div class="loading" id="ai-load"><span class="tmh-loader" role="status" aria-live="polite" aria-label="Working"><i></i><i></i><i></i></span>Working out your classes&hellip;</div>
     <div class="err" id="ai-err" style="display:none"></div>
@@ -600,24 +628,37 @@ async function sendClasses(){
 
 
 /* ======================================================================
-   AI MODE  — /class-assistant-ai only (28 Aug)
-   One file, two routes, same as free-search/quick-search: the plain tool
-   stays deliberately AI-free, and this mode bolts a separately-labelled,
-   gated panel on top. The four register routes are untouched either way.
+   AI MODE  — /class-assistant-ai only (rebuilt 28 Aug)
+   Mirrors the Class & Term Finder and Free Search's AI route exactly:
+   the website read PRE-FILLS the questionnaire (pitch + goods/services),
+   and Suggest sends {text, provides, context} to /suggest-classes — the
+   same one endpoint every other AI caller uses. Nothing is classified
+   straight off a page or a bare one-liner.
    ====================================================================== */
 const AI_MODE = /class-assistant-ai/.test(location.pathname) || P_QS.get('ai')==='1';
+let aiProvides='';
 if (AI_MODE) {
   document.title='Class Assistant with AI — The Trademark Helpline';
   const c=document.getElementById('ai-card'); if(c) c.style.display='';
   const h=document.querySelector('h1'); if(h) h.textContent='Class Assistant with AI';
+  const pg=document.getElementById('ai-prov');
+  if(pg) pg.addEventListener('click',e=>{
+    const b=e.target.closest('.t'); if(!b) return;
+    pg.querySelectorAll('.t').forEach(x=>x.classList.toggle('on',x===b));
+    aiProvides=b.dataset.p||'';
+    document.getElementById('ai-goods-wrap').style.display=
+      (aiProvides==='goods'||aiProvides==='both')?'':'none';
+    document.getElementById('ai-services-wrap').style.display=
+      (aiProvides==='services'||aiProvides==='both')?'':'none';
+  });
 }
 function aiFail(m){const e=document.getElementById('ai-err');e.textContent=m;e.style.display='';}
 function aiBusy(on){document.getElementById('ai-load').classList.toggle('show',on);
   if(on) document.getElementById('ai-err').style.display='none';}
+function aiApi(){return (CONFIG.API_BASE||'').replace(/\/$/,'');}
 
-/* The gate. Server-side per-email allowance — a cleared cookie doesn't reset
-   it. When it's exhausted the journey function also flags the Zoho record so
-   staff can see who's hitting the limit. */
+/* Server-side per-email allowance; a safe-listed email (TMH staff,
+   introducers, resellers — flagged in Zoho) is never limited. */
 async function aiGate(){
   const email=(document.getElementById('ai-email').value||'').trim();
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
@@ -628,42 +669,58 @@ async function aiGate(){
       body:JSON.stringify({email:email,tool:'class_assistant_ai'})});
     const d=await r.json();
     if(d && d.allowed===false){ aiFail(d.message||'You have used your free AI class searches for now.'); return null; }
-  }catch(e){ /* fail open: a gate outage must not block the tool */ }
+  }catch(e){ /* fail open */ }
   return email;
 }
-function aiApi(){return (CONFIG.API_BASE||'').replace(/\/$/,'');}
 
-async function aiDescribe(){
-  const text=(document.getElementById('ai-desc').value||'').trim();
-  if(text.length<12) return aiFail('Tell us a little more about what you sell — a sentence is plenty.');
-  const email=await aiGate(); if(!email) return;
-  aiBusy(true);
-  try{
-    const r=await fetch(aiApi()+'/suggest-classes',{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})});
-    const d=await r.json();
-    aiBusy(false);
-    if(!d||!d.ok||!(d.classes||[]).length) return aiFail(
-      (d&&d.message)||'We couldn’t work that out — try the register routes above.');
-    renderAi('AI suggestion — what you sell', d);
-  }catch(e){ aiBusy(false); aiFail('That didn’t work just now. Please try again.'); }
-}
-
+/* Website read -> questionnaire, never -> classes. */
 async function aiWebsite(){
   let url=(document.getElementById('ai-url').value||'').trim();
-  if(!url) return aiFail('Enter your website address.');
-  if(!/^https?:\/\//i.test(url)) url='https://'+url;
+  const note=document.getElementById('ai-sitenote');
+  if(!/^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([\/#?].*)?$/i.test(url))
+    return aiFail('That doesn\u2019t look like a website address.');
   const email=await aiGate(); if(!email) return;
-  aiBusy(true);
+  if(!/^https?:\/\//i.test(url)) url='https://'+url;
+  aiBusy(true); note.textContent='Reading the site\u2026';
   try{
     const r=await fetch(aiApi()+'/read-website',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})});
     const d=await r.json();
     aiBusy(false);
+    if(!d||!d.ok){ note.textContent=(d&&d.message)||'We couldn\u2019t read that site \u2014 fill the answers in below.'; return; }
+    const a=d.answers||{};
+    if(a.pitch) document.getElementById('ai-desc').value=a.pitch;
+    if(a.goods) document.getElementById('ai-goods').value=a.goods;
+    if(a.services) document.getElementById('ai-services').value=a.services;
+    if(a.provides){
+      const b=document.querySelector('#ai-prov .t[data-p="'+a.provides+'"]');
+      if(b) b.click();
+    }
+    note.textContent='Read it ('+(d.confidence||'medium')+' confidence). Check the answers below and correct anything wrong, then press Suggest.';
+  }catch(e){ aiBusy(false); note.textContent='We couldn\u2019t reach that site \u2014 fill the answers in below instead.'; }
+}
+
+async function aiSuggest(){
+  const text=(document.getElementById('ai-desc').value||'').trim();
+  if(text.length<10) return aiFail('Tell us a little more about what your business does \u2014 a sentence is plenty.');
+  const email=await aiGate(); if(!email) return;
+  const context={};
+  const g=(document.getElementById('ai-goods').value||'').trim();
+  const sv=(document.getElementById('ai-services').value||'').trim();
+  if(g) context.goods=g;
+  if(sv) context.services=sv;
+  aiBusy(true);
+  try{
+    const r=await fetch(aiApi()+'/suggest-classes',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:text, provides:aiProvides||undefined,
+                           context:Object.keys(context).length?context:undefined})});
+    const d=await r.json();
+    aiBusy(false);
     if(!d||!d.ok||!(d.classes||[]).length) return aiFail(
-      (d&&d.message)||'We couldn’t read enough from that site — try describing what you sell instead.');
-    renderAi('AI suggestion — from your website', d);
-  }catch(e){ aiBusy(false); aiFail('That didn’t work just now. Please try again.'); }
+      (d&&d.message)||'We couldn\u2019t work that out \u2014 try the register routes above.');
+    renderAi('AI suggestion \u2014 what your business does', d);
+  }catch(e){ aiBusy(false); aiFail('That didn\u2019t work just now. Please try again.'); }
 }
 
 /* Renders into the SAME results area as every other route, so the Add
@@ -675,10 +732,9 @@ function renderAi(title,d){
     const n=c.nice_class||c.class||c.n;
     const terms=(c.terms||[]).slice(0,8).map(t=>
       `<span class="term">${(t.text||t)}</span>`).join('');
-    return `<div class="cls"><div class="h"><span>Class ${n}${c.class_label?' · '+c.class_label:''}</span>
+    return `<div class="cls"><div class="h"><span>Class ${n}${c.class_label?' \u00b7 '+c.class_label:''}</span>
       ${c.confidence?`<span class="band">${c.confidence}</span>`:''}</div>
       ${c.reason?`<div class="heading">${c.reason}</div>`:''}
-      ${c.heading?`<details class="heading"><summary style="cursor:pointer">What this class covers</summary><div style="margin-top:4px">${c.heading}</div></details>`:''}
       ${terms?`<div class="terms">${terms}</div>`:''}</div>`;}).join('');
 }
 
