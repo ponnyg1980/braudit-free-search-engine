@@ -569,7 +569,28 @@
     </div>
 
     <div id="rv-list"></div>
-    <p style="margin:14px 0 26px"><button class="btn ghost" onclick="history.back()">+ Add or change classes</button></p>
+    <p style="margin:14px 0 20px"><button class="btn ghost" onclick="history.back()">+ Add or change classes</button></p>
+
+    <!-- Anything missing? (Jonathan, 28 Aug). The terms above come from marks
+         already on the register, so they can miss a genuinely novel offering.
+         Asked once per selection; the answer lands on the Scope Asset as
+         Additional Terms Request for an adviser to review before filing. -->
+    <div class="panel" style="display:block;margin-bottom:22px">
+      <b>Are there any specific goods or services you don&rsquo;t feel are covered above?</b>
+      <div class="pills" style="gap:10px;margin-top:10px">
+        <button type="button" class="pill navy lg on" id="rv-cov-no" onclick="setCovered(true)">
+          No &mdash; the terms above reflect my goods and services</button>
+        <button type="button" class="pill lg" id="rv-cov-yes" onclick="setCovered(false)">
+          Yes &mdash; something is missing</button>
+      </div>
+      <div id="rv-extra-wrap" class="hidden" style="margin-top:14px">
+        <label class="fld" style="margin-top:0">Please describe the goods or services</label>
+        <textarea id="rv-extra" rows="3"
+          placeholder="e.g. subscription boxes of roasted coffee delivered monthly"></textarea>
+        <p class="sub" style="margin-top:6px">An adviser will check whether these are already
+          covered by the wording above, or need adding before you file.</p>
+      </div>
+    </div>
 
     <div id="rv-deal-send" class="hidden">
       <button class="btn primary" onclick="sendToDeal()">Send to the Deal&rsquo;s Classes &amp; Terms</button>
@@ -2344,6 +2365,20 @@ function rvSkipContext(){
   renderReview();
   logEvent('class_context_declined','review',{},false);
 }
+/* Coverage question. Default is 'covered' — the honest default, since the
+   terms were drawn from the register for these exact classes. */
+function setCovered(ok){
+  state.covered = ok;
+  document.getElementById('rv-cov-no').classList.toggle('on', ok);
+  document.getElementById('rv-cov-yes').classList.toggle('on', !ok);
+  document.getElementById('rv-extra-wrap').classList.toggle('hidden', ok);
+  if(!ok){ const t=document.getElementById('rv-extra'); if(t) t.focus(); }
+}
+function additionalTerms(){
+  if(state.covered !== false) return '';
+  const t=document.getElementById('rv-extra');
+  return t ? (t.value||'').trim() : '';
+}
 function renderReview(){
   const host=document.getElementById('rv-list');
   const esc=s=>String(s||'').replace(/</g,'&lt;');
@@ -2431,6 +2466,7 @@ function sendToCaller(){
     classes:rows.map(r=>r.n),
     terms:flat,
     scope:rows,
+    additional_terms:additionalTerms(),
     token:CONFIG.RETURN}};
   try{ window.parent.postMessage(msg,'*'); }catch(e){}
   rvDone('Added to your brand — you can close this and carry on.');
@@ -2443,9 +2479,11 @@ function sendToDeal(){
     fetch(journeyBase()+'/session/event',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({session_id:id,event_type:'search_result',screen:'review',
-        payload:{zoho_deal_id:CONFIG.DEAL,sent_from:'class_builder'},
+        payload:{zoho_deal_id:CONFIG.DEAL,sent_from:'class_builder',
+                 additional_terms:additionalTerms()},
         snapshot:{name:state.name,classes:rows.map(r=>r.n),class_source:state.classSource,
-                  last_result:{application_scope:rows},status:'class_builder_sent'}})})
+                  last_result:{application_scope:rows,additional_terms:additionalTerms()},
+                  status:'class_builder_sent'}})})
       .then(r=>r.json())
       .then(d=>{ if(d&&d.ok) rvDone('Sent — the classes and terms are on the Deal in Zoho.');
                  else rvErr('The send failed — please try again.'); })
@@ -2468,11 +2506,12 @@ function sendClassTools(){
     fetch(journeyBase()+'/session/event',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({session_id:id,event_type:'lead_captured',screen:'review',
-        payload:{sent_from:'class_builder'},
+        payload:{sent_from:'class_builder',additional_terms:additionalTerms()},
         snapshot:{name:state.name,classes:rows.map(r=>r.n),class_source:state.classSource,
                   first_name:first,last_name:last,email:email,phone:phone,
                   business_name:company||'',email_source:'class_tools',
-                  last_result:{application_scope:rows},status:'class_builder_sent'}})})
+                  last_result:{application_scope:rows,additional_terms:additionalTerms()},
+                  status:'class_builder_sent'}})})
       .then(r=>r.json())
       .then(d=>{ if(d&&d.ok) rvDone('Done — your classes and terms are on their way to '+email+' as a CSV.');
                  else rvErr('The send failed — please try again.'); })
