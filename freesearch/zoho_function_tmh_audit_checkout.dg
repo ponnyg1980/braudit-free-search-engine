@@ -198,6 +198,22 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			}
 			if(leadId != "")
 			{
+				// Zoho's conversion mapping does NOT carry the AI fields --
+				// they are not on the layouts, and the auto-map skips them
+				// (proven 30 Aug: a lead with both flags true converted to a
+				// contact with both false). Read them off the lead first and
+				// write them onto the contact ourselves.
+				aiBlk = false;
+				aiSafe = false;
+				ldRec = zoho.crm.getRecordById("Leads",leadId.toLong());
+				if(ldRec.get("AI_Tools_Blocked") != null)
+				{
+					aiBlk = ldRec.get("AI_Tools_Blocked").toString().equalsIgnoreCase("true");
+				}
+				if(ldRec.get("AI_Safe_Sender") != null)
+				{
+					aiSafe = ldRec.get("AI_Safe_Sender").toString().equalsIgnoreCase("true");
+				}
 				cMap = Map();
 				cMap.put("overwrite",false);
 				cMap.put("notify_lead_owner",false);
@@ -210,6 +226,16 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				if(cv.get("Accounts") != null)
 				{
 					accountId = cv.get("Accounts").toString();
+				}
+				if(contactId != "")
+				{
+					if(aiBlk || aiSafe)
+					{
+						aiC = Map();
+						aiC.put("AI_Tools_Blocked",aiBlk);
+						aiC.put("AI_Safe_Sender",aiSafe);
+						zoho.crm.updateRecord("Contacts",contactId.toLong(),aiC);
+					}
 				}
 			}
 		}
