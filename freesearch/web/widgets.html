@@ -351,25 +351,15 @@
     <!-- clear -->
     <div class="host" style="margin-top:22px">
       <div class="hostlbl">Clear register &mdash; Northstar Coffee, class 30</div>
-      <p class="use" style="margin:0 0 14px">One similar mark, nothing above low risk, 77% and a
-        verdict of Strong. The engine leads with the application here rather than the audit &mdash;
-        it would be dishonest to push an audit at somebody who doesn&rsquo;t need one.</p>
-
-      <div class="hostlbl" style="margin-top:6px">1 &middot; On the website &mdash; the results page</div>
-      <div class="rpt">
-        <iframe id="resClear" title="Results page — clear register"
-                src="/uk-trademark-quick-search?s=0d9dd4a5-17fc-4f9a-b2e1-e0788708e148&amp;screen=results"></iframe>
-      </div>
+      <p class="use" style="margin:0 0 12px">The other end of the range, for reference rather than
+        review: one similar mark, nothing above low risk, 77% and a verdict of Strong. The engine
+        leads with the application here rather than the audit &mdash; it would be dishonest to push
+        an audit at somebody who doesn&rsquo;t need one. Not embedded, because two full-length
+        samples make this page a slog; open either in a tab when you want to compare tone.</p>
       <a class="openfull" target="_blank" rel="noopener"
-         href="/uk-trademark-quick-search?s=0d9dd4a5-17fc-4f9a-b2e1-e0788708e148&amp;screen=results">Open the results page</a>
-
-      <div class="hostlbl" style="margin-top:22px">2 &middot; In the inbox &mdash; the full report</div>
-      <div class="rpt">
-        <iframe id="rptClear" title="Search report — clear register"
-                src="/report/0d9dd4a5-17fc-4f9a-b2e1-e0788708e148"></iframe>
-      </div>
-      <a class="openfull" target="_blank" rel="noopener"
-         href="/report/0d9dd4a5-17fc-4f9a-b2e1-e0788708e148">Open the Northstar report</a>
+         href="/uk-trademark-quick-search?s=0d9dd4a5-17fc-4f9a-b2e1-e0788708e148&amp;screen=results">Results page</a>
+      <a class="openfull" style="margin-left:10px" target="_blank" rel="noopener"
+         href="/report/0d9dd4a5-17fc-4f9a-b2e1-e0788708e148">Full report</a>
     </div>
 
     <div class="snippet">results   https://www.thetrademarkhelpline.com/uk-trademark-quick-search/?fs=&lt;session&gt;&amp;screen=results
@@ -395,7 +385,7 @@ report    https://www.thetrademarkhelpline.com/search-report/?fs=&lt;session&gt;
   // too (the bug that stretched the compact boxes on 28 Aug).
   window.addEventListener('message', function(e){
     if(!(e.data && e.data.brauditHeight)) return;
-    ['resCrowded','rptCrowded','resClear','rptClear'].forEach(function(id){
+    ['resCrowded','rptCrowded'].forEach(function(id){
       var f = document.getElementById(id);
       if(f && e.source === f.contentWindow) f.style.height = e.data.brauditHeight + 'px';
     });
