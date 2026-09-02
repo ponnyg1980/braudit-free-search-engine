@@ -471,11 +471,12 @@
     var audit = cta.brand_audit || {};
     var cards = [
       { key:'audit', eyebrow: audit.eyebrow || '',
-        head: audit.label || 'Request a Brand Audit — £99',
+        /* heading is the claim line, label the button — see serialize.py. */
+        head: audit.heading || audit.label || 'Claim your international brand audit — only £99',
         blurb: audit.blurb || audit.offer || '',
         note: audit.offer && audit.blurb ? audit.offer : '',
         href: 'https://www.thetrademarkhelpline.com/request-brand-audit/',
-        btn: audit.label || 'Request a Brand Audit — £99', primary:true },
+        btn: audit.label || 'Order online — only £99', primary:true },
       { key:'apply', eyebrow: '',
         head: apply.label || 'Proceed to application',
         blurb: apply.blurb || '', note: apply.note || '',
