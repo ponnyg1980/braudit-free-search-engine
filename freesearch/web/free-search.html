@@ -268,7 +268,15 @@
   .co{font-size:13px;color:var(--quiet);margin-top:3px}
   .co .dead{color:var(--risk-high);font-weight:700}
 
-  /* full-report CTA + book-a-call, side by side */
+  /* results header: copy left, red call CTA hard right */
+  .res-top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+  .res-topcopy{min-width:0}
+  .res-call{flex:0 0 auto;white-space:nowrap;margin-top:6px}
+  @media(max-width:700px){ .res-top{flex-direction:column;gap:14px} .res-call{margin-top:0} }
+
+  /* full-report CTA + book-a-call, side by side. Each column carries its own
+     copy — the intro used to span both, which left the left-hand column
+     looking like a stray caption under the button (Jonathan, 31 Aug). */
   .fr-ctas{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
   .fr-call{border-left:1px solid var(--line);padding-left:22px}
   .fr-callq{margin:0 0 10px;font-size:15px;font-weight:800;color:var(--navy)}
@@ -684,8 +692,18 @@
 
   <!-- RESULTS -->
   <section class="card hidden" data-screen="results">
-    <h1 id="res-head">Here&rsquo;s what&rsquo;s on the register</h1>
-    <p class="lead" id="res-sub"></p>
+    <!-- The site header carries a Book a Free Call, but the widget travels to
+         pages and partner sites that have no TMH header, and the top of the
+         results is where somebody decides whether to ask a human
+         (Jonathan, 31 Aug). Red, same weight as the header button. -->
+    <div class="res-top">
+      <div class="res-topcopy">
+        <h1 id="res-head">Here&rsquo;s what&rsquo;s on the register</h1>
+        <p class="lead" id="res-sub"></p>
+      </div>
+      <a class="btn primary res-call" href="https://bookings.thetrademarkhelpline.com/"
+         target="_blank" rel="noopener">Book a Free Call</a>
+    </div>
     <div class="disc hidden" id="res-stale">Your classes or jurisdictions have changed since
       this search ran &mdash; go back and press &ldquo;Begin free search&rdquo; again to
       refresh these results.</div>
@@ -706,11 +724,12 @@
          they live in the full report, and the CTA says so explicitly. -->
     <div id="res-fullreport" style="margin:18px 0 6px;padding:16px 20px;background:#f7f8fa;
          border:1px solid #e3e8ee;border-radius:12px">
-      <p style="margin:0 0 12px;font-size:14.5px;color:#33424f">We&rsquo;ve shown the five
-        closest live marks here. Your <b>full report</b> contains all flagged results so you
-        can review the complete picture, including owners, status, classes, goods and services.</p>
       <div class="fr-ctas">
         <div>
+          <p style="margin:0 0 14px;font-size:14.5px;color:#33424f">We&rsquo;ve shown the five
+            closest live marks here. Your <b>full report</b> contains all flagged results so you
+            can review the complete picture, including owners, status, classes, goods and
+            services.</p>
           <button class="btn primary" onclick="document.getElementById('report-form').scrollIntoView({behavior:'smooth',block:'center'})">Get my full trademark search report</button>
           <p class="sub" style="font-size:13px;margin:8px 0 0">See and assess every result &mdash;
             not just the five closest matches.</p>
