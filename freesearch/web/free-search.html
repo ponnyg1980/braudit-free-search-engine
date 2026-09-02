@@ -268,18 +268,25 @@
   .co{font-size:13px;color:var(--quiet);margin-top:3px}
   .co .dead{color:var(--risk-high);font-weight:700}
 
-  /* results header: copy left, red call CTA hard right */
-  .res-top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
-  .res-topcopy{min-width:0}
-  .res-call{flex:0 0 auto;white-space:nowrap;margin-top:6px}
-  @media(max-width:700px){ .res-top{flex-direction:column;gap:14px} .res-call{margin-top:0} }
+  /* step bar + the call CTA on its right */
+  .steprow{display:flex;align-items:center;gap:22px;margin:0 0 20px}
+  .steprow .steps{flex:1;margin:0}
+  .res-call{flex:0 0 auto;white-space:nowrap}
+  @media(max-width:700px){
+    .steprow{flex-direction:column;align-items:stretch;gap:14px}
+    .res-call{align-self:flex-start}
+  }
 
   /* full-report CTA + book-a-call, side by side. Each column carries its own
      copy — the intro used to span both, which left the left-hand column
-     looking like a stray caption under the button (Jonathan, 31 Aug). */
-  .fr-ctas{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+     looking like a stray caption under the button (Jonathan, 31 Aug).
+     Both columns stretch and distribute, so the closing line of each sits on
+     the same baseline instead of the right-hand one floating half way up. */
+  .fr-ctas{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:stretch}
+  .fr-ctas > div{display:flex;flex-direction:column;justify-content:space-between}
   .fr-call{border-left:1px solid var(--line);padding-left:22px}
-  .fr-callq{margin:0 0 10px;font-size:15px;font-weight:800;color:var(--navy)}
+  .fr-callq{margin:0;font-size:16.5px;font-weight:800;color:var(--navy)}
+  .fr-call .btn{align-self:flex-start}
   @media(max-width:700px){
     .fr-ctas{grid-template-columns:1fr;gap:18px}
     .fr-call{border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:18px}
@@ -338,7 +345,15 @@
     <img src="/brand/logo.svg" alt="The Trademark Helpline" class="site-logo">
   </div>
 
-  <div class="steps" id="stepper"></div>
+  <!-- The call CTA belongs in the step bar, not in the results card: inside the
+       card it squeezed the headline into two-thirds width (Jonathan, 31 Aug).
+       Here it reads as a header action, the way the site header does, and the
+       copy underneath gets its full measure back. -->
+  <div class="steprow">
+    <div class="steps" id="stepper"></div>
+    <a class="btn primary res-call" href="https://bookings.thetrademarkhelpline.com/"
+       target="_blank" rel="noopener">Book a Free Call</a>
+  </div>
 
   <!-- STEP 1 -->
   <section class="card s1" data-screen="search">
@@ -692,18 +707,8 @@
 
   <!-- RESULTS -->
   <section class="card hidden" data-screen="results">
-    <!-- The site header carries a Book a Free Call, but the widget travels to
-         pages and partner sites that have no TMH header, and the top of the
-         results is where somebody decides whether to ask a human
-         (Jonathan, 31 Aug). Red, same weight as the header button. -->
-    <div class="res-top">
-      <div class="res-topcopy">
-        <h1 id="res-head">Here&rsquo;s what&rsquo;s on the register</h1>
-        <p class="lead" id="res-sub"></p>
-      </div>
-      <a class="btn primary res-call" href="https://bookings.thetrademarkhelpline.com/"
-         target="_blank" rel="noopener">Book a Free Call</a>
-    </div>
+    <h1 id="res-head">Here&rsquo;s what&rsquo;s on the register</h1>
+    <p class="lead" id="res-sub"></p>
     <div class="disc hidden" id="res-stale">Your classes or jurisdictions have changed since
       this search ran &mdash; go back and press &ldquo;Begin free search&rdquo; again to
       refresh these results.</div>
