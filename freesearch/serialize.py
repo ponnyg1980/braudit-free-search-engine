@@ -199,7 +199,18 @@ def serialize_result(result: FreeSearchResult, *, gated: bool = False,
         'cta': {
             'lead': opinion['lead'],
             'brand_audit': {
-                'label': 'Request a Brand Audit — £99',
+                # Revised by Jonathan, 31 Aug. `heading` is the card title and
+                # `label` the button, because the claim line is too long to sit
+                # inside a half-width button without wrapping to three lines.
+                #
+                # The anchor moved from "£299 with the consultation" to
+                # "normally £149" on his instruction. Worth knowing: the
+                # results screen had already retired the £299 framing as
+                # unevidenced (22 Aug §10) while this payload kept it, so the
+                # report and the screen were quoting different numbers until
+                # now.
+                'heading': 'Claim your international brand audit — only £99',
+                'label': 'Order online — only £99',
                 'eyebrow': 'Our recommended next step',
                 'blurb': "You've already done the hard work. The Brand Audit "
                          'expands on this search to cover logos, taglines, '
@@ -207,10 +218,9 @@ def serialize_result(result: FreeSearchResult, *, gated: bool = False,
                          'registers, international & prior-use risk, and '
                          'allows us to give you all the information you need '
                          'to make an informed decision.',
-                'offer': 'The great news is we can offer the Brand Audit and '
-                         'consultation worth £299 for only £99 — and if you '
-                         'choose to use us for your application we deduct it '
-                         'from your fees.',
+                'offer': 'Normally £149. Order online for only £99 — and if '
+                         'you choose to use us for your application we deduct '
+                         'it from your fees.',
             },
             'apply': {
                 'label': 'Proceed to application',
