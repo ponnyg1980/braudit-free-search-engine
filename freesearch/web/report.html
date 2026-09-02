@@ -140,13 +140,19 @@
   .btn.primary:hover{background:var(--pink-hover)}
   .btn.ghost{background:#fff;color:var(--navy);border-color:var(--navy)}
   .btn.ghost:hover{background:var(--navy);color:#fff}
-  .speak{margin-top:18px;border:1px solid var(--line);border-radius:16px;background:var(--panel);
-    padding:20px 22px;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center}
+  /* Darker border than the hairline used elsewhere so the block reads as its
+     own offer rather than another panel (Jonathan, 31 Aug). */
+  .speak{margin-top:18px;border:1.5px solid var(--field-line);border-radius:16px;
+    background:var(--panel);padding:22px 24px;display:grid;grid-template-columns:1fr auto;
+    gap:18px;align-items:center}
   .speak h3{margin:0 0 4px;font-size:18px;font-family:var(--font-display);font-weight:800;color:var(--ink)}
   .speak p{margin:0;font-size:14.5px;color:var(--slate)}
   .speak .btn{white-space:nowrap}
   @media(max-width:640px){ .speak{grid-template-columns:1fr} }
-  .owlrow{display:flex;align-items:flex-end;justify-content:flex-end;margin-top:-8px}
+  /* Sits midway between the CTA block and the bottom of the card — it was
+     tucked up against the CTA. The card's own bottom padding is 26px, so
+     the gap above matches it. */
+  .owlrow{display:flex;align-items:flex-end;justify-content:flex-end;margin-top:26px}
   .owlrow img{width:110px;height:auto}
 
   footer{padding:20px 30px 28px;font-size:12px;color:var(--muted);line-height:1.55;
