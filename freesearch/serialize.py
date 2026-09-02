@@ -199,28 +199,38 @@ def serialize_result(result: FreeSearchResult, *, gated: bool = False,
         'cta': {
             'lead': opinion['lead'],
             'brand_audit': {
-                # Revised by Jonathan, 31 Aug. `heading` is the card title and
-                # `label` the button, because the claim line is too long to sit
-                # inside a half-width button without wrapping to three lines.
+                # TWO OFFERS, ONE PRICE (Jonathan, 31 Aug). The list prices are
+                # £149 for the audit and £149 for the consultation, an hour of
+                # someone's time each. Both surfaces sell at £99; what differs
+                # is the anchor, and that is deliberate:
                 #
-                # The anchor moved from "£299 with the consultation" to
-                # "normally £149" on his instruction. Worth knowing: the
-                # results screen had already retired the £299 framing as
-                # unevidenced (22 Aug §10) while this payload kept it, so the
-                # report and the screen were quoting different numbers until
-                # now.
-                'heading': 'Claim your international brand audit — only £99',
-                'label': 'Order online — only £99',
+                #   results screen — audit £149 reduced to £99. Nothing about
+                #     £298, because "£298 down to £99" on a page somebody
+                #     landed on 30 seconds ago reads as too good to be true.
+                #     The consultation is given free later, in the application.
+                #
+                #   this payload, i.e. the REPORT — they have given their
+                #     address, read the findings and already seen £149 → £99,
+                #     so the sweetener lands: the free consultation is named,
+                #     and the anchor becomes the real package price of £298.
+                #
+                # If you change one, look at the other. Selling the same thing
+                # at two anchors only works while each is true on its own page.
+                'heading': 'Claim your international brand audit — plus a '
+                           'free consultation',
+                'label': 'Book online — just £99',
                 'eyebrow': 'Our recommended next step',
                 'blurb': "You've already done the hard work. The Brand Audit "
-                         'expands on this search to cover logos, taglines, '
+                         'goes beyond this search to cover logos, taglines, '
                          'social media, marketplaces, domains, company '
-                         'registers, international & prior-use risk, and '
-                         'allows us to give you all the information you need '
-                         'to make an informed decision.',
-                'offer': 'Normally £149. Order online for only £99 — and if '
-                         'you choose to use us for your application we deduct '
-                         'it from your fees.',
+                         'registers, international and prior-use risk — and it '
+                         'comes with up to an hour of free consultation with '
+                         'one of our trademark experts, who will talk you '
+                         'through the audit report, cover any risks it raises '
+                         'and guide you on strategy.',
+                'offer': 'Total package normally £298. Book online today for '
+                         'just £99 — and if you choose to use us for your '
+                         'application we deduct it from your fees.',
             },
             'apply': {
                 'label': 'Proceed to application',
