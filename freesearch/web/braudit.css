@@ -124,9 +124,14 @@ h4{font-size:18.5px;font-weight:800;letter-spacing:-.3px;margin:0 0 6px}
 .panel-navy p{font-size:14px;line-height:1.6;color:var(--on-navy);margin:0}
 
 /* ---- buttons --------------------------------------------------------- */
+/* display + text-decoration are here because .btn is used on <a> as well as
+   <button> — an anchor styled as a button was arriving underlined (found on
+   the results page Book a Free Call, 31 Aug). */
 .btn{appearance:none;border:0;border-radius:var(--r-sm);padding:15px 28px;
   font-family:var(--font);font-size:15.5px;font-weight:700;cursor:pointer;
+  display:inline-block;text-align:center;text-decoration:none;
   transition:background .15s ease,color .15s ease,border-color .15s ease}
+a.btn:hover{text-decoration:none}
 .btn.primary{background:var(--pink);color:#fff}
 .btn.primary:hover:not(:disabled){background:var(--pink-hover)}
 /* Disabled keeps the hover colour identical — the button must not appear to
