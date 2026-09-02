@@ -339,15 +339,28 @@
         is weak. Distinctiveness still scores 95. It separates the name&rsquo;s own merit from
         whether somebody got there first, which is the conversation an adviser wants to be having.</p>
 
-      <div class="hostlbl" style="margin-top:6px">1 &middot; On the website &mdash; the results page</div>
+      <div class="hostlbl" style="margin-top:6px">1 &middot; On the website &mdash; Quick Search results</div>
+      <p class="use" style="margin:0 0 10px">Name, classes, results. Three steps in.</p>
       <div class="rpt">
-        <iframe id="resCrowded" title="Results page — crowded register"
+        <iframe id="resQuick" title="Quick Search results page"
                 src="/uk-trademark-quick-search?s=bb9832d7-a57b-490d-88ca-e7e4ff5e9789&amp;screen=results"></iframe>
       </div>
       <a class="openfull" target="_blank" rel="noopener"
-         href="/uk-trademark-quick-search?s=bb9832d7-a57b-490d-88ca-e7e4ff5e9789&amp;screen=results">Open the results page</a>
+         href="/uk-trademark-quick-search?s=bb9832d7-a57b-490d-88ca-e7e4ff5e9789&amp;screen=results">Open the Quick Search results</a>
 
-      <div class="hostlbl" style="margin-top:22px">2 &middot; In the inbox &mdash; the full report</div>
+      <div class="hostlbl" style="margin-top:22px">2 &middot; On the website &mdash; Free Search results</div>
+      <p class="use" style="margin:0 0 10px">The same name through the longer journey: name, logo and
+        tagline, territories, classes, results. This one also searched the tagline
+        &ldquo;I&rsquo;m lovin&rsquo; it&rdquo; as words, which is why the flagged count differs from
+        the Quick Search above &mdash; different question, different answer.</p>
+      <div class="rpt">
+        <iframe id="resFree" title="Free Search results page"
+                src="/free-search?s=a1468d83-c2c9-4b84-a1b6-46f4011655a9&amp;screen=results"></iframe>
+      </div>
+      <a class="openfull" target="_blank" rel="noopener"
+         href="/free-search?s=a1468d83-c2c9-4b84-a1b6-46f4011655a9&amp;screen=results">Open the Free Search results</a>
+
+      <div class="hostlbl" style="margin-top:22px">3 &middot; In the inbox &mdash; the full report</div>
       <div class="rpt">
         <iframe id="rptCrowded" title="Search report — crowded register"
                 src="/report/bb9832d7-a57b-490d-88ca-e7e4ff5e9789"></iframe>
@@ -393,7 +406,7 @@ report    https://www.thetrademarkhelpline.com/search-report/?fs=&lt;session&gt;
   // too (the bug that stretched the compact boxes on 28 Aug).
   window.addEventListener('message', function(e){
     if(!(e.data && e.data.brauditHeight)) return;
-    ['resCrowded','rptCrowded'].forEach(function(id){
+    ['resQuick','resFree','rptCrowded'].forEach(function(id){
       var f = document.getElementById(id);
       if(f && e.source === f.contentWindow) f.style.height = e.data.brauditHeight + 'px';
     });
