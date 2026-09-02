@@ -140,6 +140,12 @@
   .btn.primary:hover{background:var(--pink-hover)}
   .btn.ghost{background:#fff;color:var(--navy);border-color:var(--navy)}
   .btn.ghost:hover{background:var(--navy);color:#fff}
+  .speak{margin-top:18px;border:1px solid var(--line);border-radius:16px;background:var(--panel);
+    padding:20px 22px;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center}
+  .speak h3{margin:0 0 4px;font-size:18px;font-family:var(--font-display);font-weight:800;color:var(--ink)}
+  .speak p{margin:0;font-size:14.5px;color:var(--slate)}
+  .speak .btn{white-space:nowrap}
+  @media(max-width:640px){ .speak{grid-template-columns:1fr} }
   .owlrow{display:flex;align-items:flex-end;justify-content:flex-end;margin-top:-8px}
   .owlrow img{width:110px;height:auto}
 
@@ -238,6 +244,17 @@
     <section class="rcard"><div class="in">
       <h2>Recommended next steps</h2>
       <div class="nexts" id="rpt-nexts"></div>
+      <!-- Third way out. The report is a standalone page and a PDF: no site
+           header, so nothing else here offers a human (Jonathan, 31 Aug). -->
+      <div class="speak">
+        <div>
+          <h3>Prefer to speak to one of our trademark experts?</h3>
+          <p>A free call, no obligation. We go through what the search found, what it means for
+            your application, and what your options are.</p>
+        </div>
+        <a class="btn ghost" href="https://bookings.thetrademarkhelpline.com/"
+           target="_blank" rel="noopener">Book a Free Call</a>
+      </div>
       <div class="owlrow"><img src="/brand/owl-branch.png" alt=""></div>
     </div></section>
 
