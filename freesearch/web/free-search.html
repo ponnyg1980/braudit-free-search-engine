@@ -2725,8 +2725,10 @@ function renderNexts(r){
     : 'Start my Brand Audit — £99';
   const auditBlurb='Go beyond the UK word-mark search. We’ll assess your name, logo '+
     'and tagline across additional brand-risk sources and discuss the findings with you.';
-  const auditCredit='If you proceed with your application through TMH, the £99 Audit fee '+
-    'is credited in full against our professional application fees.';
+  /* Jonathan, 31 Aug: lead with the saving. £149 is the audit's own price;
+     the £99 is the online order price, and it is still credited in full. */
+  const auditCredit='Normally £149 — order online for only £99. If you proceed with your '+
+    'application through TMH, the £99 is credited in full against our professional fees.';
   const auditReassure='You’ll provide your details and choose an appointment before '+
     'the Audit begins.';
   const applyBlurb='Tell us about the applicant and the mark. You’ll then be able to '+
@@ -2734,7 +2736,7 @@ function renderNexts(r){
   const lead=(outcome==='clean'||outcome==='none')?'application':'audit';
   const audit=`<div class="nx${lead==='audit'?' lead-card':''}">
     ${lead==='audit'?'<div class="eyebrow">Our recommended next step</div>':''}
-    <h4>Comprehensive Brand Audit — £99</h4>
+    <h4>Claim your international brand audit — only £99</h4>
     <p>${esc(auditBlurb)}</p>
     <div class="offer">${esc(auditCredit)}</div>
     <button class="btn ${lead==='audit'?'primary':'ghost'} block" id="brand-audit-cta"
