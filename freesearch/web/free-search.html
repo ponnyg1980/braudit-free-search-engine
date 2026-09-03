@@ -268,6 +268,14 @@
   .co{font-size:13px;color:var(--quiet);margin-top:3px}
   .co .dead{color:var(--risk-high);font-weight:700}
 
+  /* Embedded, the host page supplies its own logo and its own Book a Free
+     Call, so ours read as duplicates (developer feedback, 2 Sep). Hidden when
+     embed=1 — unless the embed asks for them with data-chrome="full", which is
+     what an affiliate without a TMH header will want. */
+  body.embedded .brand,
+  body.embedded .res-call{display:none}
+  body.embedded .steprow{gap:0}
+
   /* step bar + the call CTA on its right */
   .steprow{display:flex;align-items:center;gap:22px;margin:0 0 20px}
   .steprow .steps{flex:1;margin:0}
@@ -277,20 +285,6 @@
     .res-call{align-self:flex-start}
   }
 
-  /* full-report CTA + book-a-call, side by side. Each column carries its own
-     copy — the intro used to span both, which left the left-hand column
-     looking like a stray caption under the button (Jonathan, 31 Aug).
-     Both columns stretch and distribute, so the closing line of each sits on
-     the same baseline instead of the right-hand one floating half way up. */
-  .fr-ctas{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:stretch}
-  .fr-ctas > div{display:flex;flex-direction:column;justify-content:space-between}
-  .fr-call{border-left:1px solid var(--line);padding-left:22px}
-  .fr-callq{margin:0;font-size:16.5px;font-weight:800;color:var(--navy)}
-  .fr-call .btn{align-self:flex-start}
-  @media(max-width:700px){
-    .fr-ctas{grid-template-columns:1fr;gap:18px}
-    .fr-call{border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:18px}
-  }
 
   .opinion{border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:26px;
     background:#fff}
@@ -717,7 +711,7 @@
     <div class="riskbar" id="res-bar"></div>
     <p class="sub" id="res-barnote" style="margin:0 0 32px"></p>
 
-    <h2 style="font-size:22px">The five closest live marks</h2>
+    <h2 style="font-size:22px" id="res-tablehead">The closest live marks</h2>
     <div class="restable">
       <div class="rt-head">
         <span>Risk</span><span>Mark</span><span>Owner</span><span>Type</span><span>Status</span>
@@ -725,34 +719,31 @@
       <div id="res-rows"></div>
     </div>
 
-    <!-- Change spec 22 Aug §6: the remaining flagged results are not missing —
-         they live in the full report, and the CTA says so explicitly. -->
-    <div id="res-fullreport" style="margin:18px 0 6px;padding:16px 20px;background:#f7f8fa;
-         border:1px solid #e3e8ee;border-radius:12px">
-      <div class="fr-ctas">
-        <div>
-          <p style="margin:0 0 14px;font-size:14.5px;color:#33424f">We&rsquo;ve shown the five
-            closest live marks here. Your <b>full report</b> contains all flagged results so you
-            can review the complete picture, including owners, status, classes, goods and
-            services.</p>
-          <button class="btn primary" onclick="document.getElementById('report-form').scrollIntoView({behavior:'smooth',block:'center'})">Get my full trademark search report</button>
-          <p class="sub" style="font-size:13px;margin:8px 0 0">See and assess every result &mdash;
-            not just the five closest matches.</p>
+    <div class="report" id="report-form">
+      <div>
+        <h2 style="font-size:24px">Want every result emailed to you?</h2>
+        <p class="sub" style="font-size:15.5px;max-width:520px;margin-bottom:18px" id="rf-intro">We&rsquo;ve
+          shown the closest matches above. Your full report lists <b>every</b> flagged mark, with the
+          classes it covers, the goods and services behind them and where each one sits on the
+          register.</p>
+        <div class="cols">
+          <div><label class="fld">First name</label><input id="r-first" type="text"></div>
+          <div><label class="fld">Last name</label><input id="r-last" type="text"></div>
         </div>
-        <!-- The site header carries a Book a Free Call too, but the header is
-             not where the doubt happens (Jonathan, 31 Aug). This one sits at
-             the moment somebody has just read a result they did not expect —
-             and it travels with the widget onto partner sites, which have no
-             TMH header at all. -->
-        <div class="fr-call">
-          <p class="fr-callq">Prefer to speak to one of our trademark experts?</p>
-          <a class="btn ghost" href="https://bookings.thetrademarkhelpline.com/"
-             target="_blank" rel="noopener">Book a Free Call</a>
-          <p class="sub" style="font-size:13px;margin:8px 0 0">No obligation &mdash; we go through
-            what we found and what it means.</p>
+        <div class="cols">
+          <div><label class="fld">Email</label><input id="r-email" type="email" placeholder="you@business.com"></div>
+          <div><label class="fld">Phone</label><input id="r-phone" type="tel"></div>
         </div>
+        <label class="fld">Business name <span class="opt">(optional)</span></label>
+        <input id="r-biz" type="text">
+        <div class="err hidden" id="r-err"></div>
+        <button class="btn primary block" style="margin-top:18px" onclick="sendReport()">Send my report</button>
+        <p class="sub" style="font-size:13.5px;margin-top:14px">We&rsquo;ll only use these
+          details to send your report and talk to you about your brand.</p>
       </div>
+      <img src="/brand/news-bird.png" alt="" class="ill" style="width:100%;max-width:150px">
     </div>
+
 
     <!-- OPINION — the viability read, ported from the Industry Report's
          Tailored Report. Rendered from what the engine sent; never
@@ -777,31 +768,6 @@
     <!-- RECOMMENDED NEXT STEPS — order adapts to what the search found -->
     <h2 style="font-size:24px;margin-top:34px">Recommended next steps</h2>
     <div class="nexts" id="res-nexts"></div>
-
-    <!-- soft lead capture — third option, never a gate -->
-    <div class="report" id="report-form">
-      <div>
-        <h2 style="font-size:24px">Want the full list emailed to you?</h2>
-        <p class="sub" style="font-size:15.5px;max-width:520px;margin-bottom:18px">We&rsquo;ll
-          send every result we found, with the owner, company status and the goods and services
-          each one covers.</p>
-        <div class="cols">
-          <div><label class="fld">First name</label><input id="r-first" type="text"></div>
-          <div><label class="fld">Last name</label><input id="r-last" type="text"></div>
-        </div>
-        <div class="cols">
-          <div><label class="fld">Email</label><input id="r-email" type="email" placeholder="you@business.com"></div>
-          <div><label class="fld">Phone</label><input id="r-phone" type="tel"></div>
-        </div>
-        <label class="fld">Business name <span class="opt">(optional)</span></label>
-        <input id="r-biz" type="text">
-        <div class="err hidden" id="r-err"></div>
-        <button class="btn primary block" style="margin-top:18px" onclick="sendReport()">Send my report</button>
-        <p class="sub" style="font-size:13.5px;margin-top:14px">We&rsquo;ll only use these
-          details to send your report and talk to you about your brand.</p>
-      </div>
-      <img src="/brand/news-bird.png" alt="" class="ill" style="width:100%;max-width:150px">
-    </div>
 
     <div class="actions">
       <button class="link" onclick="history.back()">&larr; Back to classes</button>
@@ -852,6 +818,9 @@ const CONFIG = (function(){
   // Embedded via /embed.js the tenant rides on the URL; standalone defaults tmh.
   var q=new URLSearchParams(location.search);
   return { API_BASE:'', TENANT_ID:(q.get('tenant')||'tmh'), EMBED:q.get('embed')==='1',
+    // 'full' keeps our logo and Book a Free Call inside an embed — for an
+    // affiliate page that has no TMH header of its own (Jonathan, 2 Sep).
+    CHROME:(q.get('chrome')||''),
     // Hand-off from the compact search-box widget (search-box.html), agreed
     // 6 Aug 2026: it mints the session and logs the search term itself, then
     // sends the visitor here to land on STEP 2 rather than re-typing the name.
@@ -912,6 +881,15 @@ const CONFIG = (function(){
     // read this one constant, so Free Search and Quick Search stay in step.
     APPLY_URL:'https://www.thetrademarkhelpline.com/apply-for-trademark/' };
 })();
+
+/* Hide our own logo and call CTA when we are inside someone else's page — see
+   the .embedded rules above. data-chrome="full" on the embed script opts back
+   in. */
+if(CONFIG.EMBED && CONFIG.CHROME!=='full'){
+  document.addEventListener('DOMContentLoaded',function(){
+    document.body.classList.add('embedded');
+  });
+}
 // The `journey` Edge Function is a sibling of `free-search` (same Supabase
 // project) — swap the last path segment rather than needing a second config
 // line to keep in sync. Empty in the same-origin MOCK/dev mode as API_BASE.
@@ -2629,8 +2607,12 @@ function renderResults(r){const s=r.summary;
   // An incomplete search must never be presented as a low-risk result: no
   // score, no opinion dial (spec §7 consistency rules).
   r._outcome=outcome;
-  document.getElementById('res-summary').innerHTML=[['Flagged',s.total_flagged,''],['Shown here',s.displayed,''],
-    ['High risk',s.high,'high'],['Medium risk',s.medium,'med'],['Low risk',s.low,'low']]
+  /* The five tiles must add up. "Shown here" duplicated the table heading and
+     pushed Negligible out, which is why 1 high + 1 medium + 0 low was sitting
+     under "4 flagged" (developer feedback, 2 Sep). */
+  document.getElementById('res-summary').innerHTML=[['Flagged',s.total_flagged,''],
+    ['High risk',s.high,'high'],['Medium risk',s.medium,'med'],['Low risk',s.low,'low'],
+    ['Negligible',(s.negligible!=null?s.negligible:Math.max(0,s.total_flagged-s.high-s.medium-s.low)),'']]
     .map(([k,v,cx])=>`<div class="stat ${cx}"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
   const tot=Math.max(1,s.high+s.medium+s.low);
   document.getElementById('res-bar').style.display=s.total_flagged?'flex':'none';
@@ -2649,11 +2631,18 @@ function renderResults(r){const s=r.summary;
         :'<span class="ow-lock">Request report for owner details</span>'}${co}</span>
       <span class="ty">${esc(x.type)}${cls}</span>
       <span class="st">${esc(x.status)}</span></div>`;}).join('');
+  /* "The five closest" was hard-coded and printed above two rows (developer
+     feedback, 2 Sep). Say the number that is actually there. */
+  const shown=(r.top_results||[]).length;
+  const WORD={0:'',1:'closest live mark',2:'two closest live marks',3:'three closest live marks',
+              4:'four closest live marks',5:'five closest live marks'};
+  const th=document.getElementById('res-tablehead');
+  if(th) th.textContent = shown? ('The '+(WORD[shown]||(shown+' closest live marks'))) : 'Closest live marks';
   document.getElementById('res-rows').innerHTML=rows||
     '<div style="padding:18px 20px;font-size:15px;color:var(--quiet)">Nothing live on the register looked close enough to list.</div>';
   const bn=document.getElementById('res-barnote');
   if(bn) bn.textContent=s.total_flagged
-    ? `${s.high} high, ${s.medium} medium and ${s.low} low risk across everything we flagged.`
+    ? `${s.high} high, ${s.medium} medium, ${s.low} low and ${(s.negligible!=null?s.negligible:Math.max(0,s.total_flagged-s.high-s.medium-s.low))} negligible across everything we flagged.`
     : 'Nothing on the register conflicted with what you searched.';
   document.getElementById('res-disclaimers').innerHTML=r.disclaimers.map(d=>`<div class="disc">${d}</div>`).join('');
   renderOpinion(r);
