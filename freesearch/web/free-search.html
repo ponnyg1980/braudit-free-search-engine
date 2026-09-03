@@ -814,6 +814,48 @@
    API_BASE='' -> built-in MOCK (works instantly, offline).
    API_BASE='https://<ref>.supabase.co/functions/v1/free-search' -> live.
    ======================================================================= */
+/* ---- the step-1 placeholder types itself --------------------------------
+   Same treatment as the compact search box (Jonathan, 2 Sep): a static grey
+   line reads as decoration, so the field types real-looking brand names until
+   the visitor touches it. Placeholder only — the value is never written, so
+   nothing can be submitted by accident. Stops on focus or first keystroke,
+   honours prefers-reduced-motion, pauses in a hidden tab. */
+(function(){
+  function start(){
+    var el = document.getElementById('name');
+    if(!el) return;
+    var STATIC = el.getAttribute('placeholder') || '';
+    try{
+      if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    }catch(e){}
+    var WORDS = ['Northstar Coffee', 'Bamboo Connect', 'your brand name'];
+    var w=0, i=0, deleting=false, timer=null, stopped=false;
+    function stop(){
+      if(stopped) return;
+      stopped = true;
+      if(timer) clearTimeout(timer);
+      el.setAttribute('placeholder', STATIC);
+    }
+    ['focus','input','keydown','paste'].forEach(function(ev){
+      el.addEventListener(ev, stop, {once:true});
+    });
+    function tick(){
+      if(stopped) return;
+      if(document.hidden){ timer=setTimeout(tick,600); return; }
+      var word = WORDS[w];
+      i = deleting ? i-1 : i+1;
+      el.setAttribute('placeholder', 'Try ' + word.slice(0,i) + (deleting ? '' : '\u2026'));
+      var wait = deleting ? 40 : 75;
+      if(!deleting && i === word.length){ deleting = true; wait = 1400; }
+      else if(deleting && i === 0){ deleting = false; w = (w+1) % WORDS.length; wait = 260; }
+      timer = setTimeout(tick, wait);
+    }
+    timer = setTimeout(tick, 900);
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
+
 const CONFIG = (function(){
   // Embedded via /embed.js the tenant rides on the URL; standalone defaults tmh.
   var q=new URLSearchParams(location.search);
