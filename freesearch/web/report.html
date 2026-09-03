@@ -90,7 +90,7 @@
     .op-top{grid-template-columns:1fr;justify-items:center;text-align:center} }
 
   /* ---- register findings ---- */
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 18px}
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:0 0 18px}
   @media(max-width:640px){ .stats{grid-template-columns:repeat(2,1fr)} }
   .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;text-align:center}
   .stat .big{font-family:var(--font-display);font-size:26px;font-weight:800;color:var(--navy);line-height:1}
@@ -220,6 +220,9 @@
         <div class="stat hi"><div class="big" id="st-high">&mdash;</div><div class="cap">high risk</div></div>
         <div class="stat med"><div class="big" id="st-med">&mdash;</div><div class="cap">medium risk</div></div>
         <div class="stat lo"><div class="big" id="st-low">&mdash;</div><div class="cap">low risk</div></div>
+        <!-- The band that was counted and never shown, so the tiles did not add
+             up (developer feedback, 2 Sep). -->
+        <div class="stat"><div class="big" id="st-neg">&mdash;</div><div class="cap">negligible</div></div>
       </div>
       <p id="rpt-searched"></p>
       <table id="rpt-table">
@@ -390,6 +393,9 @@
     document.getElementById('st-high').textContent = sum.high != null ? sum.high : '—';
     document.getElementById('st-med').textContent = sum.medium != null ? sum.medium : '—';
     document.getElementById('st-low').textContent = sum.low != null ? sum.low : '—';
+    var neg = sum.negligible != null ? sum.negligible
+            : Math.max(0, (sum.total_flagged||0) - (sum.high||0) - (sum.medium||0) - (sum.low||0));
+    document.getElementById('st-neg').textContent = neg;
 
     /* report_rows is the full stored list. all_results is checked for LENGTH,
        not truthiness — an empty array is truthy, and the old code fell into it
