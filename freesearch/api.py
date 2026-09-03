@@ -128,6 +128,10 @@ _EMBED_JS = """(function(){
     if(s.dataset.target)  q+='&target='+encodeURIComponent(s.dataset.target);
     if(s.dataset.journey) q+='&journey='+encodeURIComponent(s.dataset.journey);
   }
+  // data-chrome="full" keeps the tool's own logo and Book a Free Call visible
+  // inside an embed. Default is off: a host page normally has both already,
+  // and two of each reads as a mistake (developer feedback, 2 Sep).
+  if(s.dataset.chrome) q+='&chrome='+encodeURIComponent(s.dataset.chrome);
   // Domain-hosted wizard pages (20 Aug): the search box hands off to a
   // WordPress page carrying ?s=<session>&screen=&q=&journey= — forward those
   // into the iframe so the embedded wizard adopts the session instead of
