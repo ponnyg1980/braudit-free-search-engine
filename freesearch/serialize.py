@@ -100,8 +100,18 @@ def _shortlist_row(r: MarkRecord, *, gated: bool) -> dict:
             'company_name': r.company.name if r.company else '',
         })
     else:
-        # Anonymous: a taste of the company signal, no PII / owner name.
-        row['company'] = _company_public(r.company)
+        # Ownership is no longer withheld (Jonathan, 2 Sep). It was gated to
+        # make the email worth giving, but the viability opinion names the
+        # owner of an identical mark four paragraphs further down the same
+        # page — so we were asking people to hand over their details for
+        # something we had already told them. The report's value is the FULL
+        # list plus classes, goods and services and provenance, which is a
+        # real difference rather than a manufactured one.
+        row.update({
+            'owner_name': r.owner_name,
+            'company_name': r.company.name if r.company else '',
+            'company': _company_public(r.company),
+        })
     return row
 
 
@@ -146,6 +156,11 @@ def serialize_result(result: FreeSearchResult, *, gated: bool = False,
         'high': band['High Risk'],
         'medium': band['Medium Risk'],
         'low': band['Low Risk'],
+        # The band that was being counted and never shown. Without it the five
+        # tiles on the results page could not be made to add up: Cipla read
+        # "4 flagged, 1 high, 1 medium, 0 low" because the other two were
+        # Negligible (developer feedback, 2 Sep).
+        'negligible': band['Negligible'],
         'overall_risk': result.overall_risk,
         'active_count': len(active),
         'truncated': result.truncated,
