@@ -103,7 +103,59 @@ _PAGES = {
     # (Jonathan, 28 Aug) — each one dropped in via embed.js, with the exact
     # script tag to copy underneath it.
     '/widgets': 'widgets.html',
+    # Staff-facing sales enquiry form (Jonathan, 7 Sep). NOT a client surface:
+    # guided call workspace, ad-hoc completion, multiple marks on one order,
+    # and a payment gate. Token-gated below — see _STAFF_PATHS.
+    '/staff-enquiry': 'staff-enquiry.html',
 }
+
+# Pages that require the staff token. Everything else on this host is public
+# by design (the wizards are embedded on partner sites), so the check is an
+# explicit allow-list rather than a default-deny that someone could forget to
+# extend. A wrong or missing token gets the sign-in page, never the form.
+_STAFF_PATHS = {'/staff-enquiry'}
+
+def _staff_ok(token: str) -> bool:
+    """Constant-time check of the shared staff token.
+
+    STAFF_TOKEN unset means the staff pages are unreachable rather than open
+    to everyone — an absent secret must never be the same as no lock.
+    """
+    want = os.environ.get('STAFF_TOKEN', '')
+    if not want:
+        return False
+    import hmac
+    return hmac.compare_digest(str(token or ''), want)
+
+
+# Shown instead of the form when the token is missing or wrong. Stores what
+# is typed and reloads with it on the query string, so staff paste the token
+# once per browser and every later link just works.
+_STAFF_GATE_HTML = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>TMH Staff</title>
+<link rel="stylesheet" href="/braudit.css">
+<style>body{display:grid;place-items:center;min-height:100vh;background:#eef2f5}
+.b{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:30px 32px;
+width:min(420px,calc(100vw - 32px))}h1{margin:0 0 6px;font-size:19px;color:var(--navy)}
+p{margin:0 0 18px;color:var(--quiet);font-size:14px}
+input{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:10px;
+font-size:15px;font-family:inherit;margin-bottom:14px}
+input:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 3px rgba(229,22,82,.12)}
+</style></head><body><div class="b">
+<h1>Staff access</h1><p>This page is for TMH staff. Enter the access token to continue.</p>
+<input type="password" id="k" placeholder="Access token" autofocus
+ onkeydown="if(event.key==='Enter')go()">
+<button class="btn primary" style="width:100%" onclick="go()">Continue</button>
+</div><script>
+try{var s=localStorage.getItem('tmh_staff_token');
+    if(s&&!new URLSearchParams(location.search).get('k')){
+      var u=new URL(location.href);u.searchParams.set('k',s);location.replace(u.toString());}
+}catch(e){}
+function go(){var v=document.getElementById('k').value.trim();if(!v)return;
+  try{localStorage.setItem('tmh_staff_token',v);}catch(e){}
+  var u=new URL(location.href);u.searchParams.set('k',v);location.href=u.toString();}
+</script></body></html>"""
 
 # Partners drop this one line into their page:
 #   <script src="https://<host>/embed.js" data-tenant="acme" async></script>
@@ -432,6 +484,14 @@ class _Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip('/')
         params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
+        if path in _STAFF_PATHS and not _staff_ok(params.get('k', '')):
+            # Interim staff access (Jonathan, 7 Sep): a shared token in ?k=,
+            # the same pattern the onboarding site's admin pages use. It is
+            # deliberately the cheapest thing that works, because it is
+            # replaced by portal sign-in once the Portal can issue a token —
+            # see Portal_Identity_in_Search_Spec.md §5.
+            self._send_raw(_STAFF_GATE_HTML.encode(), 'text/html; charset=utf-8')
+            return
         if path in _PAGES or path.startswith('/report/'):
             # /report/<session-uuid> is the pretty unique-URL form of the
             # search report; the page reads the id from the path itself.
