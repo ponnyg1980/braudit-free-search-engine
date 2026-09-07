@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Sales Enquiry — TMH Staff</title>
+<!-- STAFF-FACING. Not a client surface. Same design layer as everything else
+     so it feels like one product, but the chrome is deliberately different
+     (dark workspace bar, guidance panels) so nobody can mistake a screenshot
+     of this for something a client saw.
+
+     Why this lives in the search engine rather than a separate app
+     (Jonathan, 7 Sep): the journey session store, the class/terms tools, the
+     staged Zoho intake and the Stripe checkout already exist here. A separate
+     application would have rebuilt all four.
+
+     The controlling difference from the client audit form: the client form is
+     a linear wizard because a client needs leading. A sales person is being
+     led BY the client, so every section is open at once — except that nothing
+     opens until the contact details are captured. -->
+<link rel="stylesheet" href="/braudit.css">
+<link rel="stylesheet" href="/wizard.css">
+<style>
+  body{background:#eef2f5}
+  .sf-shell{max-width:1420px;margin:0 auto;padding:0 18px 120px}
+
+  /* ---------- top bar ---------- */
+  .sf-top{position:sticky;top:0;z-index:40;background:var(--navy);color:#fff;
+    display:flex;align-items:center;gap:18px;padding:11px 20px;margin:0 -18px 20px;
+    border-radius:0 0 14px 14px;box-shadow:0 3px 14px rgba(45,69,90,.18)}
+  .sf-top .lg{height:26px;flex:none}
+  .sf-top .ref{font-weight:800;letter-spacing:.04em;font-size:14px}
+  .sf-top .who{font-size:13.5px;opacity:.92;flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sf-save{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    padding:5px 11px;border-radius:20px;background:rgba(255,255,255,.14);flex:none}
+  .sf-save.ok{background:rgba(120,220,160,.22);color:#c9f7dd}
+  .sf-save.bad{background:rgba(255,140,120,.22);color:#ffd8cf}
+  .sf-top .exit{color:#fff;text-decoration:none;font-size:13px;opacity:.85;flex:none}
+  .sf-top .exit:hover{opacity:1;text-decoration:underline}
+
+  /* ---------- three-column workspace ---------- */
+  .sf-grid{display:grid;grid-template-columns:212px minmax(0,1fr) 300px;gap:20px;align-items:start}
+  @media(max-width:1180px){.sf-grid{grid-template-columns:196px minmax(0,1fr)}
+    .sf-side{grid-column:1/-1}}
+  @media(max-width:820px){.sf-grid{grid-template-columns:1fr}.sf-nav{position:static}}
+
+  .sf-nav{position:sticky;top:78px}
+  .sf-nav button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;
+    background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;
+    margin-bottom:7px;font-family:inherit;font-size:13.5px;font-weight:700;color:var(--navy);
+    cursor:pointer}
+  .sf-nav button:hover:not(:disabled){border-color:var(--navy)}
+  .sf-nav button.on{background:var(--navy);border-color:var(--navy);color:#fff}
+  .sf-nav button:disabled{opacity:.45;cursor:not-allowed}
+  .sf-nav .dot{width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}
+  .sf-nav button.done .dot{background:#2f9e63}
+  .sf-nav button.part .dot{background:#d9a327}
+  .sf-nav .lk{margin-left:auto;font-size:11px;opacity:.7}
+
+  .sf-card{background:#fff;border:1.5px solid var(--line);border-radius:var(--r-md);
+    padding:24px 26px;margin-bottom:18px}
+  .sf-card > h2{margin:0 0 4px;font-size:20px;color:var(--navy)}
+  .sf-card > .lede{margin:0 0 18px;color:var(--quiet);font-size:14px}
+
+  /* ---------- guidance (staff-only, never client data) ---------- */
+  .sf-guide{border-left:4px solid var(--navy);background:#f2f6f9;border-radius:0 10px 10px 0;
+    padding:14px 16px;margin:0 0 20px}
+  .sf-guide .gh{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--navy);margin-bottom:7px}
+  .sf-guide ul{margin:0;padding-left:18px}
+  .sf-guide li{font-size:13.5px;color:var(--ink);margin-bottom:5px;line-height:1.45}
+  .sf-guide li:last-child{margin-bottom:0}
+  .sf-guide .say{font-style:italic;color:var(--navy)}
+  .sf-never{border-left-color:#b5372a;background:#fdf3f1}
+  .sf-never .gh{color:#b5372a}
+
+  /* ---------- fields ---------- */
+  input[type=text],input[type=email],input[type=tel],input[type=url],input[type=date],
+  input[type=time],select,textarea{
+    width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:9px;
+    font-size:14.5px;font-family:inherit;color:var(--ink);background:#fff}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pink);
+    box-shadow:0 0 0 3px rgba(229,22,82,.12)}
+  textarea{min-height:78px;resize:vertical;line-height:1.5}
+  label.fld{display:block;font-weight:700;color:var(--navy);margin:14px 0 5px;font-size:13.5px}
+  label.fld .req{color:var(--pink)}
+  label.fld .opt{color:var(--quiet);font-weight:500;font-size:12.5px}
+  .sf-row{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+  @media(max-width:640px){.sf-row{grid-template-columns:1fr}}
+  .sf-hint{font-size:12.5px;color:var(--quiet);margin-top:5px}
+
+  .sf-check{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border:1.5px solid var(--line);
+    border-radius:9px;margin-bottom:9px;background:#fff;cursor:pointer}
+  .sf-check.on{border-color:var(--pink);background:var(--pink-tint)}
+  .sf-check input{width:17px;height:17px;accent-color:var(--pink);margin-top:2px;flex:none}
+  .sf-check span{font-size:13.5px;color:var(--ink);line-height:1.45}
+
+  /* ---------- mark lines (multi-audit) ---------- */
+  .sf-mark{border:1.5px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px;
+    background:#fbfcfd}
+  .sf-mark .mh{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .sf-mark .mn{font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;
+    color:#fff;background:var(--navy);border-radius:5px;padding:3px 8px}
+  .sf-mark .rm{margin-left:auto;background:none;border:0;color:var(--quiet);font-size:13px;
+    cursor:pointer;font-family:inherit;text-decoration:underline}
+  .sf-mark .rm:hover{color:#b5372a}
+  .sf-mark .kinds{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+  .sf-mark .kinds label{font-size:12.5px;display:flex;gap:5px;align-items:center;
+    border:1.5px solid var(--line);border-radius:20px;padding:4px 11px;cursor:pointer;background:#fff}
+  .sf-mark .kinds input{accent-color:var(--pink);width:14px;height:14px}
+  .sf-add{background:#fff;border:1.5px dashed var(--navy);color:var(--navy);border-radius:10px;
+    padding:11px 16px;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;width:100%}
+  .sf-add:hover{background:#f2f6f9}
+
+  .sf-price{margin-top:16px;border:2px solid var(--navy);border-radius:10px;overflow:hidden}
+  .sf-price .tr{display:flex;justify-content:space-between;padding:10px 15px;font-size:14.5px;
+    border-bottom:1px solid var(--line)}
+  .sf-price .tr:last-child{border-bottom:0}
+  .sf-price .tr.grand{background:var(--navy);color:#fff;font-weight:800;font-size:16px}
+
+  /* ---------- class scope ---------- */
+  .sf-cls{border:1.5px solid var(--line);border-radius:10px;padding:13px 15px;margin-bottom:9px}
+  .sf-cls .ch{font-weight:800;color:var(--navy);font-size:14px}
+  .sf-cls .ch .n{color:var(--pink)}
+  .sf-cls textarea{margin-top:7px;min-height:56px;font-size:13.5px}
+
+  /* ---------- right rail ---------- */
+  .sf-side{position:sticky;top:78px}
+  .sf-gate{background:#fff;border:1.5px solid var(--line);border-radius:var(--r-md);padding:16px 17px;
+    margin-bottom:16px}
+  .sf-gate h3{margin:0 0 3px;font-size:14px;color:var(--navy)}
+  .sf-gate .sub{font-size:12.5px;color:var(--quiet);margin-bottom:12px}
+  .sf-gate ul{list-style:none;margin:0;padding:0}
+  .sf-gate li{display:flex;gap:9px;align-items:flex-start;font-size:13px;padding:6px 0;
+    border-bottom:1px solid #f0f3f5;cursor:pointer;line-height:1.4}
+  .sf-gate li:last-child{border-bottom:0}
+  .sf-gate li:hover .lbl{text-decoration:underline}
+  .sf-gate .ic{width:17px;height:17px;border-radius:50%;flex:none;display:grid;place-items:center;
+    font-size:10.5px;font-weight:800;color:#fff;background:var(--line);margin-top:1px}
+  .sf-gate li.ok .ic{background:#2f9e63}
+  .sf-gate li.ok .ic:after{content:'✓'}
+  .sf-gate li.no .ic{background:#c9ced3}
+  .sf-gate li.bad .ic{background:#b5372a}
+  .sf-gate li.bad .ic:after{content:'!'}
+  .sf-gate li .lbl{color:var(--ink)}
+  .sf-gate li.ok .lbl{color:var(--quiet)}
+
+  .sf-prog{height:7px;border-radius:5px;background:#e7ecf0;overflow:hidden;margin-bottom:13px}
+  .sf-prog i{display:block;height:100%;background:#2f9e63;width:0;transition:width .25s}
+
+  /* ---------- sticky action bar ---------- */
+  .sf-act{position:fixed;left:0;right:0;bottom:0;z-index:45;background:#fff;
+    border-top:1.5px solid var(--line);box-shadow:0 -3px 14px rgba(45,69,90,.10);
+    padding:11px 20px;display:flex;align-items:center;gap:14px}
+  .sf-act .msg{flex:1;min-width:0;font-size:13px;color:var(--quiet)}
+  .sf-act .msg b{color:var(--navy)}
+  .sf-act .btn{margin:0}
+  .btn.ghost{background:#fff;border:1.5px solid var(--navy);color:var(--navy)}
+  .btn[disabled]{opacity:.42;cursor:not-allowed}
+
+  /* ---------- contact lock ---------- */
+  .sf-locked{border:1.5px dashed var(--line);border-radius:var(--r-md);padding:30px 26px;
+    text-align:center;background:#fff}
+  .sf-locked h3{margin:0 0 6px;color:var(--navy);font-size:17px}
+  .sf-locked p{margin:0 auto 16px;max-width:440px;color:var(--quiet);font-size:14px}
+
+  .sf-readrow{display:flex;justify-content:space-between;gap:16px;padding:11px 0;
+    border-bottom:1px solid var(--line);font-size:14px}
+  .sf-readrow:last-child{border-bottom:0}
+  .sf-readrow .k{color:var(--quiet);flex:none;width:210px}
+  .sf-readrow .v{color:var(--ink);font-weight:600;text-align:right}
+  .sf-readrow .v.miss{color:#b5372a;font-weight:700}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="sf-top">
+  <img src="/brand/logo-white.svg" alt="TMH" class="lg"
+       onerror="this.style.display='none'">
+  <span class="ref" id="sf-ref">—</span>
+  <span class="who" id="sf-who">New enquiry</span>
+  <span class="sf-save" id="sf-savestate">Not saved</span>
+  <a class="exit" href="#" id="sf-exit" onclick="newEnquiry();return false;">New enquiry</a>
+</div>
+
+<div class="sf-shell">
+<div class="sf-grid">
+
+  <!-- ================= LEFT: SECTION NAV ================= -->
+  <nav class="sf-nav" id="sf-nav"></nav>
+
+  <!-- ================= CENTRE: SECTIONS ================= -->
+  <main>
+
+  <!-- ---------- CONTACT ---------- -->
+  <section class="sf-card" data-sec="contact">
+    <h2>Who are we speaking to?</h2>
+    <p class="lede">Take these first. Nothing else on this form opens until they are captured.</p>
+
+    <div class="sf-guide">
+      <div class="gh">Before you go any further</div>
+      <ul>
+        <li>Get the details before you give the value. If the line drops after you have
+          talked them through their risks and you have no number, the enquiry is gone.</li>
+        <li><span class="say">"Before we look at anything — can I take a few details so I can
+          send this over and pick it up if we get cut off?"</span></li>
+        <li>Position matters: it tells us whether this person can actually instruct us,
+          and it drives who signs later.</li>
+      </ul>
+    </div>
+
+    <div class="sf-row">
+      <div><label class="fld">First name <span class="req">*</span></label>
+        <input type="text" id="f-first" autocomplete="off"></div>
+      <div><label class="fld">Last name <span class="req">*</span></label>
+        <input type="text" id="f-last" autocomplete="off"></div>
+    </div>
+    <div class="sf-row">
+      <div><label class="fld">Email <span class="req">*</span></label>
+        <input type="email" id="f-email" autocomplete="off"></div>
+      <div><label class="fld">Phone <span class="req">*</span></label>
+        <input type="tel" id="f-phone" autocomplete="off"></div>
+    </div>
+    <div class="sf-row">
+      <div><label class="fld">Position <span class="req">*</span></label>
+        <input type="text" id="f-position" placeholder="Director, Founder, Marketing Manager…"></div>
+      <div><label class="fld">Organisation name <span class="opt">(optional)</span></label>
+        <input type="text" id="f-org"></div>
+    </div>
+    <div class="sf-hint">Organisation is optional — plenty of enquiries are pre-incorporation.</div>
+
+    <label class="fld">Existing client or new?</label>
+    <select id="f-clienttype">
+      <option value="">Choose…</option>
+      <option value="new">New — no history with us</option>
+      <option value="existing">Existing client</option>
+      <option value="returning">Previously enquired, never bought</option>
+    </select>
+  </section>
+
+  <!-- ---------- DISCOVERY ---------- -->
+  <section class="sf-card hidden" data-sec="discovery">
+    <h2>Discovery</h2>
+    <p class="lede">Fill this in as they talk. Order does not matter.</p>
+
+    <div class="sf-guide">
+      <div class="gh">What you are listening for</div>
+      <ul>
+        <li>What do they actually sell, in their words? You will need it for the classes.</li>
+        <li>Are they trading yet, or pre-launch? It changes the risk conversation entirely.</li>
+        <li>Why now? A deadline, an investor, a letter, a rebrand — the reason drives urgency.</li>
+        <li>Have they had any contact from another party? If so, slow down and note it exactly.</li>
+      </ul>
+    </div>
+
+    <label class="fld">What does the business do? <span class="req">*</span></label>
+    <textarea id="f-desc" placeholder="In their words — this feeds the classes and terms."></textarea>
+
+    <label class="fld">Why are they calling today? <span class="req">*</span></label>
+    <textarea id="f-reason" placeholder="Launching, rebranding, had a letter, investor asked…"></textarea>
+
+    <div class="sf-row">
+      <div><label class="fld">Trading status</label>
+        <select id="f-trading">
+          <option value="">Choose…</option>
+          <option value="trading">Trading now</option>
+          <option value="prelaunch">Pre-launch</option>
+          <option value="both">Trading, and launching something new</option>
+        </select></div>
+      <div><label class="fld">How well do they understand trademarks?</label>
+        <select id="f-knowledge">
+          <option value="">Choose…</option>
+          <option value="none">Starting from scratch</option>
+          <option value="some">Some idea</option>
+          <option value="good">Knows the process</option>
+        </select></div>
+    </div>
+
+    <div class="sf-row">
+      <div><label class="fld">Territories now</label>
+        <input type="text" id="f-terrnow" placeholder="UK"></div>
+      <div><label class="fld">Territories planned</label>
+        <input type="text" id="f-terrplan" placeholder="EU, US, none yet…"></div>
+    </div>
+
+    <label class="fld">Any deadline?</label>
+    <input type="text" id="f-deadline" placeholder="Launch date, trade show, investor deadline…">
+
+    <label class="fld">Any existing risk, threat or dispute?</label>
+    <textarea id="f-risk" placeholder="Letters received, objections, someone using the name…"></textarea>
+    <div class="sf-hint">If there is a live dispute, say you will have a specialist call them.
+      Do not advise on it here.</div>
+  </section>
+
+  <!-- ---------- PROTECTION NEED / MARKS ---------- -->
+  <section class="sf-card hidden" data-sec="marks">
+    <h2>What are we auditing?</h2>
+    <p class="lede">Add a line for every mark. They share one set of classes and terms.</p>
+
+    <div class="sf-guide">
+      <div class="gh">Multiple marks</div>
+      <ul>
+        <li>Ask what else carries the brand — a product range, a sub-brand, a tagline
+          they use in advertising. Each is a separate audit.</li>
+        <li><span class="say">"Is it just the one name, or are there product names and a
+          strapline that matter as much?"</span></li>
+        <li>Every mark is audited against the same classes and terms, so the scope is
+          agreed once and applied to all of them.</li>
+      </ul>
+    </div>
+
+    <div id="f-marks"></div>
+    <button class="sf-add" onclick="addMark()">+ Add another mark</button>
+
+    <h3 style="margin:26px 0 4px;font-size:16px;color:var(--navy)">Shared classes &amp; terms</h3>
+    <p class="sf-hint" style="margin-bottom:12px">These apply to every mark above.</p>
+    <label class="fld">Classes <span class="req">*</span></label>
+    <input type="text" id="f-classes" placeholder="e.g. 25, 35, 41">
+    <div class="sf-hint">Comma-separated Nice class numbers.
+      <a href="#" onclick="openTools();return false;" style="color:var(--pink);font-weight:700">
+        Open the class tools</a> if you need to work them out on the call.</div>
+    <div id="f-scope" style="margin-top:14px"></div>
+
+    <div class="sf-price" id="f-pricebox"></div>
+  </section>
+
+  <!-- ---------- ADVICE ---------- -->
+  <section class="sf-card hidden" data-sec="advice">
+    <h2>Advice given</h2>
+    <p class="lede">Tick these only once you have actually said them.</p>
+
+    <div class="sf-guide sf-never">
+      <div class="gh">Never say</div>
+      <ul>
+        <li>Never promise registration. The IPO decides, and third parties can oppose.</li>
+        <li>Never promise a takedown, an outcome or a timescale you do not control.</li>
+        <li>Never say a search is "clear" — say nothing obvious came up on the register.</li>
+        <li>Never give a legal opinion on someone else's rights. That is an adviser's job.</li>
+      </ul>
+    </div>
+
+    <label class="sf-check"><input type="checkbox" id="a-risks">
+      <span>I explained the risks that apply to their situation.</span></label>
+    <label class="sf-check"><input type="checkbox" id="a-fees">
+      <span>I explained that official filing fees are generally non-refundable.</span></label>
+    <label class="sf-check"><input type="checkbox" id="a-noguarantee">
+      <span>I made clear we cannot guarantee registration or any outcome.</span></label>
+    <label class="sf-check"><input type="checkbox" id="a-questions">
+      <span>I answered their questions, and they had no outstanding ones.</span></label>
+
+    <label class="fld">Anything else said that matters <span class="opt">(optional)</span></label>
+    <textarea id="f-advicenote"></textarea>
+  </section>
+
+  <!-- ---------- RECOMMENDATION ---------- -->
+  <section class="sf-card hidden" data-sec="recommend">
+    <h2>Recommendation</h2>
+    <p class="lede">What you advised, and why.</p>
+
+    <div class="sf-guide">
+      <div class="gh">Framing the audit</div>
+      <ul>
+        <li>The audit is the step that stops a wasted application. Lead with what it
+          prevents, not what it contains.</li>
+        <li>It covers logos, taglines, social media, marketplaces, domains, company
+          registers, international and prior-use risk — the free search covers none of that.</li>
+        <li>It comes with up to an hour of consultation with a specialist.</li>
+        <li><span class="say">"It is £99 a mark, and if you go on to apply through us
+          we take it off your fees."</span></li>
+      </ul>
+    </div>
+
+    <label class="fld">Audit scope — what will we actually cover? <span class="req">*</span></label>
+    <textarea id="f-scopetext" placeholder="Marks, classes, territories, anything specific they raised."></textarea>
+
+    <label class="fld">Why this is the right step for them <span class="req">*</span></label>
+    <textarea id="f-rationale" placeholder="In your words — this is read back to them and lands on the Deal."></textarea>
+
+    <div class="sf-row">
+      <div><label class="fld">Handling</label>
+        <select id="f-handling">
+          <option value="normal">Normal — 3 working days</option>
+          <option value="expedited">Expedited (reason required)</option>
+        </select></div>
+      <div><label class="fld">Audit delivery due <span class="req">*</span></label>
+        <input type="date" id="f-auditdate"></div>
+    </div>
+    <div id="f-expwrap" class="hidden">
+      <label class="fld">Reason for expediting <span class="req">*</span></label>
+      <input type="text" id="f-expreason" placeholder="Genuine reason — this is reviewed by a manager.">
+    </div>
+  </section>
+
+  <!-- ---------- CONSULTATION ---------- -->
+  <section class="sf-card hidden" data-sec="consult">
+    <h2>Consultation</h2>
+    <p class="lede">The audit is delivered into a conversation, not an inbox.</p>
+
+    <div class="sf-guide">
+      <div class="gh">Booking it properly</div>
+      <ul>
+        <li>Book it on the call. An audit with no appointment is a PDF nobody reads.</li>
+        <li>The audit must be delivered before the appointment — the date rule below
+          enforces it, but say it out loud too.</li>
+        <li><span class="say">"I'll get the audit to you by the {{date}}, and we'll go
+          through it together on the {{appointment}}."</span></li>
+      </ul>
+    </div>
+
+    <div class="sf-row">
+      <div><label class="fld">Date <span class="req">*</span></label>
+        <input type="date" id="f-consultdate"></div>
+      <div><label class="fld">Time <span class="req">*</span></label>
+        <input type="time" id="f-consulttime"></div>
+    </div>
+    <div class="sf-row">
+      <div><label class="fld">Adviser <span class="req">*</span></label>
+        <input type="text" id="f-adviser" placeholder="Who is taking it"></div>
+      <div><label class="fld">Method</label>
+        <select id="f-consultmethod">
+          <option value="phone">Phone</option>
+          <option value="video">Video call</option>
+          <option value="office">In person</option>
+        </select></div>
+    </div>
+    <label class="sf-check"><input type="checkbox" id="c-agreed">
+      <span>The client agreed to this appointment on the call.</span></label>
+    <div id="f-datewarn"></div>
+  </section>
+
+  <!-- ---------- BILLING ---------- -->
+  <section class="sf-card hidden" data-sec="billing">
+    <h2>Billing &amp; payment</h2>
+    <p class="lede">Nothing is invoiced until it is paid.</p>
+
+    <div class="sf-guide">
+      <div class="gh">Taking payment</div>
+      <ul>
+        <li>Send the payment link while they are still on the phone. A link sent after
+          the call is a link that waits.</li>
+        <li>If they cannot pay today, agree an exact date — not "next week".</li>
+        <li>The audit does not start until payment lands, so the delivery date moves
+          with the payment date. Say that plainly.</li>
+      </ul>
+    </div>
+
+    <label class="fld">Billing entity <span class="req">*</span></label>
+    <input type="text" id="f-billentity" placeholder="Who the invoice is addressed to">
+    <label class="fld">Invoice recipient email <span class="req">*</span></label>
+    <input type="email" id="f-billemail">
+    <label class="fld">Billing address <span class="req">*</span></label>
+    <textarea id="f-billaddr"></textarea>
+
+    <div class="sf-row">
+      <div><label class="fld">Payment <span class="req">*</span></label>
+        <select id="f-paywhen">
+          <option value="">Choose…</option>
+          <option value="now">Paying now — send the link</option>
+          <option value="date">Paying on an agreed date</option>
+        </select></div>
+      <div id="f-paydatewrap" class="hidden"><label class="fld">Agreed payment date <span class="req">*</span></label>
+        <input type="date" id="f-paydate"></div>
+    </div>
+    <label class="sf-check"><input type="checkbox" id="p-agreed">
+      <span>The client agreed to this payment arrangement.</span></label>
+    <div id="f-paywarn"></div>
+  </section>
+
+  <!-- ---------- READ-BACK ---------- -->
+  <section class="sf-card hidden" data-sec="readback">
+    <h2>Read this back</h2>
+    <p class="lede">Word for word. Then tick.</p>
+
+    <div class="sf-guide">
+      <div class="gh">Why this exists</div>
+      <ul>
+        <li>Most disputes about what was agreed come from what was assumed. Reading it
+          back takes forty seconds and settles it.</li>
+        <li>If they correct something, change it here before you tick — do not tick and
+          fix it afterwards.</li>
+      </ul>
+    </div>
+
+    <div id="f-readback"></div>
+
+    <label class="sf-check" style="margin-top:16px"><input type="checkbox" id="r-confirmed">
+      <span>I read the summary above back to the client and they accepted it.</span></label>
+  </section>
+
+  </main>
+
+  <!-- ================= RIGHT: GATE ================= -->
+  <aside class="sf-side">
+    <div class="sf-gate">
+      <h3>Before payment</h3>
+      <div class="sub" id="g-count">—</div>
+      <div class="sf-prog"><i id="g-bar"></i></div>
+      <ul id="g-list"></ul>
+    </div>
+    <div class="sf-gate">
+      <h3>This enquiry</h3>
+      <div class="sub">Saved continuously. Safe to close.</div>
+      <div id="g-meta" style="font-size:12.5px;color:var(--quiet);line-height:1.6"></div>
+    </div>
+  </aside>
+
+</div>
+</div>
+
+<div class="sf-act">
+  <div class="msg" id="act-msg">Take the contact details to begin.</div>
+  <button class="btn ghost" onclick="saveNow(true)">Save draft</button>
+  <button class="btn primary" id="act-pay" disabled onclick="toPayment()">Continue to payment</button>
+</div>
+
+<script>
+/* =====================================================================
+   CONFIG
+   ===================================================================== */
+const CONFIG=(function(){
+  const q=new URLSearchParams(location.search);
+  return {
+    JOURNEY:'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey',
+    SESSION:q.get('s')||'',
+    STAFF:q.get('u')||localStorage.getItem('tmh_staff')||'',
+    PRICE:99,            /* per mark, no discount (Jonathan, 7 Sep) */
+    VAT:0.20,
+    LEAD_DAYS:3          /* clear working days: payment -> audit delivered */
+  };
+})();
+if(CONFIG.STAFF) try{localStorage.setItem('tmh_staff',CONFIG.STAFF);}catch(e){}
+const jb=()=>CONFIG.JOURNEY.replace(/\/$/,'');
+
+const SECTIONS=[
+  ['contact',   'Contact'],
+  ['discovery', 'Discovery'],
+  ['marks',     'Marks & scope'],
+  ['advice',    'Advice given'],
+  ['recommend', 'Recommendation'],
+  ['consult',   'Consultation'],
+  ['billing',   'Billing'],
+  ['readback',  'Read-back']
+];
+
+/* =====================================================================
+   STATE
+   ===================================================================== */
+const state={
+  sessionId:CONFIG.SESSION||'',
+  ref:'',
+  staff:CONFIG.STAFF||'',
+  section:'contact',
+  contact:{first:'',last:'',email:'',phone:'',position:'',org:'',clientType:''},
+  discovery:{desc:'',reason:'',trading:'',knowledge:'',terrNow:'',terrPlan:'',deadline:'',risk:''},
+  marks:[{text:'',kind:'word'}],
+  classes:'',
+  scope:{},
+  advice:{risks:false,fees:false,noguarantee:false,questions:false,note:''},
+  recommend:{scope:'',rationale:'',handling:'normal',auditDate:'',expReason:''},
+  consult:{date:'',time:'',adviser:'',method:'phone',agreed:false},
+  billing:{entity:'',email:'',addr:'',payWhen:'',payDate:'',agreed:false},
+  readback:{confirmed:false,at:''}
+};
+
+/* =====================================================================
+   DATE HELPERS  (copied from audit-checkout.html — same rules apply)
+   ===================================================================== */
+function isWorkingDay(d){const g=d.getDay();return g>=1&&g<=5;}
+function addWorkingDays(date,n){
+  const d=new Date(date.getTime());let step=n<0?-1:1,left=Math.abs(n);
+  while(left>0){d.setDate(d.getDate()+step);if(isWorkingDay(d))left--;}
+  return d;
+}
+/* Local-date ISO, NOT toISOString() — that converts to UTC and moves every
+   date back a day during British Summer Time. */
+function iso(d){const p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function fromIso(s){const[y,m,dd]=String(s).split('-').map(Number);return new Date(y,m-1,dd);}
+function pretty(s){if(!s)return '';
+  try{return fromIso(s).toLocaleDateString('en-GB',
+    {weekday:'long',day:'numeric',month:'long',year:'numeric'});}catch(e){return s;}}
+function todayIso(){return iso(new Date());}
+
+/* =====================================================================
+   THE GATE
+   Every rule returns {ok, why}. One list drives the right rail, the
+   action bar and what may be submitted — so they can never disagree.
+   ===================================================================== */
+function nonEmpty(s){return String(s||'').trim().length>0;}
+function meaningful(s){return String(s||'').trim().length>=20;}
+
+function gateRules(){
+  const c=state.contact,d=state.discovery,r=state.recommend,
+        cn=state.consult,b=state.billing,a=state.advice;
+  const marks=state.marks.filter(m=>nonEmpty(m.text));
+  const rules=[
+    {id:'G-00',sec:'contact',label:'Contact details taken',
+     ok:nonEmpty(c.first)&&nonEmpty(c.last)&&validEmail(c.email)&&nonEmpty(c.phone)&&nonEmpty(c.position),
+     why:'First name, last name, email, phone and position are all needed before anything else.'},
+    {id:'G-01',sec:'discovery',label:'Business and reason understood',
+     ok:meaningful(d.desc)&&meaningful(d.reason),
+     why:'Write a real sentence for what the business does and why they are calling.'},
+    {id:'G-02',sec:'marks',label:'At least one mark',
+     ok:marks.length>0,
+     why:'Add the mark text for at least one audit.'},
+    {id:'G-03',sec:'marks',label:'Classes agreed',
+     ok:parseClasses(state.classes).length>0,
+     why:'Enter the Nice classes the audit will cover.'},
+    {id:'G-04',sec:'advice',label:'Advice confirmed',
+     ok:a.risks&&a.fees&&a.noguarantee&&a.questions,
+     why:'All four advice statements must be ticked, and only once you have said them.'},
+    {id:'G-05',sec:'recommend',label:'Scope and rationale recorded',
+     ok:meaningful(r.scope)&&meaningful(r.rationale),
+     why:'The audit scope and why you recommended it both need writing down.'},
+    {id:'G-06',sec:'recommend',label:'Expedite approved',
+     ok:r.handling!=='expedited'||nonEmpty(r.expReason),
+     why:'An expedited audit needs a genuine reason for the manager review.'},
+    {id:'G-07',sec:'consult',label:'Consultation booked and agreed',
+     ok:nonEmpty(cn.date)&&nonEmpty(cn.time)&&nonEmpty(cn.adviser)&&cn.agreed&&futureAppt(),
+     why:'A future date, a time, an adviser, and the client agreeing to it.'},
+    {id:'G-08',sec:'recommend',label:'Audit lands before the consultation',
+     ok:deliveryBeforeConsult(),
+     why:'The audit delivery date must fall before the appointment.'},
+    {id:'G-09',sec:'billing',label:'Payment agreed',
+     ok:(b.payWhen==='now'||(b.payWhen==='date'&&nonEmpty(b.payDate)&&payDateWorks()))&&b.agreed,
+     why:'Either they are paying now, or there is an exact date that still allows delivery.'},
+    {id:'G-10',sec:'billing',label:'Billing details complete',
+     ok:nonEmpty(b.entity)&&validEmail(b.email)&&nonEmpty(b.addr),
+     why:'We cannot raise anything without an entity, an invoice email and an address.'},
+    {id:'G-11',sec:'readback',label:'Read back and accepted',
+     ok:state.readback.confirmed,
+     why:'Read the summary back, then tick.'}
+  ];
+  return rules;
+}
+function validEmail(e){return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e||'').trim());}
+function parseClasses(s){
+  return String(s||'').split(/[^0-9]+/).map(x=>parseInt(x,10))
+    .filter(n=>n>=1&&n<=45).filter((v,i,a)=>a.indexOf(v)===i);
+}
+function futureAppt(){
+  const cn=state.consult; if(!cn.date) return false;
+  try{
+    const when=new Date(cn.date+'T'+(cn.time||'00:00'));
+    return when.getTime()>Date.now();
+  }catch(e){return false;}
+}
+function deliveryBeforeConsult(){
+  const a=state.recommend.auditDate,c=state.consult.date;
+  if(!a||!c) return false;
+  return fromIso(a).getTime()<fromIso(c).getTime();
+}
+/* The audit needs CONFIG.LEAD_DAYS clear working days after payment lands. */
+function payDateWorks(){
+  const p=state.billing.payDate,a=state.recommend.auditDate;
+  if(!p||!a) return false;
+  return iso(addWorkingDays(fromIso(p),CONFIG.LEAD_DAYS))<=a;
+}
+function gatePasses(){return gateRules().every(r=>r.ok);}
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+function contactDone(){return gateRules()[0].ok;}
+
+function renderNav(){
+  const locked=!contactDone();
+  document.getElementById('sf-nav').innerHTML=SECTIONS.map(([id,label])=>{
+    const rules=gateRules().filter(r=>r.sec===id);
+    const done=rules.length&&rules.every(r=>r.ok);
+    const part=rules.some(r=>r.ok)&&!done;
+    const dis=locked&&id!=='contact';
+    return `<button class="${state.section===id?'on':''} ${done?'done':(part?'part':'')}"
+      ${dis?'disabled':''} onclick="showSection('${id}')">
+      <span class="dot"></span>${label}${dis?'<span class="lk">🔒</span>':''}</button>`;
+  }).join('');
+}
+function showSection(id){
+  if(id!=='contact'&&!contactDone()) return;
+  state.section=id;
+  document.querySelectorAll('[data-sec]').forEach(el=>el.classList.add('hidden'));
+  const el=document.querySelector('[data-sec="'+id+'"]');
+  if(el) el.classList.remove('hidden');
+  if(id==='readback') renderReadback();
+  renderNav();
+  try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}
+}
+function renderGate(){
+  const rules=gateRules(),done=rules.filter(r=>r.ok).length;
+  document.getElementById('g-count').textContent=done+' of '+rules.length+' complete';
+  document.getElementById('g-bar').style.width=Math.round(done/rules.length*100)+'%';
+  document.getElementById('g-list').innerHTML=rules.map(r=>
+    `<li class="${r.ok?'ok':'no'}" onclick="showSection('${r.sec}')" title="${esc(r.why)}">
+       <span class="ic"></span><span class="lbl">${esc(r.label)}</span></li>`).join('');
+
+  const pay=document.getElementById('act-pay'),msg=document.getElementById('act-msg');
+  const outstanding=rules.filter(r=>!r.ok);
+  if(!contactDone()){
+    msg.innerHTML='Take the contact details to begin.';
+  }else if(outstanding.length===0){
+    msg.innerHTML='<b>Ready.</b> '+markCount()+' × £'+CONFIG.PRICE+
+      ' = £'+total().toFixed(2)+' inc VAT.';
+  }else{
+    msg.innerHTML='<b>'+outstanding.length+' outstanding.</b> Next: '+esc(outstanding[0].why);
+  }
+  pay.disabled=outstanding.length>0;
+
+  document.getElementById('g-meta').innerHTML=[
+    state.ref?('Reference <b>'+esc(state.ref)+'</b>'):'',
+    state.staff?('Owner '+esc(state.staff)):'',
+    markCount()+' mark'+(markCount()===1?'':'s')+' · '+parseClasses(state.classes).length+' class'
+      +(parseClasses(state.classes).length===1?'':'es')
+  ].filter(Boolean).join('<br>');
+
+  const who=[state.contact.first,state.contact.last].filter(Boolean).join(' ');
+  document.getElementById('sf-who').textContent=
+    who?(who+(state.contact.org?(' — '+state.contact.org):'')):'New enquiry';
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,
+  c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* ---------- marks ---------- */
+const KINDS=[['word','Word / name'],['logo','Logo'],['tagline','Tagline'],
+             ['product','Product or service name'],['other','Other']];
+function renderMarks(){
+  document.getElementById('f-marks').innerHTML=state.marks.map((m,i)=>`
+    <div class="sf-mark">
+      <div class="mh"><span class="mn">Audit ${i+1}</span>
+        ${state.marks.length>1?`<button class="rm" onclick="removeMark(${i})">Remove</button>`:''}</div>
+      <input type="text" value="${esc(m.text)}" placeholder="Exact mark text as it is used"
+        oninput="state.marks[${i}].text=this.value;markChanged()">
+      <div class="kinds">${KINDS.map(([k,l])=>`
+        <label><input type="radio" name="kind${i}" value="${k}" ${m.kind===k?'checked':''}
+          onchange="state.marks[${i}].kind='${k}';touch()">${l}</label>`).join('')}</div>
+    </div>`).join('');
+  renderPrice();
+}
+function addMark(){state.marks.push({text:'',kind:'word'});renderMarks();touch();}
+function removeMark(i){state.marks.splice(i,1);if(!state.marks.length)state.marks=[{text:'',kind:'word'}];
+  renderMarks();touch();}
+function markChanged(){renderPrice();touch();}
+function markCount(){return Math.max(1,state.marks.filter(m=>nonEmpty(m.text)).length);}
+function net(){return markCount()*CONFIG.PRICE;}
+function total(){return net()*(1+CONFIG.VAT);}
+function renderPrice(){
+  const n=markCount();
+  document.getElementById('f-pricebox').innerHTML=`
+    <div class="tr"><span>Brand Audit × ${n}</span><span>£${net().toFixed(2)}</span></div>
+    <div class="tr"><span>VAT at 20%</span><span>£${(total()-net()).toFixed(2)}</span></div>
+    <div class="tr grand"><span>Total</span><span>£${total().toFixed(2)}</span></div>`;
+}
+
+/* ---------- shared class scope ---------- */
+function renderScope(){
+  const cls=parseClasses(state.classes);
+  document.getElementById('f-scope').innerHTML=cls.length?cls.map(c=>`
+    <div class="sf-cls"><div class="ch">Class <span class="n">${c}</span></div>
+      <textarea placeholder="Goods and services for class ${c} — applies to every mark above"
+        oninput="state.scope[${c}]=this.value;touch()">${esc(state.scope[c]||'')}</textarea></div>`
+    ).join(''):'<div class="sf-hint">Enter classes above and the terms boxes appear here.</div>';
+}
+
+/* ---------- read-back ---------- */
+function renderReadback(){
+  const c=state.contact,r=state.recommend,cn=state.consult,b=state.billing;
+  const marks=state.marks.filter(m=>nonEmpty(m.text)).map(m=>m.text);
+  const row=(k,v)=>`<div class="sf-readrow"><span class="k">${esc(k)}</span>
+    <span class="v ${v?'':'miss'}">${esc(v||'not recorded')}</span></div>`;
+  document.getElementById('f-readback').innerHTML=
+    row('Client',[c.first,c.last].filter(Boolean).join(' ')+(c.org?(', '+c.org):''))+
+    row('Marks being audited',marks.join(', '))+
+    row('Classes',parseClasses(state.classes).join(', '))+
+    row('Scope',r.scope)+
+    row('Audit delivered by',pretty(r.auditDate))+
+    row('Consultation',cn.date?(pretty(cn.date)+' at '+(cn.time||'—')+' with '+(cn.adviser||'—')):'')+
+    row('Invoice to',b.entity?(b.entity+' · '+b.email):'')+
+    row('Payment',b.payWhen==='now'?'Paying now':(b.payDate?('Agreed for '+pretty(b.payDate)):''))+
+    row('Total',markCount()+' × £'+CONFIG.PRICE+' = £'+total().toFixed(2)+' inc VAT');
+}
+
+/* ---------- date warnings ---------- */
+function renderWarnings(){
+  const w=document.getElementById('f-datewarn');
+  const msgs=[];
+  if(state.consult.date&&!futureAppt()) msgs.push('That appointment is not in the future.');
+  if(state.recommend.auditDate&&state.consult.date&&!deliveryBeforeConsult())
+    msgs.push('The audit must be delivered before the consultation. Move one of the two dates.');
+  w.innerHTML=msgs.length?'<div class="sf-guide sf-never" style="margin:14px 0 0"><div class="gh">Check</div><ul>'
+    +msgs.map(m=>'<li>'+esc(m)+'</li>').join('')+'</ul></div>':'';
+
+  const p=document.getElementById('f-paywarn');
+  const pm=[];
+  if(state.billing.payWhen==='date'&&state.billing.payDate&&state.recommend.auditDate&&!payDateWorks())
+    pm.push('Paying on that date leaves less than '+CONFIG.LEAD_DAYS+
+      ' working days to deliver the audit by '+pretty(state.recommend.auditDate)+'.');
+  p.innerHTML=pm.length?'<div class="sf-guide sf-never" style="margin:14px 0 0"><div class="gh">Check</div><ul>'
+    +pm.map(m=>'<li>'+esc(m)+'</li>').join('')+'</ul></div>':'';
+}
+
+function renderAll(){renderNav();renderGate();renderWarnings();}
+
+/* =====================================================================
+   AUTOSAVE
+   Everything is written to the journey session as it is typed. Two
+   places, deliberately:
+     * journey_events  — the durable append-only record. Always written.
+     * journey_sessions.last_result.staff_enquiry — the resumable state,
+       merged so a session that arrived from a search keeps its results.
+   ===================================================================== */
+let saveTimer=null,saving=false,dirty=false;
+function setSaveState(t,cls){
+  const el=document.getElementById('sf-savestate');
+  el.textContent=t;el.className='sf-save'+(cls?' '+cls:'');
+}
+function touch(){
+  dirty=true;setSaveState('Saving…');
+  renderAll();
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>saveNow(false),900);
+}
+async function ensureSession(){
+  if(state.sessionId) return state.sessionId;
+  try{
+    const r=await fetch(jb()+'/session/start',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({tenant_id:'tmh',source:'brand_audit_direct',
+        name:(state.marks[0]&&state.marks[0].text)||null,screen:'staff_enquiry'})});
+    const d=await r.json();
+    if(d&&d.ok&&d.session_id){state.sessionId=d.session_id;setRef();}
+  }catch(e){}
+  return state.sessionId;
+}
+function setRef(){
+  if(!state.sessionId) return;
+  state.ref='TMH-'+state.sessionId.slice(0,4).toUpperCase()+state.sessionId.slice(-4).toUpperCase();
+  document.getElementById('sf-ref').textContent=state.ref;
+  /* Keep the session on the URL so a refresh, or a colleague opening the
+     same link, resumes the same enquiry rather than starting a new one. */
+  try{
+    const u=new URL(location.href);
+    if(u.searchParams.get('s')!==state.sessionId){
+      u.searchParams.set('s',state.sessionId);
+      history.replaceState({},'',u.toString());
+    }
+  }catch(e){}
+}
+async function saveNow(explicit){
+  if(saving) return;
+  saving=true;
+  if(explicit) setSaveState('Saving…');
+  try{
+    const id=await ensureSession();
+    if(!id){setSaveState('Not saved','bad');saving=false;return;}
+
+    /* Read the session first so the merge cannot clobber a search result
+       already stored on it (a staff form opened from a Quick Search). */
+    let lr={};
+    try{
+      const g=await fetch(jb()+'/session?id='+encodeURIComponent(id));
+      const gd=await g.json();
+      if(gd&&gd.ok&&gd.session&&gd.session.last_result&&typeof gd.session.last_result==='object')
+        lr=gd.session.last_result;
+    }catch(e){}
+    lr.staff_enquiry=Object.assign({},state,{savedAt:new Date().toISOString()});
+
+    const c=state.contact;
+    const snapshot={
+      first_name:c.first||undefined, last_name:c.last||undefined,
+      email:c.email||undefined, phone:c.phone||undefined,
+      business_name:c.org||undefined,
+      name:(state.marks[0]&&state.marks[0].text)||undefined,
+      classes:parseClasses(state.classes),
+      class_source:'staff',
+      email_source:'staff_enquiry',
+      current_screen:'staff_'+state.section,
+      last_result:lr
+    };
+    Object.keys(snapshot).forEach(k=>snapshot[k]===undefined&&delete snapshot[k]);
+
+    const r=await fetch(jb()+'/session/event',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:id,event_type:'staff_enquiry_saved',
+        screen:'staff_'+state.section,
+        payload:{staff:state.staff||null,section:state.section,
+                 marks:markCount(),gate_pass:gatePasses()},
+        snapshot:snapshot})});
+    const d=await r.json();
+    if(d&&d.ok){dirty=false;
+      setSaveState('Saved '+new Date().toLocaleTimeString('en-GB',
+        {hour:'2-digit',minute:'2-digit'}),'ok');}
+    else setSaveState('Not saved','bad');
+  }catch(e){setSaveState('Not saved','bad');}
+  saving=false;
+  if(dirty){clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveNow(false),1200);}
+}
+window.addEventListener('beforeunload',e=>{
+  if(dirty){e.preventDefault();e.returnValue='';}
+});
+
+/* =====================================================================
+   LOAD / RESUME
+   ===================================================================== */
+async function load(){
+  if(!state.sessionId){finishLoad();return;}
+  setRef();
+  try{
+    const r=await fetch(jb()+'/session?id='+encodeURIComponent(state.sessionId));
+    const d=await r.json();
+    if(d&&d.ok&&d.session){
+      const s=d.session,lr=s.last_result||{};
+      if(lr.staff_enquiry){
+        /* Resuming a staff enquiry. */
+        const sv=lr.staff_enquiry;
+        Object.keys(state).forEach(k=>{
+          if(k==='sessionId'||k==='ref'||k==='section') return;
+          if(sv[k]!==undefined) state[k]=sv[k];
+        });
+        if(!Array.isArray(state.marks)||!state.marks.length) state.marks=[{text:'',kind:'word'}];
+      }else{
+        /* Arrived from a Free or Quick Search — carry across what we know
+           so the sales person is not retyping the client's own words. */
+        if(s.first_name) state.contact.first=s.first_name;
+        if(s.last_name) state.contact.last=s.last_name;
+        if(s.email) state.contact.email=s.email;
+        if(s.phone) state.contact.phone=s.phone;
+        if(s.business_name) state.contact.org=s.business_name;
+        if(s.name) state.marks=[{text:s.name,kind:'word'}];
+        if(s.tagline) state.marks.push({text:s.tagline,kind:'tagline'});
+        if(Array.isArray(s.classes)&&s.classes.length) state.classes=s.classes.join(', ');
+        if(s.business_website) state.discovery.desc=
+          (state.discovery.desc?state.discovery.desc+' ':'')+'Website: '+s.business_website;
+      }
+    }
+  }catch(e){}
+  finishLoad();
+}
+function finishLoad(){
+  const set=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=v;};
+  const chk=(id,v)=>{const el=document.getElementById(id);if(el)el.checked=!!v;};
+  const c=state.contact,d=state.discovery,r=state.recommend,cn=state.consult,
+        b=state.billing,a=state.advice;
+  set('f-first',c.first);set('f-last',c.last);set('f-email',c.email);set('f-phone',c.phone);
+  set('f-position',c.position);set('f-org',c.org);set('f-clienttype',c.clientType);
+  set('f-desc',d.desc);set('f-reason',d.reason);set('f-trading',d.trading);
+  set('f-knowledge',d.knowledge);set('f-terrnow',d.terrNow);set('f-terrplan',d.terrPlan);
+  set('f-deadline',d.deadline);set('f-risk',d.risk);
+  set('f-classes',state.classes);
+  chk('a-risks',a.risks);chk('a-fees',a.fees);chk('a-noguarantee',a.noguarantee);
+  chk('a-questions',a.questions);set('f-advicenote',a.note);
+  set('f-scopetext',r.scope);set('f-rationale',r.rationale);set('f-handling',r.handling);
+  set('f-auditdate',r.auditDate);set('f-expreason',r.expReason);
+  set('f-consultdate',cn.date);set('f-consulttime',cn.time);set('f-adviser',cn.adviser);
+  set('f-consultmethod',cn.method);chk('c-agreed',cn.agreed);
+  set('f-billentity',b.entity);set('f-billemail',b.email);set('f-billaddr',b.addr);
+  set('f-paywhen',b.payWhen);set('f-paydate',b.payDate);chk('p-agreed',b.agreed);
+  chk('r-confirmed',state.readback.confirmed);
+
+  document.getElementById('f-expwrap').classList.toggle('hidden',r.handling!=='expedited');
+  document.getElementById('f-paydatewrap').classList.toggle('hidden',b.payWhen!=='date');
+  if(!r.auditDate){
+    /* Sensible default: the earliest date we could actually deliver. */
+    r.auditDate=iso(addWorkingDays(new Date(),CONFIG.LEAD_DAYS));
+    set('f-auditdate',r.auditDate);
+  }
+  renderMarks();renderScope();renderAll();
+  showSection(contactDone()?'discovery':'contact');
+  if(state.sessionId) setSaveState('Loaded','ok');
+}
+
+/* =====================================================================
+   BINDINGS
+   ===================================================================== */
+function bind(id,fn){
+  const el=document.getElementById(id);if(!el)return;
+  const ev=(el.type==='checkbox'||el.tagName==='SELECT')?'change':'input';
+  el.addEventListener(ev,()=>{fn(el.type==='checkbox'?el.checked:el.value);touch();});
+}
+function bindAll(){
+  bind('f-first',v=>state.contact.first=v);
+  bind('f-last',v=>state.contact.last=v);
+  bind('f-email',v=>state.contact.email=v);
+  bind('f-phone',v=>state.contact.phone=v);
+  bind('f-position',v=>state.contact.position=v);
+  bind('f-org',v=>state.contact.org=v);
+  bind('f-clienttype',v=>state.contact.clientType=v);
+
+  bind('f-desc',v=>state.discovery.desc=v);
+  bind('f-reason',v=>state.discovery.reason=v);
+  bind('f-trading',v=>state.discovery.trading=v);
+  bind('f-knowledge',v=>state.discovery.knowledge=v);
+  bind('f-terrnow',v=>state.discovery.terrNow=v);
+  bind('f-terrplan',v=>state.discovery.terrPlan=v);
+  bind('f-deadline',v=>state.discovery.deadline=v);
+  bind('f-risk',v=>state.discovery.risk=v);
+
+  const cl=document.getElementById('f-classes');
+  cl.addEventListener('input',()=>{state.classes=cl.value;renderScope();touch();});
+
+  bind('a-risks',v=>state.advice.risks=v);
+  bind('a-fees',v=>state.advice.fees=v);
+  bind('a-noguarantee',v=>state.advice.noguarantee=v);
+  bind('a-questions',v=>state.advice.questions=v);
+  bind('f-advicenote',v=>state.advice.note=v);
+
+  bind('f-scopetext',v=>state.recommend.scope=v);
+  bind('f-rationale',v=>state.recommend.rationale=v);
+  bind('f-auditdate',v=>state.recommend.auditDate=v);
+  bind('f-expreason',v=>state.recommend.expReason=v);
+  const hd=document.getElementById('f-handling');
+  hd.addEventListener('change',()=>{state.recommend.handling=hd.value;
+    document.getElementById('f-expwrap').classList.toggle('hidden',hd.value!=='expedited');touch();});
+
+  bind('f-consultdate',v=>state.consult.date=v);
+  bind('f-consulttime',v=>state.consult.time=v);
+  bind('f-adviser',v=>state.consult.adviser=v);
+  bind('f-consultmethod',v=>state.consult.method=v);
+  bind('c-agreed',v=>state.consult.agreed=v);
+
+  bind('f-billentity',v=>state.billing.entity=v);
+  bind('f-billemail',v=>state.billing.email=v);
+  bind('f-billaddr',v=>state.billing.addr=v);
+  bind('f-paydate',v=>state.billing.payDate=v);
+  bind('p-agreed',v=>state.billing.agreed=v);
+  const pw=document.getElementById('f-paywhen');
+  pw.addEventListener('change',()=>{state.billing.payWhen=pw.value;
+    document.getElementById('f-paydatewrap').classList.toggle('hidden',pw.value!=='date');touch();});
+
+  const rc=document.getElementById('r-confirmed');
+  rc.addEventListener('change',()=>{
+    state.readback.confirmed=rc.checked;
+    state.readback.at=rc.checked?new Date().toISOString():'';
+    touch();
+  });
+
+  /* Checkbox rows highlight when ticked. */
+  document.querySelectorAll('.sf-check input').forEach(i=>{
+    const sync=()=>i.closest('.sf-check').classList.toggle('on',i.checked);
+    i.addEventListener('change',sync);sync();
+  });
+}
+
+/* =====================================================================
+   ACTIONS
+   ===================================================================== */
+/* Start a fresh enquiry, keeping the staff token and owner on the URL so the
+   sales person is not asked for either again. */
+async function newEnquiry(){
+  if(dirty) await saveNow(true);
+  try{
+    const u=new URL(location.href);
+    u.searchParams.delete('s');
+    location.href=u.toString();
+  }catch(e){location.href='/staff-enquiry';}
+}
+function openTools(){
+  const u='/class-assistant'+(state.classes?('?classes='+encodeURIComponent(state.classes)):'');
+  window.open(u,'_blank','noopener');
+}
+async function toPayment(){
+  if(!gatePasses()){renderGate();return;}
+  await saveNow(true);
+  const id=state.sessionId;
+  if(!id) return;
+  /* The gate is re-checked server-side before anything is charged; this
+     button only carries the enquiry across. */
+  location.href='/audit?s='+encodeURIComponent(id)+'&staff=1';
+}
+
+/* =====================================================================
+   GO
+   ===================================================================== */
+bindAll();
+load();
+</script>
+</body>
+</html>
