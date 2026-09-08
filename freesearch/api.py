@@ -107,6 +107,9 @@ _PAGES = {
     # guided call workspace, ad-hoc completion, multiple marks on one order,
     # and a payment gate. Token-gated below — see _STAFF_PATHS.
     '/staff-enquiry': 'staff-enquiry.html',
+    # Stripe Checkout lands here after payment — a branded "what happens
+    # next" page (Jonathan, 8 Sep), never the bare WordPress homepage.
+    '/audit-thanks': 'audit-thanks.html',
 }
 
 # Pages that require the staff token. Everything else on this host is public
@@ -594,7 +597,13 @@ def _audit_pay(payload: dict) -> dict:
             + (' — VAT not applicable (outside UK)' if vat_exempt
                else ' — includes VAT @ 20%')
             + (f' — {qty} marks' if qty > 1 else ''))
-    back = 'https://www.thetrademarkhelpline.com/?audit_paid='
+    # Land on OUR thank-you page, personalised from the session — never the
+    # bare WP homepage (Jonathan, 8 Sep: "there should be a what happens
+    # next"). Cancel returns to the same page in its "nothing was taken"
+    # state, keeping the session on the URL so the order isn't lost.
+    import urllib.parse as _up
+    back = ('https://braudit-free-search.onrender.com/audit-thanks?s='
+            + _up.quote(session_id) + '&paid=')
     form = {
         'mode': 'payment',
         'client_reference_id': ref or session_id or 'AUD',
