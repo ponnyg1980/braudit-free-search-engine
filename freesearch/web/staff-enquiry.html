@@ -402,7 +402,10 @@
     <div class="sf-guide">
       <div class="gh">Booking it properly</div>
       <ul>
-        <li>Book it on the call. An audit with no appointment is a PDF nobody reads.</li>
+        <li>Book it on the call. This is an expected step, not an optional one — an audit
+          with no appointment is a PDF nobody reads.</li>
+        <li>It is a £149 consultation they are getting free. Sell it as that, because
+          it is that.</li>
         <li>The audit must be delivered before the appointment — the date rule below
           enforces it, but say it out loud too.</li>
         <li><span class="say">"I'll get the audit to you by the {{date}}, and we'll go
@@ -410,6 +413,7 @@
       </ul>
     </div>
 
+    <div id="f-consultfields">
     <div class="sf-row">
       <div><label class="fld">Date <span class="req">*</span></label>
         <input type="date" id="f-consultdate"></div>
@@ -428,7 +432,26 @@
     </div>
     <label class="sf-check"><input type="checkbox" id="c-agreed">
       <span>The client agreed to this appointment on the call.</span></label>
+    </div>
     <div id="f-datewarn"></div>
+
+    <label class="sf-check" style="margin-top:18px"><input type="checkbox" id="c-declined">
+      <span>The client would <b>not</b> commit to an appointment on this call.</span></label>
+    <div id="f-declinewrap" class="hidden">
+      <div class="sf-guide sf-never" style="margin-top:4px">
+        <div class="gh">This is the exception, not a shortcut</div>
+        <ul>
+          <li>Booking the appointment is the expected step in every order. Skipping it
+            needs a very specific reason — the client's, not yours.</li>
+          <li>"They were busy" is not a reason. "Director is abroad until the 20th and
+            will only book on their return" is.</li>
+          <li>This reason is reviewed by a manager and is recorded on the Deal.</li>
+        </ul>
+      </div>
+      <label class="fld">Why would the client not commit? <span class="req">*</span></label>
+      <textarea id="f-declinereason"
+        placeholder="The specific reason, in enough detail for a manager to accept it."></textarea>
+    </div>
   </section>
 
   <!-- ---------- BILLING ---------- -->
@@ -453,6 +476,15 @@
     <input type="email" id="f-billemail">
     <label class="fld">Billing address <span class="req">*</span></label>
     <textarea id="f-billaddr"></textarea>
+
+    <label class="fld">Where is the client based? <span class="req">*</span></label>
+    <select id="f-vatloc">
+      <option value="">Confirm with the client…</option>
+      <option value="uk">United Kingdom — VAT at 20% applies</option>
+      <option value="nonuk">Outside the UK — no VAT</option>
+    </select>
+    <div class="sf-hint">Ask, don't assume — the address above may be a UK agent for an
+      overseas client. VAT is charged unless the client is outside the UK.</div>
 
     <div class="sf-row">
       <div><label class="fld">Payment <span class="req">*</span></label>
@@ -488,6 +520,8 @@
 
     <label class="sf-check" style="margin-top:16px"><input type="checkbox" id="r-confirmed">
       <span>I read the summary above back to the client and they accepted it.</span></label>
+
+    <div id="f-payresult"></div>
   </section>
 
   </main>
@@ -560,8 +594,9 @@ const state={
   scope:{},
   advice:{risks:false,fees:false,noguarantee:false,questions:false,note:''},
   recommend:{scope:'',rationale:'',handling:'normal',auditDate:'',expReason:''},
-  consult:{date:'',time:'',adviser:'',method:'phone',agreed:false},
-  billing:{entity:'',email:'',addr:'',payWhen:'',payDate:'',agreed:false},
+  consult:{date:'',time:'',adviser:'',method:'phone',agreed:false,
+           declined:false,declineReason:''},
+  billing:{entity:'',email:'',addr:'',location:'',payWhen:'',payDate:'',agreed:false},
   readback:{confirmed:false,at:''}
 };
 
@@ -618,18 +653,29 @@ function gateRules(){
     {id:'G-06',sec:'recommend',label:'Expedite approved',
      ok:r.handling!=='expedited'||nonEmpty(r.expReason),
      why:'An expedited audit needs a genuine reason for the manager review.'},
-    {id:'G-07',sec:'consult',label:'Consultation booked and agreed',
-     ok:nonEmpty(cn.date)&&nonEmpty(cn.time)&&nonEmpty(cn.adviser)&&cn.agreed&&futureAppt(),
-     why:'A future date, a time, an adviser, and the client agreeing to it.'},
-    {id:'G-08',sec:'recommend',label:'Audit lands before the consultation',
-     ok:deliveryBeforeConsult(),
-     why:'The audit delivery date must fall before the appointment.'},
+    {id:'G-07',sec:'consult',
+     label:cn.declined?'Appointment declined — reason given':'Consultation booked and agreed',
+     ok:cn.declined
+        ?meaningful(cn.declineReason)
+        :(nonEmpty(cn.date)&&nonEmpty(cn.time)&&nonEmpty(cn.adviser)&&cn.agreed&&futureAppt()),
+     why:cn.declined
+        ?'Skipping the appointment needs a specific, reviewable reason — a sentence, not a word.'
+        :'A future date, a time, an adviser, and the client agreeing to it.'},
+    {id:'G-08',sec:'recommend',
+     label:cn.declined?'Audit delivery date set':'Audit lands before the consultation',
+     ok:cn.declined?nonEmpty(state.recommend.auditDate):deliveryBeforeConsult(),
+     why:cn.declined
+        ?'With no appointment, the delivery date is the promise — it must be set.'
+        :'The audit delivery date must fall before the appointment.'},
     {id:'G-09',sec:'billing',label:'Payment agreed',
      ok:(b.payWhen==='now'||(b.payWhen==='date'&&nonEmpty(b.payDate)&&payDateWorks()))&&b.agreed,
      why:'Either they are paying now, or there is an exact date that still allows delivery.'},
     {id:'G-10',sec:'billing',label:'Billing details complete',
      ok:nonEmpty(b.entity)&&validEmail(b.email)&&nonEmpty(b.addr),
      why:'We cannot raise anything without an entity, an invoice email and an address.'},
+    {id:'G-12',sec:'billing',label:'VAT position confirmed',
+     ok:b.location==='uk'||b.location==='nonuk',
+     why:'Confirm with the client whether they are UK-based — it changes the total.'},
     {id:'G-11',sec:'readback',label:'Read back and accepted',
      ok:state.readback.confirmed,
      why:'Read the summary back, then tick.'}
@@ -701,8 +747,9 @@ function renderGate(){
   if(!contactDone()){
     msg.innerHTML='Take the contact details to begin.';
   }else if(outstanding.length===0){
-    msg.innerHTML='<b>Ready.</b> '+markCount()+' × £'+CONFIG.PRICE+
-      ' = £'+total().toFixed(2)+' inc VAT.';
+    msg.innerHTML='<b>Ready.</b> '+markCount()+' × £'+CONFIG.PRICE+' = £'+total().toFixed(2)+
+      (vatExempt()?' (no VAT — outside the UK).':' inc VAT.');
+    pay.textContent=state.billing.payWhen==='date'?'Request invoice':'Take payment now';
   }else{
     msg.innerHTML='<b>'+outstanding.length+' outstanding.</b> Next: '+esc(outstanding[0].why);
   }
@@ -743,13 +790,16 @@ function removeMark(i){state.marks.splice(i,1);if(!state.marks.length)state.mark
   renderMarks();touch();}
 function markChanged(){renderPrice();touch();}
 function markCount(){return Math.max(1,state.marks.filter(m=>nonEmpty(m.text)).length);}
+function vatExempt(){return state.billing.location==='nonuk';}
 function net(){return markCount()*CONFIG.PRICE;}
-function total(){return net()*(1+CONFIG.VAT);}
+function total(){return vatExempt()?net():net()*(1+CONFIG.VAT);}
 function renderPrice(){
   const n=markCount();
   document.getElementById('f-pricebox').innerHTML=`
     <div class="tr"><span>Brand Audit × ${n}</span><span>£${net().toFixed(2)}</span></div>
-    <div class="tr"><span>VAT at 20%</span><span>£${(total()-net()).toFixed(2)}</span></div>
+    ${vatExempt()
+      ?'<div class="tr"><span>VAT — not applicable (outside the UK)</span><span>£0.00</span></div>'
+      :`<div class="tr"><span>VAT at 20%</span><span>£${(net()*CONFIG.VAT).toFixed(2)}</span></div>`}
     <div class="tr grand"><span>Total</span><span>£${total().toFixed(2)}</span></div>`;
 }
 
@@ -775,10 +825,15 @@ function renderReadback(){
     row('Classes',parseClasses(state.classes).join(', '))+
     row('Scope',r.scope)+
     row('Audit delivered by',pretty(r.auditDate))+
-    row('Consultation',cn.date?(pretty(cn.date)+' at '+(cn.time||'—')+' with '+(cn.adviser||'—')):'')+
+    row('Consultation',cn.declined
+      ?('Declined — '+(cn.declineReason||'no reason recorded'))
+      :(cn.date?(pretty(cn.date)+' at '+(cn.time||'—')+' with '+(cn.adviser||'—')):''))+
     row('Invoice to',b.entity?(b.entity+' · '+b.email):'')+
-    row('Payment',b.payWhen==='now'?'Paying now':(b.payDate?('Agreed for '+pretty(b.payDate)):''))+
-    row('Total',markCount()+' × £'+CONFIG.PRICE+' = £'+total().toFixed(2)+' inc VAT');
+    row('VAT treatment',b.location==='uk'?'UK — VAT at 20%'
+      :(b.location==='nonuk'?'Outside the UK — no VAT':''))+
+    row('Payment',b.payWhen==='now'?'Paying now':(b.payDate?('Invoice — payment agreed for '+pretty(b.payDate)):''))+
+    row('Total',markCount()+' × £'+CONFIG.PRICE+' = £'+total().toFixed(2)+
+      (vatExempt()?' (no VAT)':' inc VAT'));
 }
 
 /* ---------- date warnings ---------- */
@@ -954,7 +1009,11 @@ function finishLoad(){
   set('f-auditdate',r.auditDate);set('f-expreason',r.expReason);
   set('f-consultdate',cn.date);set('f-consulttime',cn.time);set('f-adviser',cn.adviser);
   set('f-consultmethod',cn.method);chk('c-agreed',cn.agreed);
+  chk('c-declined',cn.declined);set('f-declinereason',cn.declineReason);
+  document.getElementById('f-declinewrap').classList.toggle('hidden',!cn.declined);
+  document.getElementById('f-consultfields').classList.toggle('hidden',!!cn.declined);
   set('f-billentity',b.entity);set('f-billemail',b.email);set('f-billaddr',b.addr);
+  set('f-vatloc',b.location);
   set('f-paywhen',b.payWhen);set('f-paydate',b.payDate);chk('p-agreed',b.agreed);
   chk('r-confirmed',state.readback.confirmed);
 
@@ -1018,10 +1077,20 @@ function bindAll(){
   bind('f-adviser',v=>state.consult.adviser=v);
   bind('f-consultmethod',v=>state.consult.method=v);
   bind('c-agreed',v=>state.consult.agreed=v);
+  const dc=document.getElementById('c-declined');
+  dc.addEventListener('change',()=>{
+    state.consult.declined=dc.checked;
+    document.getElementById('f-declinewrap').classList.toggle('hidden',!dc.checked);
+    document.getElementById('f-consultfields').classList.toggle('hidden',dc.checked);
+    touch();
+  });
+  bind('f-declinereason',v=>state.consult.declineReason=v);
 
   bind('f-billentity',v=>state.billing.entity=v);
   bind('f-billemail',v=>state.billing.email=v);
   bind('f-billaddr',v=>state.billing.addr=v);
+  const vl=document.getElementById('f-vatloc');
+  vl.addEventListener('change',()=>{state.billing.location=vl.value;renderPrice();touch();});
   bind('f-paydate',v=>state.billing.payDate=v);
   bind('p-agreed',v=>state.billing.agreed=v);
   const pw=document.getElementById('f-paywhen');
@@ -1059,14 +1128,63 @@ function openTools(){
   const u='/class-assistant'+(state.classes?('?classes='+encodeURIComponent(state.classes)):'');
   window.open(u,'_blank','noopener');
 }
+/* Scenario 1 (pay now): create the Stripe Checkout session and hand the link
+   to the sales person — open it, or copy it to send while the client is still
+   on the phone. Stripe emails the receipt; the Xero invoice follows from the
+   webhook once payment lands.
+   Scenario 2 (invoice): no money moves now. The server records the invoice
+   request with the agreed payment date, for the Xero queue.
+   In BOTH cases the eleven gate rules are re-checked server-side from the
+   stored enquiry — this button carries nothing the server trusts. */
 async function toPayment(){
   if(!gatePasses()){renderGate();return;}
   await saveNow(true);
   const id=state.sessionId;
   if(!id) return;
-  /* The gate is re-checked server-side before anything is charged; this
-     button only carries the enquiry across. */
-  location.href='/audit?s='+encodeURIComponent(id)+'&staff=1';
+  const box=document.getElementById('f-payresult');
+  showSection('readback');
+  box.innerHTML='<div class="sf-hint" style="margin-top:16px">Working…</div>';
+  const btn=document.getElementById('act-pay');btn.disabled=true;
+  try{
+    const r=await fetch('/audit-pay',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({staff:1,session_id:id,ref:state.ref,
+        consult:!state.consult.declined})});
+    const d=await r.json();
+    if(d&&d.ok&&d.url){
+      box.innerHTML=`
+        <div class="sf-guide" style="margin-top:16px">
+          <div class="gh">Payment link ready — £${(d.total_pence/100).toFixed(2)} for ${d.marks} audit${d.marks>1?'s':''}</div>
+          <ul>
+            <li><a class="btn primary" style="margin:6px 0" href="${esc(d.url)}"
+              target="_blank" rel="noopener">Open the payment page</a></li>
+            <li><button class="btn ghost" style="margin:0"
+              onclick="navigator.clipboard.writeText('${esc(d.url)}').then(()=>this.textContent='Copied')">
+              Copy link to send to the client</button></li>
+            <li>The receipt comes from Stripe automatically. The Xero invoice follows
+              once payment lands.</li>
+          </ul>
+        </div>`;
+    }else if(d&&d.ok&&d.invoice){
+      box.innerHTML=`
+        <div class="sf-guide" style="margin-top:16px">
+          <div class="gh">Invoice requested</div>
+          <ul>
+            <li>Recorded for £${(d.total_pence/100).toFixed(2)} — ${d.marks} audit${d.marks>1?'s':''},
+              payment agreed for ${esc(pretty(state.billing.payDate))}.</li>
+            <li>The invoice is raised in Xero from this record. Nothing further to do
+              on this call.</li>
+          </ul>
+        </div>`;
+    }else{
+      const unmet=(d&&d.unmet)?(' Unmet: '+d.unmet.join(', ')):'';
+      box.innerHTML='<div class="sf-guide sf-never" style="margin-top:16px"><div class="gh">Refused</div><ul><li>'
+        +esc((d&&d.error)||'Something went wrong.')+unmet+'</li></ul></div>';
+    }
+  }catch(e){
+    box.innerHTML='<div class="sf-guide sf-never" style="margin-top:16px"><div class="gh">Network problem</div><ul><li>Nothing was charged. Try again.</li></ul></div>';
+  }
+  btn.disabled=!gatePasses();
 }
 
 /* =====================================================================
