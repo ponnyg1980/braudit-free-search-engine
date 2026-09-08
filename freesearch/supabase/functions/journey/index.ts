@@ -760,6 +760,19 @@ serve(async (req) => {
     });
     if (evErr) return json({ ok: false, error: "could not log event" }, 500, origin);
 
+    // A client-side invoice request arrives HERE directly (the engine is not
+    // in that loop), so Xero processing is triggered from the event itself —
+    // a self-call, so idempotency and logging stay in /xero/process. No-op
+    // until XERO_PROCESS_KEY is configured.
+    if (String(body.event_type) === "audit_invoice_requested") {
+      const xk = (Deno.env.get("XERO_PROCESS_KEY") ?? "").trim();
+      if (xk) {
+        fireAndForget(
+          url.origin + url.pathname.replace(/\/session\/event$/, "/xero/process"),
+          { key: xk, session_id, kind: "invoice" });
+      }
+    }
+
     if (body.snapshot && typeof body.snapshot === "object") {
       const patch = pick(body.snapshot as Record<string, unknown>, SESSION_SNAPSHOT_FIELDS);
       if (Object.keys(patch).length) {
@@ -1383,6 +1396,233 @@ serve(async (req) => {
       return json({ ok: false, error: "session_id or request_id required" }, 400, origin);
     }
     return json({ ok: true }, 200, origin);
+  }
+
+  // ======================= XERO =============================================
+  // Both payment scenarios end in Xero (Jonathan, 8 Sep):
+  //   Scenario A — invoice first (current normal): AUTHORISED invoice with
+  //     the agreed due date, emailed from Xero, paid through the invoice's
+  //     own pay-now link, reconciled natively by Xero.
+  //   Scenario B — Stripe first: same invoice, immediately marked PAID
+  //     against the Stripe clearing account; the bank rec then matches
+  //     Stripe payouts to that account.
+  // This module lives HERE rather than in the engine because Xero refresh
+  // tokens ROTATE — each refresh invalidates the last — so they need a
+  // database, and this function has one. Row 1 of xero_tokens is the store.
+  //
+  // Env: XERO_CLIENT_ID / XERO_CLIENT_SECRET / XERO_TENANT_ID (identity),
+  //      XERO_PROCESS_KEY (shared with the engine), XERO_SALES_ACCOUNT
+  //      (revenue code, default 200), XERO_CLEARING_ACCOUNT (the Stripe
+  //      clearing account code — required for scenario B),
+  //      XERO_TAX_UK (default OUTPUT2), XERO_TAX_NONUK (default NONE),
+  //      XERO_BRANDING_THEME (optional), XERO_EMAIL_INVOICES (default true).
+
+  const xeroKeyOk = (body: Record<string, unknown> | null) => {
+    const want = (Deno.env.get("XERO_PROCESS_KEY") ?? "").trim();
+    return want !== "" && String(body?.key ?? "") === want;
+  };
+
+  async function xeroAccessToken(): Promise<string | null> {
+    const cid = (Deno.env.get("XERO_CLIENT_ID") ?? "").trim();
+    const sec = (Deno.env.get("XERO_CLIENT_SECRET") ?? "").trim();
+    if (!cid || !sec) return null;
+    const { data: row } = await admin.from("xero_tokens")
+      .select("*").eq("id", 1).maybeSingle();
+    if (!row?.refresh_token) return null;
+    if (row.access_token && row.expires_at &&
+        Date.parse(row.expires_at) > Date.now() + 60_000) {
+      return row.access_token;
+    }
+    const res = await fetch("https://identity.xero.com/connect/token", {
+      method: "POST",
+      headers: {
+        "Authorization": "Basic " + btoa(`${cid}:${sec}`),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token", refresh_token: row.refresh_token,
+      }),
+    });
+    if (!res.ok) return null;
+    const tok = await res.json();
+    // The old refresh token is now DEAD. Persist the new one before anything
+    // else can fail — losing it means redoing the consent flow.
+    await admin.from("xero_tokens").update({
+      refresh_token: tok.refresh_token ?? row.refresh_token,
+      access_token: tok.access_token,
+      expires_at: new Date(Date.now() + (tok.expires_in ?? 1800) * 1000).toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", 1);
+    return tok.access_token ?? null;
+  }
+
+  async function xeroApi(path: string, method: string, body?: unknown,
+                         idem?: string): Promise<{ ok: boolean; data: unknown }> {
+    const at = await xeroAccessToken();
+    const tenant = (Deno.env.get("XERO_TENANT_ID") ?? "").trim();
+    if (!at || !tenant) return { ok: false, data: "xero not connected" };
+    const headers: Record<string, string> = {
+      "Authorization": "Bearer " + at,
+      "Xero-tenant-id": tenant,
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+    };
+    if (idem) headers["Idempotency-Key"] = idem;
+    const res = await fetch("https://api.xero.com/api.xro/2.0" + path, {
+      method, headers, body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    let data: unknown = null;
+    try { data = await res.json(); } catch (_e) { /* empty body */ }
+    return { ok: res.ok, data };
+  }
+
+  // POST /xero/connect — one-time store of the refresh token minted by the
+  // engine's /xero-callback OAuth landing. Guarded by the shared key.
+  if (req.method === "POST" && path === "/xero/connect") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    const rt = String(body?.refresh_token ?? "").trim();
+    if (!rt) return json({ ok: false, error: "refresh_token required" }, 400, origin);
+    await admin.from("xero_tokens").upsert({
+      id: 1, refresh_token: rt, access_token: null, expires_at: null,
+      updated_at: new Date().toISOString(),
+    });
+    // Prove it works NOW, while a human is watching, not on the first
+    // invoice at 2am: refresh immediately and report honestly.
+    const at = await xeroAccessToken();
+    return json({ ok: Boolean(at),
+                  error: at ? undefined : "stored, but the refresh failed" },
+                at ? 200 : 502, origin);
+  }
+
+  // POST /xero/process — raise the invoice for one session's order.
+  // kind 'paid'    -> scenario B (invoice + payment, marked PAID)
+  // kind 'invoice' -> scenario A (AUTHORISED, due date, emailed)
+  if (req.method === "POST" && path === "/xero/process") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    const sid = String(body?.session_id ?? "").trim();
+    const kind = String(body?.kind ?? "") === "invoice" ? "invoice" : "paid";
+    if (!sid) return json({ ok: false, error: "session_id required" }, 400, origin);
+
+    // Idempotent per session+kind: Stripe retries its webhook and buttons
+    // get double-clicked; the second arrival must find the first invoice.
+    const { data: done } = await admin.from("journey_events")
+      .select("payload").eq("session_id", sid)
+      .eq("event_type", "xero_invoice_created").limit(10);
+    const prior = (done ?? []).find((r: { payload?: Record<string, unknown> }) =>
+      (r.payload as Record<string, unknown>)?.kind === kind);
+    if (prior) return json({ ok: true, already: true }, 200, origin);
+
+    const evType = kind === "paid" ? "audit_paid" : "audit_invoice_requested";
+    const { data: evs } = await admin.from("journey_events")
+      .select("payload, created_at").eq("session_id", sid)
+      .eq("event_type", evType).order("created_at", { ascending: false }).limit(1);
+    const p = (evs?.[0]?.payload ?? null) as Record<string, unknown> | null;
+    if (!p) return json({ ok: false, error: `no ${evType} event` }, 404, origin);
+
+    const marks = Math.max(1, Number(p.marks ?? 1) || 1);
+    const vatExempt = p.vat_exempt === true;
+    const email = String(p.billing_email ?? p.customer_email ?? "").trim();
+    const entity = String(p.billing_entity ?? "").trim() || (email || "Audit client");
+    const ref = String(p.invoice_ref ?? sid.slice(0, 8));
+    const today = new Date().toISOString().slice(0, 10);
+    const due = kind === "invoice" && p.pay_date ? String(p.pay_date) : today;
+
+    // Contact: match on email first (a client's entity name drifts, their
+    // billing address doesn't), fall back to entity name, else create.
+    let contactId: string | null = null;
+    if (email) {
+      const q = await xeroApi(
+        `/Contacts?where=${encodeURIComponent(`EmailAddress=="${email}"`)}`, "GET");
+      const hits = (q.data as { Contacts?: { ContactID: string }[] })?.Contacts;
+      if (q.ok && hits?.length) contactId = hits[0].ContactID;
+    }
+    if (!contactId) {
+      const c = await xeroApi("/Contacts", "POST",
+        { Contacts: [{ Name: entity, EmailAddress: email || undefined }] },
+        `contact_${sid}`);
+      const made = (c.data as { Contacts?: { ContactID: string }[] })?.Contacts;
+      if (c.ok && made?.length) contactId = made[0].ContactID;
+      else {
+        // Name collision: Xero names are unique. Reuse the existing one.
+        const q2 = await xeroApi(
+          `/Contacts?where=${encodeURIComponent(`Name=="${entity.replace(/"/g, '')}"`)}`, "GET");
+        const h2 = (q2.data as { Contacts?: { ContactID: string }[] })?.Contacts;
+        if (q2.ok && h2?.length) contactId = h2[0].ContactID;
+      }
+    }
+    if (!contactId) {
+      await admin.from("journey_events").insert({ session_id: sid,
+        event_type: "xero_invoice_failed", payload: { kind, step: "contact" } });
+      return json({ ok: false, error: "could not resolve Xero contact" }, 502, origin);
+    }
+
+    const inv: Record<string, unknown> = {
+      Type: "ACCREC", Status: "AUTHORISED",
+      Contact: { ContactID: contactId },
+      Date: today, DueDate: due, Reference: ref,
+      LineAmountTypes: "Exclusive",
+      LineItems: [{
+        Description: "Trademark Audit" + (marks > 1 ? ` × ${marks} marks` : "")
+          + " — Audit Promotion applied"
+          + (vatExempt ? " (VAT not applicable — outside the UK)" : ""),
+        Quantity: marks, UnitAmount: 99.00,
+        AccountCode: (Deno.env.get("XERO_SALES_ACCOUNT") ?? "200").trim(),
+        TaxType: vatExempt
+          ? (Deno.env.get("XERO_TAX_NONUK") ?? "NONE").trim()
+          : (Deno.env.get("XERO_TAX_UK") ?? "OUTPUT2").trim(),
+      }],
+    };
+    const theme = (Deno.env.get("XERO_BRANDING_THEME") ?? "").trim();
+    if (theme) inv.BrandingThemeID = theme;
+    const made = await xeroApi("/Invoices", "POST", { Invoices: [inv] },
+                               `invoice_${kind}_${sid}`);
+    const invoice = (made.data as { Invoices?: { InvoiceID: string;
+      InvoiceNumber?: string; Total?: number }[] })?.Invoices?.[0];
+    if (!made.ok || !invoice) {
+      await admin.from("journey_events").insert({ session_id: sid,
+        event_type: "xero_invoice_failed",
+        payload: { kind, step: "invoice", detail: JSON.stringify(made.data).slice(0, 500) } });
+      return json({ ok: false, error: "invoice creation failed" }, 502, origin);
+    }
+
+    let paid = false;
+    if (kind === "paid") {
+      const clearing = (Deno.env.get("XERO_CLEARING_ACCOUNT") ?? "").trim();
+      if (clearing) {
+        const pay = await xeroApi("/Payments", "PUT", { Payments: [{
+          Invoice: { InvoiceID: invoice.InvoiceID },
+          Account: { Code: clearing },
+          Date: today, Amount: invoice.Total,
+          Reference: String(p.payment_intent ?? p.stripe_session ?? ref),
+        }] }, `payment_${sid}`);
+        paid = pay.ok;
+        if (!pay.ok) {
+          await admin.from("journey_events").insert({ session_id: sid,
+            event_type: "xero_payment_failed",
+            payload: { invoice_id: invoice.InvoiceID,
+                       detail: JSON.stringify(pay.data).slice(0, 500) } });
+        }
+      }
+    }
+
+    if ((Deno.env.get("XERO_EMAIL_INVOICES") ?? "true") !== "false") {
+      // Scenario A: the bill to pay. Scenario B: their tax invoice, already
+      // showing PAID. Best-effort — the invoice exists either way.
+      await xeroApi(`/Invoices/${invoice.InvoiceID}/Email`, "POST", {})
+        .catch(() => undefined);
+    }
+
+    await admin.from("journey_events").insert({ session_id: sid,
+      event_type: "xero_invoice_created", payload: {
+        kind, invoice_id: invoice.InvoiceID,
+        invoice_number: invoice.InvoiceNumber, total: invoice.Total,
+        marked_paid: paid, due_date: due, contact_id: contactId,
+      } });
+    return json({ ok: true, invoice_id: invoice.InvoiceID,
+                  invoice_number: invoice.InvoiceNumber, marked_paid: paid },
+                200, origin);
   }
 
   return json({ ok: false, error: "not found" }, 404, origin);
