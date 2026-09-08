@@ -1422,14 +1422,22 @@ serve(async (req) => {
     return want !== "" && String(body?.key ?? "") === want;
   };
 
+  // TMH's Xero app is a CUSTOM CONNECTION (discovered 8 Sep, with Jonathan
+  // watching his own developer console): client_credentials grant, no
+  // consent flow, no refresh tokens, no tenant header. The xero_tokens row
+  // survives purely as an access-token CACHE so we do not hit the identity
+  // endpoint on every call — losing it costs one extra token mint, nothing
+  // more.
+  const XERO_SCOPES =
+    "accounting.contacts accounting.invoices accounting.payments";
+
   async function xeroAccessToken(): Promise<string | null> {
     const cid = (Deno.env.get("XERO_CLIENT_ID") ?? "").trim();
     const sec = (Deno.env.get("XERO_CLIENT_SECRET") ?? "").trim();
     if (!cid || !sec) return null;
     const { data: row } = await admin.from("xero_tokens")
       .select("*").eq("id", 1).maybeSingle();
-    if (!row?.refresh_token) return null;
-    if (row.access_token && row.expires_at &&
+    if (row?.access_token && row.expires_at &&
         Date.parse(row.expires_at) > Date.now() + 60_000) {
       return row.access_token;
     }
@@ -1440,30 +1448,25 @@ serve(async (req) => {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        grant_type: "refresh_token", refresh_token: row.refresh_token,
+        grant_type: "client_credentials", scope: XERO_SCOPES,
       }),
     });
     if (!res.ok) return null;
     const tok = await res.json();
-    // The old refresh token is now DEAD. Persist the new one before anything
-    // else can fail — losing it means redoing the consent flow.
-    await admin.from("xero_tokens").update({
-      refresh_token: tok.refresh_token ?? row.refresh_token,
-      access_token: tok.access_token,
+    await admin.from("xero_tokens").upsert({
+      id: 1, refresh_token: null, access_token: tok.access_token,
       expires_at: new Date(Date.now() + (tok.expires_in ?? 1800) * 1000).toISOString(),
       updated_at: new Date().toISOString(),
-    }).eq("id", 1);
+    });
     return tok.access_token ?? null;
   }
 
   async function xeroApi(path: string, method: string, body?: unknown,
                          idem?: string): Promise<{ ok: boolean; data: unknown }> {
     const at = await xeroAccessToken();
-    const tenant = (Deno.env.get("XERO_TENANT_ID") ?? "").trim();
-    if (!at || !tenant) return { ok: false, data: "xero not connected" };
+    if (!at) return { ok: false, data: "xero not configured" };
     const headers: Record<string, string> = {
       "Authorization": "Bearer " + at,
-      "Xero-tenant-id": tenant,
       "Accept": "application/json",
       "Content-Type": "application/json",
     };
@@ -1476,23 +1479,16 @@ serve(async (req) => {
     return { ok: res.ok, data };
   }
 
-  // POST /xero/connect — one-time store of the refresh token minted by the
-  // engine's /xero-callback OAuth landing. Guarded by the shared key.
+  // POST /xero/connect — health probe. The custom connection needs no
+  // consent, so "connect" just proves the credentials mint a token and the
+  // API answers. Guarded by the shared key.
   if (req.method === "POST" && path === "/xero/connect") {
     const body = await readJson(req);
     if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
-    const rt = String(body?.refresh_token ?? "").trim();
-    if (!rt) return json({ ok: false, error: "refresh_token required" }, 400, origin);
-    await admin.from("xero_tokens").upsert({
-      id: 1, refresh_token: rt, access_token: null, expires_at: null,
-      updated_at: new Date().toISOString(),
-    });
-    // Prove it works NOW, while a human is watching, not on the first
-    // invoice at 2am: refresh immediately and report honestly.
-    const at = await xeroAccessToken();
-    return json({ ok: Boolean(at),
-                  error: at ? undefined : "stored, but the refresh failed" },
-                at ? 200 : 502, origin);
+    const probe = await xeroApi("/Contacts?page=1&pageSize=1", "GET");
+    return json({ ok: probe.ok,
+                  error: probe.ok ? undefined : String(probe.data).slice(0, 200) },
+                probe.ok ? 200 : 502, origin);
   }
 
   // POST /xero/process — raise the invoice for one session's order.
@@ -1568,13 +1564,19 @@ serve(async (req) => {
           + " — Audit Promotion applied"
           + (vatExempt ? " (VAT not applicable — outside the UK)" : ""),
         Quantity: marks, UnitAmount: 99.00,
-        AccountCode: (Deno.env.get("XERO_SALES_ACCOUNT") ?? "200").trim(),
+        // Dedicated pair created 8 Sep, matching the chart's UK/Overseas
+        // client split — the VAT location decides the nominal too.
+        AccountCode: vatExempt
+          ? (Deno.env.get("XERO_SALES_ACCOUNT_NONUK") ?? "247").trim()
+          : (Deno.env.get("XERO_SALES_ACCOUNT_UK") ?? "227").trim(),
         TaxType: vatExempt
           ? (Deno.env.get("XERO_TAX_NONUK") ?? "NONE").trim()
           : (Deno.env.get("XERO_TAX_UK") ?? "OUTPUT2").trim(),
       }],
     };
-    const theme = (Deno.env.get("XERO_BRANDING_THEME") ?? "").trim();
+    // Simple Invoice theme (Jonathan, 8 Sep).
+    const theme = (Deno.env.get("XERO_BRANDING_THEME")
+      ?? "8f4d977a-cf02-4580-8610-f44dc31a609a").trim();
     if (theme) inv.BrandingThemeID = theme;
     const made = await xeroApi("/Invoices", "POST", { Invoices: [inv] },
                                `invoice_${kind}_${sid}`);
@@ -1589,11 +1591,14 @@ serve(async (req) => {
 
     let paid = false;
     if (kind === "paid") {
-      const clearing = (Deno.env.get("XERO_CLEARING_ACCOUNT") ?? "").trim();
+      // "Stripe GBP" bank account — it has no code in the chart, so the
+      // payment references it by AccountID (confirmed with Jonathan, 8 Sep).
+      const clearing = (Deno.env.get("XERO_CLEARING_ACCOUNT_ID")
+        ?? "3c7966d7-2ce1-4f2e-9532-7ce04d6e16d7").trim();
       if (clearing) {
         const pay = await xeroApi("/Payments", "PUT", { Payments: [{
           Invoice: { InvoiceID: invoice.InvoiceID },
-          Account: { Code: clearing },
+          Account: { AccountID: clearing },
           Date: today, Amount: invoice.Total,
           Reference: String(p.payment_intent ?? p.stripe_session ?? ref),
         }] }, `payment_${sid}`);
