@@ -401,6 +401,9 @@
       <div class="opt" data-k="uk_ind" onclick="appKind('uk_ind')">UK individual</div>
       <div class="opt" data-k="nonuk_ind" onclick="appKind('nonuk_ind')">Non-UK individual</div>
     </div>
+    <!-- VAT is decided HERE, at the billing step, and said out loud rather
+         than discovered at the total (Jonathan, 8 Sep). -->
+    <p class="sub hidden" id="app-vat-note" style="margin-top:10px"></p>
 
     <div id="app-form" class="hidden">
       <div id="app-ch" class="panel hidden" style="display:block">
@@ -1126,6 +1129,11 @@ function appKind(k){
   state.applicant.kind=k;
   document.querySelectorAll('#app-kind .opt').forEach(el=>
     el.classList.toggle('on',el.dataset.k===k));
+  const vn=document.getElementById('app-vat-note');
+  vn.classList.remove('hidden');
+  vn.innerHTML=(k==='nonuk_org'||k==='nonuk_ind')
+    ?'As you’re outside the UK, <b>no VAT applies</b> — your total is £99.'
+    :'UK VAT at 20% applies — your total is £118.80 including VAT.';
   document.getElementById('app-form').classList.remove('hidden');
   document.getElementById('app-ch').classList.toggle('hidden',k!=='uk_org');
   const org=k==='uk_org'||k==='nonuk_org';
@@ -1340,6 +1348,16 @@ function submitOrder(){
   }
   clearErr('sum-err');
   const pr=pricing();
+  /* Scenario 2 (client asks for an invoice): the request goes into the same
+     journey-event queue the staff form uses, so the Xero invoice is raised
+     from one list regardless of which form took the order. */
+  if(state.payment.method==='invoice'){
+    logEvent('audit_invoice_requested','audit_summary',{
+      marks:1,total_pence:Math.round(pr.total*100),vat_exempt:pr.exempt,
+      pay_date:state.payment.payDate,invoice_ref:invoiceRef(),
+      billing_entity:state.applicant.name||'',source:'client_checkout',
+      xero_invoice:'pending_credentials'});
+  }
   const dealName=(state.consult.taken?'Trademark Audit & Consultation - ':'Trademark Audit Only - ')+
     state.name+(state.hasLogo?' Word, Logo':' Word');
   /* Summary reached -> Quoted. */
