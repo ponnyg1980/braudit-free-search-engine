@@ -1196,6 +1196,27 @@ function submitApplicant(){
   clearErr('a-err');
   logEvent('audit_checkout_applicant','audit_applicant',{applicant:state.applicant},
     {current_screen:'audit_applicant'});
+  /* Persist the applicant kind ONTO THE SESSION so the server derives the
+     VAT treatment from stored fact rather than a browser flag (Jonathan,
+     8 Sep — "audit is only the first billing product"). Read-merge-write on
+     last_result so a session that came from a search keeps its results. */
+  (async()=>{try{
+    const id=await ensureSession(); if(!id) return;
+    let lr={};
+    try{
+      const g=await fetch(journeyBase()+'/session?id='+encodeURIComponent(id));
+      const gd=await g.json();
+      if(gd&&gd.ok&&gd.session&&gd.session.last_result&&typeof gd.session.last_result==='object')
+        lr=gd.session.last_result;
+    }catch(e){}
+    lr.audit_billing={kind:state.applicant.kind,entity:state.applicant.name,
+      at:new Date().toISOString()};
+    await fetch(journeyBase()+'/session/event',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:id,event_type:'audit_billing_confirmed',
+        screen:'audit_applicant',
+        payload:{kind:state.applicant.kind},snapshot:{last_result:lr}})});
+  }catch(e){}})();
   /* The Details page is where the Account comes from. */
   crm('applicant',{org_name:state.applicant.name,org_id:state.applicant.id,
     addr1:state.applicant.addr1,addr2:state.applicant.addr2,
