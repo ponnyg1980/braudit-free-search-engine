@@ -794,6 +794,290 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		]
 		res.put("ok",true);
 	}
+	else if(stg == "order_complete")
+	{
+		//
+		// ----------------------------------------- stage: order_complete
+		//
+		// SERVER-DRIVEN (journey /xero/process, 8 Sep) -- fires after the
+		// Xero invoice exists, for BOTH payment scenarios and BOTH forms.
+		// Unlike 'paid' (browser-driven, client checkout only), this stage
+		// can also create the Deal when none exists yet (staff orders), and
+		// it carries the invoice number, deadline and ownership rules:
+		//   * kind=paid    -> Stage Paid,     Next Action Send for Research
+		//   * kind=invoice -> Stage Invoiced, Next Action Confirm Payment
+		//   * Deadline (Deadline Date) = consultation date when supplied,
+		//     else copied from the Deal's Audit_Deadline
+		//   * Owner + Next_Action_Owner = the staff user who took the order,
+		//     or Admin Support (support@) for online orders
+		//   * fast_track=requested -> NEXT_ACTION1 'Approve/Reject Fast
+		//     Track' + approval email to support@ with one-click links
+		//
+		// Owner map: the six active CRM users, keyed by email. A userlookup
+		// takes the user id; an unknown email falls back to Admin Support.
+		owners = Map();
+		owners.put("alex@thetrademarkhelpline.com","1964745000009819001");
+		owners.put("kayleigh@thetrademarkhelpline.com","1964745000018749001");
+		owners.put("jon@thetrademarkhelpline.com","1964745000033839001");
+		owners.put("matt@thetrademarkhelpline.com","1964745000035362001");
+		owners.put("saad@thetrademarkhelpline.com","1964745000040621001");
+		owners.put("support@thetrademarkhelpline.com","1964745000036444001");
+		staffEm = "";
+		if(p.get("staff_email") != null)
+		{
+			staffEm = p.get("staff_email").toString().trim().toLowerCase();
+		}
+		ownerId = "1964745000036444001";
+		if((staffEm != "") && (owners.get(staffEm) != null))
+		{
+			ownerId = owners.get(staffEm);
+		}
+		kind = "paid";
+		if(p.get("kind") != null)
+		{
+			kind = p.get("kind").toString();
+		}
+		ft = "";
+		if(p.get("fast_track") != null)
+		{
+			ft = p.get("fast_track").toString();
+		}
+		// ---- resolve or create the Deal --------------------------------
+		if((dealId == "") && (emIn != ""))
+		{
+			// Staff orders have no browser-built Deal. Find the Contact by
+			// email (plus-addressing rule: search the prefix, verify exact),
+			// then create a Deal owned by the right user.
+			cid = "";
+			srch = zoho.crm.searchRecords("Contacts","(Email:starts_with:" + emPre + ")");
+			for each  rec in srch
+			{
+				if((rec.get("Email") != null) && rec.get("Email").toString().equalsIgnoreCase(emIn))
+				{
+					cid = rec.get("id").toString();
+					break;
+				}
+			}
+			if(cid == "")
+			{
+				cM = Map();
+				fn = "";
+				if(p.get("first_name") != null)
+				{
+					fn = p.get("first_name").toString();
+				}
+				ln = emIn;
+				if(p.get("last_name") != null)
+				{
+					ln = p.get("last_name").toString();
+				}
+				cM.put("First_Name",fn);
+				cM.put("Last_Name",ln);
+				cM.put("Email",emIn);
+				if(p.get("phone") != null)
+				{
+					cM.put("Phone",p.get("phone").toString());
+				}
+				cM.put("Owner",ownerId);
+				cr = zoho.crm.createRecord("Contacts",cM);
+				if(cr.get("id") != null)
+				{
+					cid = cr.get("id").toString();
+				}
+			}
+			mk = "Trademark Audit";
+			if(p.get("mark") != null)
+			{
+				mk = p.get("mark").toString();
+			}
+			dNew = Map();
+			dNew.put("Deal_Name","Trademark Audit & Consultation - " + mk);
+			dNew.put("Stage","Prospect");
+			dNew.put("Pipeline","Standard (Standard)");
+			dNew.put("Owner",ownerId);
+			if(cid != "")
+			{
+				dNew.put("Contact_Name",cid);
+			}
+			if(p.get("session_id") != null)
+			{
+				dNew.put("Audit_Order_Ref",p.get("session_id").toString());
+			}
+			dcr = zoho.crm.createRecord("Deals",dNew);
+			if(dcr.get("id") != null)
+			{
+				dealId = dcr.get("id").toString();
+				res.put("zoho_deal_id",dealId);
+			}
+		}
+		if(dealId != "")
+		{
+			dealRec = zoho.crm.getRecordById("Deals",dealId.toLong());
+			dM = Map();
+			dM.put("Owner",ownerId);
+			dM.put("Next_Action_Owner",ownerId);
+			dM.put("Next_Action_Date",zoho.currentdate);
+			if(p.get("invoice_number") != null)
+			{
+				dM.put("Invoice_Number",p.get("invoice_number").toString());
+			}
+			// Deadline Date <- consultation date; fall back to the Deal's
+			// own Audit_Deadline so the client checkout path (which stamped
+			// it at the scope stage) maps through too.
+			if(p.get("deadline") != null)
+			{
+				dM.put("Deadline",p.get("deadline").toString().toDate());
+			}
+			else if(dealRec.get("Audit_Deadline") != null)
+			{
+				dM.put("Deadline",dealRec.get("Audit_Deadline").toString().toDate());
+			}
+			if(kind == "paid")
+			{
+				dM.put("Stage","Paid");
+				dM.put("Next_Action","Send for Research");
+				dM.put("Paid",zoho.currentdate);
+			}
+			else
+			{
+				dM.put("Stage","Invoiced");
+				dM.put("Next_Action","Confirm Payment");
+				if(p.get("pay_date") != null)
+				{
+					dM.put("Payment_Due_Date",p.get("pay_date").toString().toDate());
+				}
+			}
+			if(ft == "requested")
+			{
+				dM.put("NEXT_ACTION1","Approve/Reject Fast Track");
+			}
+			else
+			{
+				dM.put("NEXT_ACTION1","Send for Research");
+			}
+			upd = zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
+			if(upd.get("id") != null)
+			{
+				res.put("deal_updated",true);
+			}
+			// Paid orders get the research task + inbox nudge, same as the
+			// browser 'paid' stage (which stays for sessions mid-flight).
+			if(kind == "paid")
+			{
+				dn = "this audit";
+				if(dealRec.get("Deal_Name") != null)
+				{
+					dn = dealRec.get("Deal_Name").toString();
+				}
+				tM = Map();
+				tM.put("Subject","Send for Research -- " + dn);
+				tM.put("Status","Not Started");
+				tM.put("Priority","High");
+				tM.put("Due_Date",zoho.currentdate);
+				tM.put("What_Id",dealId);
+				tM.put("$se_module","Deals");
+				tM.put("Owner",ownerId);
+				tM.put("Description","Audit paid (server-confirmed by Stripe)." + nl + "Deal: " + dn + nl + "Invoice: " + ifnull(p.get("invoice_number"),""));
+				zoho.crm.createRecord("Tasks",tM);
+			}
+			// Fast-track approval request to the admin team: two links, one
+			// click each. Links go to the engine, which verifies the
+			// signature and relays the decision back through the journey.
+			if(ft == "requested")
+			{
+				au = "";
+				ru = "";
+				if(p.get("approve_url") != null)
+				{
+					au = p.get("approve_url").toString();
+				}
+				if(p.get("reject_url") != null)
+				{
+					ru = p.get("reject_url").toString();
+				}
+				dn2 = "this audit";
+				if(dealRec.get("Deal_Name") != null)
+				{
+					dn2 = dealRec.get("Deal_Name").toString();
+				}
+				sendmail
+				[
+					from :zoho.loginuserid
+					to :"support@thetrademarkhelpline.com"
+					subject :"Fast Track requested -- " + dn2
+					message :"<p>A client has asked to Fast Track their audit consultation.</p><p><b>Deal:</b> " + dn2 + "<br><b>Invoice:</b> " + ifnull(p.get("invoice_number"),"") + "<br><b>Client:</b> " + emIn + "</p><p>A fast track needs one clear half-day block (9am-1pm or 1pm-5pm) to prepare the audit before the consultation.</p><p><a href='" + au + "' style='background:#1F8A5B;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:bold'>Approve fast track</a>&nbsp;&nbsp;<a href='" + ru + "' style='background:#C0392B;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:bold'>Reject fast track</a></p><p><a href='https://crm.zoho.com/crm/org628887698/tab/Potentials/" + dealId + "'>Open the deal in Zoho</a></p>"
+				]
+			}
+		}
+		res.put("ok",true);
+	}
+	else if(stg == "fast_track_decision")
+	{
+		//
+		// ------------------------------------- stage: fast_track_decision
+		//
+		// One click from the approval email (via engine signature check +
+		// journey relay). Sends the client their answer -- Jonathan's copy
+		// verbatim (8 Sep) -- signed Laura Spencer, reply-to support@, and
+		// clears the Deal's fast-track action.
+		act = "";
+		if(p.get("action") != null)
+		{
+			act = p.get("action").toString();
+		}
+		cEm = "";
+		if(p.get("client_email") != null)
+		{
+			cEm = p.get("client_email").toString();
+		}
+		cFn = "";
+		if(p.get("client_first") != null)
+		{
+			cFn = p.get("client_first").toString();
+		}
+		greet = "Hi";
+		if(cFn != "")
+		{
+			greet = "Hi " + cFn;
+		}
+		if(dealId != "")
+		{
+			dM = Map();
+			dM.put("NEXT_ACTION1","Send for Research");
+			if((act == "approve") && (p.get("date") != null))
+			{
+				dM.put("Deadline",p.get("date").toString().toDate());
+			}
+			zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
+			nM = Map();
+			nM.put("Note_Title","Fast Track " + act);
+			nM.put("Note_Content","Fast track " + act + "d" + ifnull(p.get("date"),"") + " " + ifnull(p.get("time"),"") + " -- decision relayed by the engine, emailed to " + cEm + ".");
+			nM.put("Parent_Id",dealId);
+			nM.put("$se_module","Deals");
+			zoho.crm.createRecord("Notes",nM);
+		}
+		if((cEm != "") && (act == "approve"))
+		{
+			sendmail
+			[
+				from :zoho.loginuserid
+				to :cEm
+				subject :"Your Fast Track request -- confirmed"
+				message :"<p>" + greet + ",</p><p>Thank you for your recent request to Fast Track your Audit, I am happy to confirm we can accommodate your request and we look forward to speaking with you on <b>" + ifnull(p.get("date"),"") + "</b> at <b>" + ifnull(p.get("time"),"") + "</b>.</p><p>If you have any questions in the meantime, please don't hesitate to reach out.</p><p>Kind regards,<br>Laura Spencer<br>The Trademark Helpline<br>0161 833 5400</p>"
+			]
+		}
+		if((cEm != "") && (act == "reject"))
+		{
+			sendmail
+			[
+				from :zoho.loginuserid
+				to :cEm
+				subject :"Your Fast Track request"
+				message :"<p>" + greet + ",</p><p>Thank you for your recent request to Fast Track your Audit, unfortunately due to high demand we can not accommodate your request on this occasion. However, your audit has been requested as a priority and one of our team will be in touch with you as soon as your audit is prepared, we estimate no more than 1 working day.</p><p>If you have any questions please do not hesitate to reach out.</p><p>Kind regards,<br>Laura Spencer<br>The Trademark Helpline<br>0161 833 5400</p>"
+			]
+		}
+		res.put("ok",true);
+	}
 	else if((stg == "ai_block") && (emIn != ""))
 	{
 		//
