@@ -349,6 +349,18 @@
           <div class="opt" id="ct-phone" onclick="consultType('Phone')">Phone</div>
           <div class="opt" id="ct-video" onclick="consultType('Video')">Video (Teams)</div>
         </div>
+        <div id="ft-wrap" class="hidden" style="margin:14px 0 4px">
+          <a href="#" id="ft-link" onclick="requestFastTrack();return false;"
+             style="color:var(--pink);font-weight:700;font-size:14px">I want my
+             consultation sooner &mdash; request Fast Track</a>
+          <div id="ft-msg" class="hidden" style="margin-top:10px;border-left:4px solid var(--pink);
+               background:var(--pink-tint);border-radius:0 10px 10px 0;padding:13px 16px;
+               font-size:14px;color:var(--ink)">
+            We have logged your request for Fast Track with our admin team, please
+            continue with your audit application and we will confirm whether fast
+            track is available within 1 hour of your order being received.
+          </div>
+        </div>
         <div id="book-slot" class="hidden">
           <div class="panel" style="display:block">
             <p style="margin:0 0 12px;font-size:14.5px">Pick your slot in our booking diary
@@ -1088,6 +1100,9 @@ function consultType(t){
   document.getElementById('ct-phone').classList.toggle('on',t==='Phone');
   document.getElementById('ct-video').classList.toggle('on',t==='Video');
   document.getElementById('book-slot').classList.remove('hidden');
+  /* The Fast Track pressure valve appears beside the diary, never instead
+     of it — the 48-hour guard rails in the booking system stay untouched. */
+  document.getElementById('ft-wrap').classList.remove('hidden');
   document.getElementById('book-link').href=
     t==='Phone'?CONFIG.BOOK_PHONE_URL:CONFIG.BOOK_VIDEO_URL;
 }
@@ -1225,6 +1240,18 @@ function submitApplicant(){
       ?'United Kingdom':''});
   renderSummary();
   go('summary');
+}
+
+/* ---- Fast Track (Jonathan, 8 Sep, point 6) --------------------------------
+   The booking diary's 48-hour guard rails stay exactly as they are. This is
+   the pressure valve beside them: the request is logged as a journey event,
+   the order carries it into Zoho (NEXT ACTION 'Approve/Reject Fast Track'),
+   and support@ gets a one-click approve/reject email after checkout. */
+function requestFastTrack(){
+  state.fastTrack=true;
+  document.getElementById('ft-link').classList.add('hidden');
+  document.getElementById('ft-msg').classList.remove('hidden');
+  logEvent('fast_track_requested','audit_consult',{via:'audit_checkout'});
 }
 
 /* ================= 8 — SUMMARY & PAYMENT ================= */
