@@ -301,14 +301,15 @@
     <p class="lede">Add a line for every mark. They share one set of classes and terms.</p>
 
     <div class="sf-guide">
-      <div class="gh">Multiple marks</div>
+      <div class="gh">One brand, priced by line</div>
       <ul>
-        <li>Ask what else carries the brand — a product range, a sub-brand, a tagline
-          they use in advertising. Each is a separate audit.</li>
-        <li><span class="say">"Is it just the one name, or are there product names and a
+        <li>Ask what carries the brand — the name, the logo, a tagline, product names.
+          Each is its own line at £149, on ONE deal and ONE invoice.</li>
+        <li><span class="say">"Is it just the one name, or are there a logo and a
           strapline that matter as much?"</span></li>
-        <li>Every mark is audited against the same classes and terms, so the scope is
-          agreed once and applied to all of them.</li>
+        <li>You control the discount per line. Charge the full £149s, or discount down —
+          the order total can never go below £99.</li>
+        <li>A second brand is a separate deal — start a new enquiry for it.</li>
       </ul>
     </div>
 
@@ -561,7 +562,8 @@ const CONFIG=(function(){
     SESSION:q.get('s')||'',
     STAFF:q.get('u')||localStorage.getItem('tmh_staff')||'',
     TOKEN:q.get('k')||localStorage.getItem('tmh_staff_token')||'',
-    PRICE:99,            /* per mark, no discount (Jonathan, 7 Sep) */
+    PRICE:149,           /* RRP per line item (Jonathan, 9 Sep) */
+    MIN_TOTAL:99,        /* net order floor -- the total can never go below */
     VAT:0.20,
     LEAD_DAYS:3          /* clear working days: payment -> audit delivered */
   };
@@ -590,7 +592,7 @@ const state={
   section:'contact',
   contact:{first:'',last:'',email:'',phone:'',position:'',org:'',clientType:''},
   discovery:{desc:'',reason:'',trading:'',knowledge:'',terrNow:'',terrPlan:'',deadline:'',risk:''},
-  marks:[{text:'',kind:'word'}],
+  marks:[{text:'',kind:'word',price:149}],
   classes:'',
   scope:{},
   advice:{risks:false,fees:false,noguarantee:false,questions:false,note:''},
@@ -677,6 +679,9 @@ function gateRules(){
     {id:'G-12',sec:'billing',label:'VAT position confirmed',
      ok:b.location==='uk'||b.location==='nonuk',
      why:'Confirm with the client whether they are UK-based — it changes the total.'},
+    {id:'G-13',sec:'marks',label:'Prices within bounds',
+     ok:priceFloorOk(),
+     why:'Each line is £0–£149 and the order total cannot go below £99 net.'},
     {id:'G-11',sec:'readback',label:'Read back and accepted',
      ok:state.readback.confirmed,
      why:'Read the summary back, then tick.'}
@@ -748,8 +753,8 @@ function renderGate(){
   if(!contactDone()){
     msg.innerHTML='Take the contact details to begin.';
   }else if(outstanding.length===0){
-    msg.innerHTML='<b>Ready.</b> '+markCount()+' × £'+CONFIG.PRICE+' = £'+total().toFixed(2)+
-      (vatExempt()?' (no VAT — outside the UK).':' inc VAT.');
+    msg.innerHTML='<b>Ready.</b> '+markCount()+' line'+(markCount()===1?'':'s')+
+      ' = £'+total().toFixed(2)+(vatExempt()?' (no VAT — outside the UK).':' inc VAT.');
     pay.textContent=state.billing.payWhen==='date'?'Request invoice':'Take payment now';
   }else{
     msg.innerHTML='<b>'+outstanding.length+' outstanding.</b> Next: '+esc(outstanding[0].why);
@@ -776,28 +781,55 @@ const KINDS=[['word','Word / name'],['logo','Logo'],['tagline','Tagline'],
 function renderMarks(){
   document.getElementById('f-marks').innerHTML=state.marks.map((m,i)=>`
     <div class="sf-mark">
-      <div class="mh"><span class="mn">Audit ${i+1}</span>
+      <div class="mh"><span class="mn">Line ${i+1} — RRP £149</span>
         ${state.marks.length>1?`<button class="rm" onclick="removeMark(${i})">Remove</button>`:''}</div>
-      <input type="text" value="${esc(m.text)}" placeholder="Exact mark text as it is used"
+      <input type="text" value="${esc(m.text)}"
+        placeholder="${m.kind==='logo'?'Which mark does the logo belong to?':'Exact mark text as it is used'}"
         oninput="state.marks[${i}].text=this.value;markChanged()">
       <div class="kinds">${KINDS.map(([k,l])=>`
         <label><input type="radio" name="kind${i}" value="${k}" ${m.kind===k?'checked':''}
           onchange="state.marks[${i}].kind='${k}';touch()">${l}</label>`).join('')}</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
+        <label style="font-size:12.5px;font-weight:700;color:var(--navy);flex:none">Charge £</label>
+        <input type="number" min="0" max="149" step="1" value="${m.price!=null?m.price:149}"
+          style="width:110px" oninput="setLinePrice(${i},this.value)">
+        <span class="sf-hint" style="margin:0">Your discount decision, on the record.</span>
+      </div>
     </div>`).join('');
   renderPrice();
 }
-function addMark(){state.marks.push({text:'',kind:'word'});renderMarks();touch();}
-function removeMark(i){state.marks.splice(i,1);if(!state.marks.length)state.marks=[{text:'',kind:'word'}];
+function setLinePrice(i,v){
+  const n=Math.max(0,Math.min(149,parseFloat(v)||0));
+  state.marks[i].price=n;renderPrice();touch();
+}
+function addMark(){state.marks.push({text:'',kind:'word',price:149});renderMarks();touch();}
+function removeMark(i){state.marks.splice(i,1);if(!state.marks.length)state.marks=[{text:'',kind:'word',price:149}];
   renderMarks();touch();}
 function markChanged(){renderPrice();touch();}
-function markCount(){return Math.max(1,state.marks.filter(m=>nonEmpty(m.text)).length);}
+function liveLines(){return state.marks.filter(m=>nonEmpty(m.text));}
+function markCount(){return Math.max(1,liveLines().length);}
 function vatExempt(){return state.billing.location==='nonuk';}
-function net(){return markCount()*CONFIG.PRICE;}
+function net(){return liveLines().reduce((a,m)=>a+(m.price!=null?m.price:149),0);}
+function rrp(){return liveLines().length*149;}
 function total(){return vatExempt()?net():net()*(1+CONFIG.VAT);}
+function priceFloorOk(){
+  return liveLines().every(m=>{const p=(m.price!=null?m.price:149);
+    return p>=0&&p<=149;}) && (liveLines().length===0||net()>=CONFIG.MIN_TOTAL);
+}
 function renderPrice(){
-  const n=markCount();
-  document.getElementById('f-pricebox').innerHTML=`
-    <div class="tr"><span>Brand Audit × ${n}</span><span>£${net().toFixed(2)}</span></div>
+  const lines=liveLines();
+  const KL={word:'Name',logo:'Logo',tagline:'Tagline',product:'Product name',other:'Mark'};
+  const rows=lines.map(m=>{
+    const p=m.price!=null?m.price:149;
+    const disc=149-p;
+    return `<div class="tr"><span>${esc(KL[m.kind]||'Mark')} — ${esc(m.text)}
+      ${disc>0?`<span style="color:var(--quiet);font-size:12.5px"> (RRP £149, −£${disc.toFixed(2)})</span>`:''}</span>
+      <span>£${p.toFixed(2)}</span></div>`;
+  }).join('');
+  const under=lines.length&&net()<CONFIG.MIN_TOTAL;
+  document.getElementById('f-pricebox').innerHTML=rows+
+    `${under?`<div class="tr" style="color:#b5372a;font-weight:700">
+       <span>Below the £${CONFIG.MIN_TOTAL} order minimum</span><span></span></div>`:''}
     ${vatExempt()
       ?'<div class="tr"><span>VAT — not applicable (outside the UK)</span><span>£0.00</span></div>'
       :`<div class="tr"><span>VAT at 20%</span><span>£${(net()*CONFIG.VAT).toFixed(2)}</span></div>`}
@@ -833,8 +865,9 @@ function renderReadback(){
     row('VAT treatment',b.location==='uk'?'UK — VAT at 20%'
       :(b.location==='nonuk'?'Outside the UK — no VAT':''))+
     row('Payment',b.payWhen==='now'?'Paying now':(b.payDate?('Invoice — payment agreed for '+pretty(b.payDate)):''))+
-    row('Total',markCount()+' × £'+CONFIG.PRICE+' = £'+total().toFixed(2)+
-      (vatExempt()?' (no VAT)':' inc VAT'));
+    row('Total',markCount()+' line'+(markCount()===1?'':'s')+' — £'+total().toFixed(2)+
+      (vatExempt()?' (no VAT)':' inc VAT')+
+      (net()<rrp()?' (RRP £'+rrp().toFixed(2)+' net)':''));
 }
 
 /* ---------- date warnings ---------- */
@@ -974,7 +1007,7 @@ async function load(){
           if(k==='sessionId'||k==='ref'||k==='section') return;
           if(sv[k]!==undefined) state[k]=sv[k];
         });
-        if(!Array.isArray(state.marks)||!state.marks.length) state.marks=[{text:'',kind:'word'}];
+        if(!Array.isArray(state.marks)||!state.marks.length) state.marks=[{text:'',kind:'word',price:149}];
       }else{
         /* Arrived from a Free or Quick Search — carry across what we know
            so the sales person is not retyping the client's own words. */
@@ -983,8 +1016,8 @@ async function load(){
         if(s.email) state.contact.email=s.email;
         if(s.phone) state.contact.phone=s.phone;
         if(s.business_name) state.contact.org=s.business_name;
-        if(s.name) state.marks=[{text:s.name,kind:'word'}];
-        if(s.tagline) state.marks.push({text:s.tagline,kind:'tagline'});
+        if(s.name) state.marks=[{text:s.name,kind:'word',price:149}];
+        if(s.tagline) state.marks.push({text:s.tagline,kind:'tagline',price:149});
         if(Array.isArray(s.classes)&&s.classes.length) state.classes=s.classes.join(', ');
         if(s.business_website) state.discovery.desc=
           (state.discovery.desc?state.discovery.desc+' ':'')+'Website: '+s.business_website;
