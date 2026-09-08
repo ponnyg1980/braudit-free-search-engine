@@ -560,6 +560,7 @@ const CONFIG=(function(){
     JOURNEY:'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey',
     SESSION:q.get('s')||'',
     STAFF:q.get('u')||localStorage.getItem('tmh_staff')||'',
+    TOKEN:q.get('k')||localStorage.getItem('tmh_staff_token')||'',
     PRICE:99,            /* per mark, no discount (Jonathan, 7 Sep) */
     VAT:0.20,
     LEAD_DAYS:3          /* clear working days: payment -> audit delivered */
@@ -1149,7 +1150,7 @@ async function toPayment(){
     const r=await fetch('/audit-pay',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({staff:1,session_id:id,ref:state.ref,
-        consult:!state.consult.declined})});
+        k:CONFIG.TOKEN,consult:!state.consult.declined})});
     const d=await r.json();
     if(d&&d.ok&&d.url){
       box.innerHTML=`
@@ -1190,6 +1191,15 @@ async function toPayment(){
 /* =====================================================================
    GO
    ===================================================================== */
+/* WHO is working this enquiry (Jonathan, 8 Sep): resolved from the staff
+   token server-side — it drives the Deal owner in Zoho, so it is never a
+   free-typed name. */
+(async()=>{try{
+  if(!CONFIG.TOKEN) return;
+  const r=await fetch('/staff-whoami?k='+encodeURIComponent(CONFIG.TOKEN));
+  const d=await r.json();
+  if(d&&d.ok){state.staff=d.name;state.staffEmail=d.email;renderGate();}
+}catch(e){}})();
 bindAll();
 load();
 </script>
