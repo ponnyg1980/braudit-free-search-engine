@@ -1257,13 +1257,27 @@ function requestFastTrack(){
 /* ================= 8 — SUMMARY & PAYMENT ================= */
 function money(n){return '£'+n.toFixed(2);}
 function vatExempt(){return state.applicant.kind==='nonuk_org'||state.applicant.kind==='nonuk_ind';}
+function auditLines(){
+  /* One line per TYPE (Jonathan, 9 Sep): Name, Logo, Tagline at £149 each.
+     Billing lines, not search contexts — the tagline is billed as a line but
+     travels inside the word search alongside the name. */
+  const lines=[{label:'Name search — '+state.name,price:CONFIG.PRICE_AUDIT}];
+  if(state.hasLogo)lines.push({label:'Logo search'+(state.logoLater?' (logo to follow)':''),
+    price:CONFIG.PRICE_AUDIT});
+  if(state.tagline)lines.push({label:'Tagline — '+state.tagline,price:CONFIG.PRICE_AUDIT});
+  return lines;
+}
 function pricing(){
   const consult=state.consult.taken===true;
-  const gross=CONFIG.PRICE_AUDIT+(consult?CONFIG.PRICE_CONSULT:0);
+  const lines=auditLines();
+  const linesum=lines.reduce((a,l)=>a+l.price,0);
+  const gross=linesum+(consult?CONFIG.PRICE_CONSULT:0);
+  /* The client-facing promotion ALWAYS lands the net total on £99, however
+     many lines the brand carries. The value stack is the point. */
   const discount=gross-CONFIG.NET_TOTAL;
   const net=CONFIG.NET_TOTAL, exempt=vatExempt();
   const vat=exempt?0:net*CONFIG.VAT_RATE;
-  return {consult,gross,discount,net,vat,exempt,total:net+vat};
+  return {consult,lines,gross,discount,net,vat,exempt,total:net+vat};
 }
 function invoiceRef(){return 'AUD-'+(state.sessionId||'').replace(/-/g,'').slice(0,8).toUpperCase();}
 function renderSummary(){
@@ -1300,7 +1314,7 @@ function renderSummary(){
        state.applicant.postcode].filter(Boolean).join(', '));
 
   document.getElementById('sum-totals').innerHTML=
-    `<div class="tr"><span>Trademark Audit</span><span>${money(CONFIG.PRICE_AUDIT)}</span></div>`+
+    pr.lines.map(l=>`<div class="tr"><span>${l.label}</span><span>${money(l.price)}</span></div>`).join('')+
     (pr.consult?`<div class="tr"><span>Audit Consultation</span><span>${money(CONFIG.PRICE_CONSULT)}</span></div>`:'')+
     `<div class="tr disc"><span>Audit Promotion</span><span>&minus;${money(pr.discount)}</span></div>`+
     `<div class="tr"><span>Net total</span><span>${money(pr.net)}</span></div>`+
