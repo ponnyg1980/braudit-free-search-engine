@@ -118,17 +118,35 @@ _PAGES = {
 # extend. A wrong or missing token gets the sign-in page, never the form.
 _STAFF_PATHS = {'/staff-enquiry'}
 
-def _staff_ok(token: str) -> bool:
-    """Constant-time check of the shared staff token.
+def _staff_user(token: str) -> dict | None:
+    """Resolve a staff token to a user, constant-time.
 
-    STAFF_TOKEN unset means the staff pages are unreachable rather than open
-    to everyone — an absent secret must never be the same as no lock.
+    STAFF_TOKENS (JSON: [{"t": token, "n": name, "e": email}, …]) gives each
+    staff member their own token, so a staff order carries WHO took it — the
+    Deal owner in Zoho follows it (Jonathan, 8 Sep). The legacy shared
+    STAFF_TOKEN still works and maps to Admin Support, so nothing breaks
+    mid-rollout. No secrets configured -> locked, never open.
     """
-    want = os.environ.get('STAFF_TOKEN', '')
-    if not want:
-        return False
     import hmac
-    return hmac.compare_digest(str(token or ''), want)
+    tok = str(token or '')
+    raw = os.environ.get('STAFF_TOKENS', '')
+    if raw:
+        try:
+            for u in json.loads(raw):
+                if hmac.compare_digest(tok, str(u.get('t', ''))):
+                    return {'name': str(u.get('n', 'Staff')),
+                            'email': str(u.get('e', ''))}
+        except (ValueError, TypeError):
+            pass
+    legacy = os.environ.get('STAFF_TOKEN', '')
+    if legacy and hmac.compare_digest(tok, legacy):
+        return {'name': 'Admin Support',
+                'email': 'support@thetrademarkhelpline.com'}
+    return None
+
+
+def _staff_ok(token: str) -> bool:
+    return _staff_user(token) is not None
 
 
 # Shown instead of the form when the token is missing or wrong. Stores what
@@ -530,6 +548,11 @@ def _audit_pay(payload: dict) -> dict:
     email = str(payload.get('email') or '')[:200]
     session_id = str(payload.get('session_id') or '')[:60]
     staff = bool(payload.get('staff'))
+    # WHO took the order (Jonathan, 8 Sep): the staff token travels with the
+    # payment request and resolves server-side — the browser only ever sends
+    # the token, never a name it chose for itself.
+    su = _staff_user(str(payload.get('k') or '')) if staff else None
+    staff_email = (su or {}).get('email', '')
     qty, enq = 1, None
     entity = ''
 
@@ -580,8 +603,7 @@ def _audit_pay(payload: dict) -> dict:
                 'pay_date': str(billing.get('payDate') or ''),
                 'billing_entity': str(billing.get('entity') or '')[:200],
                 'billing_email': email, 'invoice_ref': ref,
-                'source': 'staff_enquiry',
-                'xero_invoice': 'pending_credentials',
+                'source': 'staff_enquiry', 'staff_email': staff_email,
             })
             # Scenario 2's second half: raise the AUTHORISED invoice in Xero
             # with the agreed due date, emailed from Xero so the client pays
@@ -621,6 +643,7 @@ def _audit_pay(payload: dict) -> dict:
         # Carried so the webhook -> Xero step needs no second lookup.
         'metadata[vat_exempt]': '1' if vat_exempt else '0',
         'metadata[entity]': entity,
+        'metadata[staff_email]': staff_email,
     }
     if email:
         form['customer_email'] = email
@@ -710,6 +733,7 @@ def _stripe_webhook(raw: bytes, sig_header: str) -> dict:
         'source': meta.get('source'),
         'vat_exempt': meta.get('vat_exempt') == '1',
         'billing_entity': meta.get('entity') or cd.get('name') or '',
+        'staff_email': meta.get('staff_email') or '',
         'customer_email': cd.get('email'),
     })
     # Scenario 1's second half: raise the Xero invoice and mark it paid
@@ -806,6 +830,152 @@ def _xero_callback(params: dict) -> str:
                 'The token exchange worked but the journey function did not '
                 'store it. Check XERO_PROCESS_KEY matches on both sides, '
                 'then start again from the consent link.')
+
+
+def _ft_sig(sid: str, action: str, exp: str) -> str:
+    import hashlib
+    import hmac as _hmac
+    key = (os.environ.get('XERO_PROCESS_KEY') or '').encode()
+    return _hmac.new(key, f'{sid}|{action}|{exp}'.encode(),
+                     hashlib.sha256).hexdigest()
+
+
+def _ft_ok(params: dict) -> bool:
+    import hmac as _hmac
+    import time
+    sid = str(params.get('sid') or '')
+    action = str(params.get('action') or '')
+    exp = str(params.get('exp') or '')
+    sig = str(params.get('sig') or '')
+    if not (sid and action in ('approve', 'reject') and exp and sig):
+        return False
+    try:
+        if int(exp) < time.time():
+            return False
+    except ValueError:
+        return False
+    if not (os.environ.get('XERO_PROCESS_KEY') or ''):
+        return False
+    return _hmac.compare_digest(_ft_sig(sid, action, exp), sig)
+
+
+def _ft_earliest() -> tuple[str, str]:
+    """Earliest fast-track consultation: the next COMPLETE half-day block
+    (9-1 or 1-5, Mon-Fri) is needed to prepare the audit, so the earliest
+    appointment is that block's end (Jonathan, 8 Sep)."""
+    import datetime as _dt
+    try:
+        from zoneinfo import ZoneInfo
+        now = _dt.datetime.now(ZoneInfo('Europe/London'))
+    except Exception:
+        now = _dt.datetime.now()
+    d, t = now.date(), now.time()
+
+    def next_working(day):
+        while day.weekday() >= 5:
+            day += _dt.timedelta(days=1)
+        return day
+
+    if d.weekday() < 5 and t < _dt.time(9, 0):
+        return (d.isoformat(), '13:00')            # morning block -> 1pm
+    if d.weekday() < 5 and t < _dt.time(13, 0):
+        return (d.isoformat(), '17:00')            # afternoon block -> 5pm
+    nd = next_working(d + _dt.timedelta(days=1))
+    return (nd.isoformat(), '13:00')               # tomorrow morning -> 1pm
+
+
+def _fasttrack_page(params: dict) -> str:
+    """GET /fasttrack/decide — the landing for the one-click links in the
+    approval email. Verifies the signed link, then: reject confirms in one
+    press; approve asks for the date and time (pre-filled with the earliest
+    slot the half-day rule allows) so the client's confirmation email can
+    say when. The actual decision is POSTed to /fasttrack/submit."""
+    head = ('<!DOCTYPE html><html><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<meta name="robots" content="noindex,nofollow">'
+            '<title>Fast Track — TMH</title>'
+            '<link rel="stylesheet" href="/braudit.css">'
+            '<style>body{background:#eef2f5;display:grid;place-items:center;'
+            'min-height:100vh}.b{background:#fff;border:1.5px solid var(--line);'
+            'border-radius:14px;padding:30px 34px;width:min(460px,calc(100vw - 32px))}'
+            'h1{margin:0 0 8px;font-size:20px;color:var(--navy)}'
+            'p{margin:0 0 16px;color:var(--quiet);font-size:14px;line-height:1.5}'
+            'label{display:block;font-weight:700;color:var(--navy);margin:12px 0 5px;'
+            'font-size:13.5px}input{width:100%;padding:11px 13px;'
+            'border:1.5px solid var(--line);border-radius:9px;font-size:15px;'
+            'font-family:inherit}.btn{margin-top:18px;width:100%}</style></head><body>')
+    tail = '</body></html>'
+    if not _ft_ok(params):
+        return (head + '<div class="b"><h1>Link expired or invalid</h1>'
+                '<p>This decision link is no longer valid. Open the deal in '
+                'Zoho and contact the client directly instead.</p></div>' + tail)
+    sid = str(params.get('sid') or '')
+    action = str(params.get('action') or '')
+    exp = str(params.get('exp') or '')
+    sig = str(params.get('sig') or '')
+    hidden = (f'<input type="hidden" name="sid" value="{sid}">'
+              f'<input type="hidden" name="action" value="{action}">'
+              f'<input type="hidden" name="exp" value="{exp}">'
+              f'<input type="hidden" name="sig" value="{sig}">')
+    if action == 'reject':
+        return (head + '<div class="b"><h1>Reject this fast track?</h1>'
+                '<p>The client is emailed straight away: their audit is being '
+                'treated as a priority and will be with them within one '
+                'working day. The deal moves back to Send for Research.</p>'
+                '<form method="POST" action="/fasttrack/submit">' + hidden +
+                '<button class="btn primary" type="submit">Confirm — send the '
+                'email</button></form></div>' + tail)
+    ed, et = _ft_earliest()
+    return (head + '<div class="b"><h1>Approve fast track</h1>'
+            '<p>Confirm when the consultation will be. The earliest the '
+            'half-day rule allows is pre-filled — one full 9–1 or 1–5 block '
+            'is needed to prepare the audit first.</p>'
+            '<form method="POST" action="/fasttrack/submit">' + hidden +
+            f'<label>Consultation date</label><input type="date" name="date" value="{ed}" required>'
+            f'<label>Time</label><input type="time" name="time" value="{et}" required>'
+            '<button class="btn primary" type="submit">Approve — email the '
+            'client</button></form></div>' + tail)
+
+
+def _fasttrack_submit(form: dict) -> str:
+    """POST /fasttrack/submit — re-verifies the signature (the browser is
+    untrusted even when it is ours), relays to the journey function, and
+    reports plainly."""
+    import urllib.request
+    ok_page = ('<!DOCTYPE html><html><head><meta charset="utf-8">'
+               '<link rel="stylesheet" href="/braudit.css"><style>body{background:#eef2f5;'
+               'display:grid;place-items:center;min-height:100vh}.b{background:#fff;'
+               'border:1.5px solid var(--line);border-radius:14px;padding:30px 34px;'
+               'width:min(460px,calc(100vw - 32px))}h1{margin:0 0 8px;font-size:20px;'
+               'color:var(--navy)}p{margin:0;color:var(--quiet);font-size:14px}</style>'
+               '</head><body><div class="b"><h1>%s</h1><p>%s</p></div></body></html>')
+    if not _ft_ok(form):
+        return ok_page % ('Link expired or invalid',
+                          'Nothing was sent. Use a fresh link from the email.')
+    body = json.dumps({
+        'key': os.environ.get('XERO_PROCESS_KEY', ''),
+        'session_id': str(form.get('sid') or ''),
+        'action': str(form.get('action') or ''),
+        'date': str(form.get('date') or ''),
+        'time': str(form.get('time') or ''),
+    }).encode()
+    req = urllib.request.Request(_JOURNEY_URL.rstrip('/') + '/fasttrack/decide',
+                                 data=body,
+                                 headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            d = json.loads(r.read().decode())
+        if d.get('ok'):
+            act = str(form.get('action') or '')
+            return ok_page % ('Done — the client has been emailed',
+                              ('Approved for ' + str(form.get('date')) + ' at '
+                               + str(form.get('time'))) if act == 'approve'
+                              else 'Rejected politely, with the priority promise.')
+    except Exception:
+        pass
+    return ok_page % ('That didn\'t send',
+                      'The decision was not relayed. Try the link again, or '
+                      'handle it from the Zoho deal.')
 
 
 def _allowed_origin(origin: str) -> str:
@@ -913,6 +1083,17 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_raw(_xero_callback(params).encode(),
                            'text/html; charset=utf-8')
             return
+        if path == '/staff-whoami':
+            u = _staff_user(params.get('k', ''))
+            if u:
+                self._send({'ok': True, 'name': u['name'], 'email': u['email']})
+            else:
+                self._send({'ok': False}, 403)
+            return
+        if path == '/fasttrack/decide':
+            self._send_raw(_fasttrack_page(params).encode(),
+                           'text/html; charset=utf-8')
+            return
         if path == '/nuggets':
             from .nuggets import payload as _nug
             self._send({'ok': True, 'nuggets': _nug()})
@@ -931,6 +1112,18 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.rstrip('/')
+        if path == '/fasttrack/submit':
+            # Form-encoded from the decision page; carries its own HMAC, so
+            # it sits outside the engine-key gate like the webhook does.
+            try:
+                length = int(self.headers.get('Content-Length', 0) or 0)
+                raw = self.rfile.read(length).decode() if length else ''
+                form = {k: v[0] for k, v in parse_qs(raw).items()}
+            except (ValueError, OSError):
+                form = {}
+            self._send_raw(_fasttrack_submit(form).encode(),
+                           'text/html; charset=utf-8')
+            return
         if path == '/stripe-webhook':
             # Handled BEFORE the engine-key check and before any JSON parse:
             # Stripe cannot send our shared header, and the signature is over
