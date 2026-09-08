@@ -528,6 +528,19 @@ def _audit_pay(payload: dict) -> dict:
     session_id = str(payload.get('session_id') or '')[:60]
     staff = bool(payload.get('staff'))
     qty, enq = 1, None
+    entity = ''
+
+    if not staff and session_id:
+        # Client route: the VAT treatment comes from the applicant kind the
+        # client confirmed at the billing step, which the page persists onto
+        # the session — stored fact, not a browser flag. The payload value
+        # above survives only as a fallback for sessions already in flight
+        # when this shipped.
+        sess = _journey_session(session_id)
+        ab = ((sess or {}).get('last_result') or {}).get('audit_billing')
+        if isinstance(ab, dict) and ab.get('kind'):
+            vat_exempt = str(ab.get('kind', '')).startswith('nonuk')
+            entity = str(ab.get('entity') or '')[:200]
 
     if staff:
         sess = _journey_session(session_id)
@@ -544,6 +557,7 @@ def _audit_pay(payload: dict) -> dict:
                           if isinstance(m, dict) and str(m.get('text') or '').strip()]))
         billing = enq.get('billing') or {}
         email = email or str(billing.get('email') or '')[:200]
+        entity = str(billing.get('entity') or '')[:200]
         # Both of these are decided by the STORED enquiry, not the request:
         # VAT from the confirmed client location (G-12 guarantees it is set),
         # and consultation from whether an appointment was actually booked.
@@ -566,6 +580,10 @@ def _audit_pay(payload: dict) -> dict:
                 'source': 'staff_enquiry',
                 'xero_invoice': 'pending_credentials',
             })
+            # Scenario 2's second half: raise the AUTHORISED invoice in Xero
+            # with the agreed due date, emailed from Xero so the client pays
+            # through the invoice itself and reconciliation stays native.
+            _xero_process(session_id, 'invoice')
             return {'ok': True, 'invoice': 'queued', 'marks': qty,
                     'total_pence': unit_p * qty, 'status': 200}
 
@@ -591,6 +609,9 @@ def _audit_pay(payload: dict) -> dict:
         'metadata[session_id]': session_id,
         'metadata[marks]': str(qty),
         'metadata[source]': 'staff_enquiry' if staff else 'client_checkout',
+        # Carried so the webhook -> Xero step needs no second lookup.
+        'metadata[vat_exempt]': '1' if vat_exempt else '0',
+        'metadata[entity]': entity,
     }
     if email:
         form['customer_email'] = email
@@ -668,7 +689,9 @@ def _stripe_webhook(raw: bytes, sig_header: str) -> dict:
 
     obj = (ev.get('data') or {}).get('object') or {}
     meta = obj.get('metadata') or {}
-    _journey_event(str(meta.get('session_id') or ''), 'audit_paid', {
+    sid = str(meta.get('session_id') or '')
+    cd = obj.get('customer_details') or {}
+    _journey_event(sid, 'audit_paid', {
         'stripe_session': obj.get('id'),
         'payment_intent': obj.get('payment_intent'),
         'amount_total': obj.get('amount_total'),
@@ -676,13 +699,104 @@ def _stripe_webhook(raw: bytes, sig_header: str) -> dict:
         'marks': meta.get('marks'),
         'invoice_ref': meta.get('invoice_ref'),
         'source': meta.get('source'),
-        'customer_email': (obj.get('customer_details') or {}).get('email'),
-        # Xero cannot be raised yet: there is no refresh token, only an
-        # expired access token (checked 7 Sep). Flagged so the paid orders
-        # awaiting an invoice can be listed rather than silently forgotten.
-        'xero_invoice': 'pending_credentials',
+        'vat_exempt': meta.get('vat_exempt') == '1',
+        'billing_entity': meta.get('entity') or cd.get('name') or '',
+        'customer_email': cd.get('email'),
     })
+    # Scenario 1's second half: raise the Xero invoice and mark it paid
+    # against the Stripe clearing account. The journey function owns the
+    # Xero credentials (it has the database the rotating refresh token
+    # lives in); this is only the trigger, and it is best-effort — Stripe
+    # retries this webhook, and /xero/process is idempotent per session.
+    _xero_process(sid, 'paid')
     return {'ok': True, 'status': 200}
+
+
+def _xero_process(session_id: str, kind: str) -> None:
+    """Ask the journey function to raise the Xero invoice for a session.
+    No-op until XERO_PROCESS_KEY is configured on both sides."""
+    import urllib.request
+    key = (os.environ.get('XERO_PROCESS_KEY') or '').strip()
+    if not key or not session_id:
+        return
+    body = json.dumps({'key': key, 'session_id': session_id,
+                       'kind': kind}).encode()
+    req = urllib.request.Request(_JOURNEY_URL.rstrip('/') + '/xero/process',
+                                 data=body,
+                                 headers={'Content-Type': 'application/json'})
+    try:
+        urllib.request.urlopen(req, timeout=20).read()
+    except Exception:
+        pass
+
+
+def _xero_callback(params: dict) -> str:
+    """One-time Xero OAuth consent landing (GET /xero-callback).
+
+    Jonathan opens the consent URL, approves in Xero, and Xero redirects
+    here with a code. We exchange it and hand the refresh token STRAIGHT to
+    the journey function's token store — it never appears on screen, in a
+    log, or in chat. Returns HTML for the browser.
+    """
+    import base64
+    import urllib.parse
+    import urllib.request
+
+    def page(title, body):
+        return ('<!DOCTYPE html><html><head><meta charset="utf-8">'
+                '<title>%s</title><style>body{font-family:sans-serif;'
+                'max-width:560px;margin:80px auto;color:#2d455a}</style>'
+                '</head><body><h2>%s</h2><p>%s</p></body></html>'
+                % (title, title, body))
+
+    cid = (os.environ.get('XERO_CLIENT_ID') or '').strip()
+    sec = (os.environ.get('XERO_CLIENT_SECRET') or '').strip()
+    key = (os.environ.get('XERO_PROCESS_KEY') or '').strip()
+    code = str(params.get('code') or '')
+    if not (cid and sec and key):
+        return page('Not configured',
+                    'XERO_CLIENT_ID, XERO_CLIENT_SECRET and XERO_PROCESS_KEY '
+                    'must be set on Render first.')
+    if not code:
+        return page('No code', 'Xero did not return an authorisation code. '
+                    'Start again from the consent link.')
+    form = urllib.parse.urlencode({
+        'grant_type': 'authorization_code', 'code': code,
+        'redirect_uri': 'https://braudit-free-search.onrender.com/xero-callback',
+    }).encode()
+    basic = base64.b64encode(f'{cid}:{sec}'.encode()).decode()
+    req = urllib.request.Request('https://identity.xero.com/connect/token',
+                                 data=form,
+                                 headers={'Authorization': 'Basic ' + basic,
+                                          'Content-Type': 'application/x-www-form-urlencoded'})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            tok = json.loads(r.read().decode())
+    except Exception as e:
+        return page('Exchange failed', 'Xero refused the code exchange: '
+                    '%s. Codes are single-use and short-lived — start again '
+                    'from the consent link.' % str(e)[:200])
+    rt = tok.get('refresh_token')
+    if not rt:
+        return page('No refresh token', 'Xero returned no refresh token. '
+                    'Check the app has the offline_access scope.')
+    body = json.dumps({'key': key, 'refresh_token': rt}).encode()
+    req2 = urllib.request.Request(_JOURNEY_URL.rstrip('/') + '/xero/connect',
+                                  data=body,
+                                  headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req2, timeout=20) as r:
+            d = json.loads(r.read().decode())
+        if d.get('ok'):
+            return page('Xero connected',
+                        'The refresh token is stored. Invoicing is live — '
+                        'you can close this tab.')
+    except Exception:
+        pass
+    return page('Storage failed',
+                'The token exchange worked but the journey function did not '
+                'store it. Check XERO_PROCESS_KEY matches on both sides, '
+                'then start again from the consent link.')
 
 
 def _allowed_origin(origin: str) -> str:
@@ -785,6 +899,10 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if path == '/healthz':
             self._send({'ok': True})
+            return
+        if path == '/xero-callback':
+            self._send_raw(_xero_callback(params).encode(),
+                           'text/html; charset=utf-8')
             return
         if path == '/nuggets':
             from .nuggets import payload as _nug
