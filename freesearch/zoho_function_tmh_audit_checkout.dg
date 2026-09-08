@@ -849,6 +849,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			// email (plus-addressing rule: search the prefix, verify exact),
 			// then create a Deal owned by the right user.
 			cid = "";
+			acc2Id = "";
 			srch = zoho.crm.searchRecords("Contacts","(Email:starts_with:" + emPre + ")");
 			for each  rec in srch
 			{
@@ -856,6 +857,52 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				{
 					cid = rec.get("id").toString();
 					break;
+				}
+			}
+			// No Contact -> is there a LEAD? A staff audit launched from a
+			// search lead must CONVERT it (Jonathan, 9 Sep), never leave a
+			// duplicate behind. Same pattern as the contact stage, including
+			// the AI-fields carry-over (conversion drops them -- proven
+			// 30 Aug).
+			if(cid == "")
+			{
+				fndLd2 = zoho.crm.searchRecords("Leads","(Email:starts_with:" + emPre + ")");
+				for each  ldr2 in fndLd2
+				{
+					if((ldr2.get("Email") != null) && ldr2.get("Email").toString().equalsIgnoreCase(emIn))
+					{
+						aiBlk2 = false;
+						aiSafe2 = false;
+						if(ldr2.get("AI_Tools_Blocked") != null)
+						{
+							aiBlk2 = ldr2.get("AI_Tools_Blocked").toString().equalsIgnoreCase("true");
+						}
+						if(ldr2.get("AI_Safe_Sender") != null)
+						{
+							aiSafe2 = ldr2.get("AI_Safe_Sender").toString().equalsIgnoreCase("true");
+						}
+						cMap2 = Map();
+						cMap2.put("overwrite",false);
+						cMap2.put("notify_lead_owner",false);
+						cMap2.put("notify_new_entity_owner",false);
+						cv2 = zoho.crm.convertLead(ldr2.get("id").toString().toLong(),cMap2);
+						if(cv2.get("Contacts") != null)
+						{
+							cid = cv2.get("Contacts").toString();
+						}
+						if(cv2.get("Accounts") != null)
+						{
+							acc2Id = cv2.get("Accounts").toString();
+						}
+						if((cid != "") && (aiBlk2 || aiSafe2))
+						{
+							aiC2 = Map();
+							aiC2.put("AI_Tools_Blocked",aiBlk2);
+							aiC2.put("AI_Safe_Sender",aiSafe2);
+							zoho.crm.updateRecord("Contacts",cid.toLong(),aiC2);
+						}
+						break;
+					}
 				}
 			}
 			if(cid == "")
@@ -899,6 +946,10 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			{
 				dNew.put("Contact_Name",cid);
 			}
+			if(acc2Id != "")
+			{
+				dNew.put("Account_Name",acc2Id);
+			}
 			if(p.get("session_id") != null)
 			{
 				dNew.put("Audit_Order_Ref",p.get("session_id").toString());
@@ -917,6 +968,21 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			dM.put("Owner",ownerId);
 			dM.put("Next_Action_Owner",ownerId);
 			dM.put("Next_Action_Date",zoho.currentdate);
+			// Search contexts (9 Sep): tagline rides inside the WORD search
+			// beside the name; the logo is the IMAGE context. Billing lines
+			// and search contexts are different things by design.
+			if(p.get("search_types") != null)
+			{
+				stl = List();
+				// Deluge refuses a method chain as a for-each source
+				// (proven on save, 9 Sep) -- assign it first.
+				stparts = p.get("search_types").toString().toList(";");
+				for each  stv in stparts
+				{
+					stl.add(stv);
+				}
+				dM.put("Braudit_Search_Types",stl);
+			}
 			if(p.get("invoice_number") != null)
 			{
 				dM.put("Invoice_Number",p.get("invoice_number").toString());
