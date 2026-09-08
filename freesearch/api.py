@@ -457,11 +457,23 @@ def _staff_gate(enq: dict) -> list:
         bad.append('G-05')
     if s('recommend', 'handling') == 'expedited' and not full(s('recommend', 'expReason')):
         bad.append('G-06')
-    if not (consult_d and full(s('consult', 'time')) and full(s('consult', 'adviser'))
-            and bool(s('consult', 'agreed')) and consult_d >= today):
-        bad.append('G-07')
-    if not (audit_d and consult_d and audit_d < consult_d):
-        bad.append('G-08')
+    # The appointment is the EXPECTED step (Jonathan, 8 Sep). A staff order
+    # may only skip it when the client would not commit on the call, and then
+    # only with a specific written reason a manager can review. The reason
+    # requirement is deliberately the same bar as the needs summary — a
+    # sentence, not a word.
+    declined = bool(s('consult', 'declined'))
+    if declined:
+        if not real(s('consult', 'declineReason')):
+            bad.append('G-07')
+        if not audit_d:
+            bad.append('G-08')      # no appointment -> the delivery date IS the promise
+    else:
+        if not (consult_d and full(s('consult', 'time')) and full(s('consult', 'adviser'))
+                and bool(s('consult', 'agreed')) and consult_d >= today):
+            bad.append('G-07')
+        if not (audit_d and consult_d and audit_d < consult_d):
+            bad.append('G-08')
     pay_when = s('billing', 'payWhen')
     pay_ok = (pay_when == 'now'
               or (pay_when == 'date' and pay_d and audit_d
@@ -473,6 +485,11 @@ def _staff_gate(enq: dict) -> list:
         bad.append('G-10')
     if not bool(s('readback', 'confirmed')):
         bad.append('G-11')
+    # VAT position confirmed at the billing step (Jonathan, 8 Sep): charged
+    # unless the CLIENT is outside the UK — asked, never inferred from the
+    # billing address, which may be a UK agent.
+    if s('billing', 'location') not in ('uk', 'nonuk'):
+        bad.append('G-12')
     return bad
 
 
@@ -525,7 +542,32 @@ def _audit_pay(payload: dict) -> dict:
                     'unmet': unmet, 'status': 200}
         qty = max(1, len([m for m in (enq.get('marks') or [])
                           if isinstance(m, dict) and str(m.get('text') or '').strip()]))
-        email = email or str((enq.get('billing') or {}).get('email') or '')[:200]
+        billing = enq.get('billing') or {}
+        email = email or str(billing.get('email') or '')[:200]
+        # Both of these are decided by the STORED enquiry, not the request:
+        # VAT from the confirmed client location (G-12 guarantees it is set),
+        # and consultation from whether an appointment was actually booked.
+        vat_exempt = billing.get('location') == 'nonuk'
+        consult = not bool((enq.get('consult') or {}).get('declined'))
+
+        # Scenario 2 — invoice with an agreed payment date. No money moves
+        # now, so no Stripe session: the request is recorded (having already
+        # passed the full gate above) and the Xero invoice is raised from
+        # this event. Decided by the stored payWhen, never a browser flag.
+        if billing.get('payWhen') == 'date':
+            unit_p = (AUDIT_NET_PENCE if vat_exempt
+                      else int(round(AUDIT_NET_PENCE * 1.20)))
+            _journey_event(session_id, 'audit_invoice_requested', {
+                'marks': qty, 'unit_pence': unit_p,
+                'total_pence': unit_p * qty, 'vat_exempt': vat_exempt,
+                'pay_date': str(billing.get('payDate') or ''),
+                'billing_entity': str(billing.get('entity') or '')[:200],
+                'billing_email': email, 'invoice_ref': ref,
+                'source': 'staff_enquiry',
+                'xero_invoice': 'pending_credentials',
+            })
+            return {'ok': True, 'invoice': 'queued', 'marks': qty,
+                    'total_pence': unit_p * qty, 'status': 200}
 
     unit = (AUDIT_NET_PENCE if vat_exempt
             else int(round(AUDIT_NET_PENCE * 1.20)))
@@ -552,6 +594,9 @@ def _audit_pay(payload: dict) -> dict:
     }
     if email:
         form['customer_email'] = email
+        # Scenario 1: the client gets a Stripe receipt the moment payment
+        # lands, independent of the Xero invoice that follows.
+        form['payment_intent_data[receipt_email]'] = email
     # Idempotency: the same enquiry at the same price returns the SAME
     # Checkout Session instead of a second one, so a double click or a retry
     # cannot produce two payments (scope INT-004 / AC-07).
