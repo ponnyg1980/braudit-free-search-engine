@@ -373,7 +373,8 @@ def _static(path: str):
 
 _JOURNEY_URL = (os.environ.get('JOURNEY_URL')
                 or 'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey')
-AUDIT_NET_PENCE = 9900          # £99 per mark. No multi-mark discount (7 Sep).
+AUDIT_LINE_PENCE = 14900        # RRP per line item: Name / Logo / Tagline (9 Sep).
+AUDIT_MIN_PENCE = 9900          # net order floor — no order goes below £99.
 
 
 def _journey_session(session_id: str) -> dict | None:
@@ -556,6 +557,7 @@ def _audit_pay(payload: dict) -> dict:
     qty, enq = 1, None
     entity = ''
 
+    sess = None
     if not staff and session_id:
         # Client route: the VAT treatment comes from the applicant kind the
         # client confirmed at the billing step, which the page persists onto
@@ -579,8 +581,32 @@ def _audit_pay(payload: dict) -> dict:
             _journey_event(session_id, 'audit_pay_refused', {'unmet': unmet})
             return {'ok': False, 'error': 'enquiry is not ready for payment',
                     'unmet': unmet, 'status': 200}
-        qty = max(1, len([m for m in (enq.get('marks') or [])
-                          if isinstance(m, dict) and str(m.get('text') or '').strip()]))
+        # Staff line items: each mark row is a line the staff member priced
+        # (£0–£149 each, order floor £99 net) — their discount decision,
+        # validated here against the STORED enquiry, never the request.
+        rows = [m for m in (enq.get('marks') or [])
+                if isinstance(m, dict) and str(m.get('text') or '').strip()]
+        kl = {'word': 'Name', 'logo': 'Logo', 'tagline': 'Tagline',
+              'product': 'Product name', 'other': 'Mark'}
+        lines = []
+        for m in rows:
+            try:
+                gbp = float(m.get('price', 149))
+            except (TypeError, ValueError):
+                gbp = 149.0
+            pence = int(round(gbp * 100))
+            if pence < 0 or pence > AUDIT_LINE_PENCE:
+                return {'ok': False, 'error': 'line price out of bounds',
+                        'status': 200}
+            lines.append({'l': (kl.get(str(m.get('kind')), 'Mark') + ' — '
+                                + str(m.get('text'))[:60]), 'p': pence})
+        if not lines or sum(x['p'] for x in lines) < AUDIT_MIN_PENCE:
+            _journey_event(session_id, 'audit_pay_refused',
+                           {'unmet': ['G-13']})
+            return {'ok': False, 'error': 'order total below the £99 minimum',
+                    'unmet': ['G-13'], 'status': 200}
+        discount_p = 0
+        qty = len(lines)
         billing = enq.get('billing') or {}
         email = email or str(billing.get('email') or '')[:200]
         entity = str(billing.get('entity') or '')[:200]
@@ -595,11 +621,12 @@ def _audit_pay(payload: dict) -> dict:
         # passed the full gate above) and the Xero invoice is raised from
         # this event. Decided by the stored payWhen, never a browser flag.
         if billing.get('payWhen') == 'date':
-            unit_p = (AUDIT_NET_PENCE if vat_exempt
-                      else int(round(AUDIT_NET_PENCE * 1.20)))
+            net_p = sum(x['p'] for x in lines)
+            tot_p = net_p if vat_exempt else int(round(net_p * 1.20))
             _journey_event(session_id, 'audit_invoice_requested', {
-                'marks': qty, 'unit_pence': unit_p,
-                'total_pence': unit_p * qty, 'vat_exempt': vat_exempt,
+                'marks': qty, 'lines': lines, 'discount_pence': 0,
+                'net_pence': net_p,
+                'total_pence': tot_p, 'vat_exempt': vat_exempt,
                 'pay_date': str(billing.get('payDate') or ''),
                 'billing_entity': str(billing.get('entity') or '')[:200],
                 'billing_email': email, 'invoice_ref': ref,
@@ -610,15 +637,32 @@ def _audit_pay(payload: dict) -> dict:
             # through the invoice itself and reconciliation stays native.
             _xero_process(session_id, 'invoice')
             return {'ok': True, 'invoice': 'queued', 'marks': qty,
-                    'total_pence': unit_p * qty, 'status': 200}
+                    'total_pence': tot_p, 'status': 200}
 
-    unit = (AUDIT_NET_PENCE if vat_exempt
-            else int(round(AUDIT_NET_PENCE * 1.20)))
+    if not staff:
+        # Client line items derive from the STORED session: the name always,
+        # a tagline line when one was searched, a logo line when one was
+        # given — £149 each, and the Audit Promotion ALWAYS lands the net
+        # total on £99 (Jonathan, 9 Sep). The value stack is the point.
+        if sess is None and session_id:
+            sess = _journey_session(session_id)
+        nm = str((sess or {}).get('name') or 'your brand')[:60]
+        lines = [{'l': 'Name search — ' + nm, 'p': AUDIT_LINE_PENCE}]
+        if (sess or {}).get('has_logo'):
+            lines.append({'l': 'Logo search', 'p': AUDIT_LINE_PENCE})
+        if (sess or {}).get('tagline'):
+            lines.append({'l': 'Tagline — '
+                          + str(sess.get('tagline'))[:50], 'p': AUDIT_LINE_PENCE})
+        qty = len(lines)
+        discount_p = sum(x['p'] for x in lines) - AUDIT_MIN_PENCE
+
+    mult = 1.0 if vat_exempt else 1.20
+    net_total = sum(x['p'] for x in lines) - discount_p
+    gross_total = int(round(net_total * mult))
     name = ('Trademark Audit & Consultation' if consult else 'Trademark Audit')
     desc = ('Audit Promotion applied'
             + (' — VAT not applicable (outside UK)' if vat_exempt
-               else ' — includes VAT @ 20%')
-            + (f' — {qty} marks' if qty > 1 else ''))
+               else ' — includes VAT @ 20%'))
     # Land on OUR thank-you page, personalised from the session — never the
     # bare WP homepage (Jonathan, 8 Sep: "there should be a what happens
     # next"). Cancel returns to the same page in its "nothing was taken"
@@ -631,11 +675,15 @@ def _audit_pay(payload: dict) -> dict:
         'client_reference_id': ref or session_id or 'AUD',
         'success_url': back + '1',
         'cancel_url': back + '0',
-        'line_items[0][quantity]': str(qty),
-        'line_items[0][price_data][currency]': 'gbp',
-        'line_items[0][price_data][unit_amount]': str(unit),
-        'line_items[0][price_data][product_data][name]': name,
-        'line_items[0][price_data][product_data][description]': desc,
+    }
+    for i, ln in enumerate(lines):
+        form[f'line_items[{i}][quantity]'] = '1'
+        form[f'line_items[{i}][price_data][currency]'] = 'gbp'
+        form[f'line_items[{i}][price_data][unit_amount]'] = str(
+            int(round(ln['p'] * mult)))
+        form[f'line_items[{i}][price_data][product_data][name]'] = ln['l'][:100]
+    form[f'line_items[0][price_data][product_data][description]'] = (name + ' — ' + desc)[:300]
+    form.update({
         'metadata[invoice_ref]': ref,
         'metadata[session_id]': session_id,
         'metadata[marks]': str(qty),
@@ -644,7 +692,35 @@ def _audit_pay(payload: dict) -> dict:
         'metadata[vat_exempt]': '1' if vat_exempt else '0',
         'metadata[entity]': entity,
         'metadata[staff_email]': staff_email,
-    }
+        'metadata[lines]': json.dumps(
+            [{'l': x['l'][:38], 'p': x['p']} for x in lines])[:490],
+        'metadata[discount_pence]': str(discount_p),
+    })
+    # The client promotion is a real Stripe discount, so the checkout page
+    # itself shows the £149 lines and the promotion taking it to £99.
+    if discount_p > 0:
+        cf = urllib.parse.urlencode({
+            'amount_off': str(int(round(discount_p * mult))),
+            'currency': 'gbp', 'duration': 'once',
+            'name': 'Audit Promotion'}).encode()
+        creq = urllib.request.Request('https://api.stripe.com/v1/coupons',
+            data=cf, headers={'Authorization': 'Bearer ' + sk,
+                              'Content-Type': 'application/x-www-form-urlencoded'})
+        try:
+            with urllib.request.urlopen(creq, timeout=15) as r:
+                coup = json.loads(r.read().decode())
+            if coup.get('id'):
+                form['discounts[0][coupon]'] = coup['id']
+        except Exception:
+            # No coupon -> charge the correct total on a single line rather
+            # than the full stack: rebuild as one £99 line. Never overcharge.
+            for k in [k for k in form if k.startswith('line_items[')]:
+                del form[k]
+            form['line_items[0][quantity]'] = '1'
+            form['line_items[0][price_data][currency]'] = 'gbp'
+            form['line_items[0][price_data][unit_amount]'] = str(gross_total)
+            form['line_items[0][price_data][product_data][name]'] = name
+            form['line_items[0][price_data][product_data][description]'] = desc
     if email:
         form['customer_email'] = email
         # Scenario 1: the client gets a Stripe receipt the moment payment
@@ -654,7 +730,7 @@ def _audit_pay(payload: dict) -> dict:
     # Checkout Session instead of a second one, so a double click or a retry
     # cannot produce two payments (scope INT-004 / AC-07).
     idem = hashlib.sha256(
-        f'{session_id}|{ref}|{qty}|{unit}'.encode()).hexdigest()
+        f'{session_id}|{ref}|{qty}|{net_total}|{discount_p}'.encode()).hexdigest()
     req = urllib.request.Request(
         'https://api.stripe.com/v1/checkout/sessions',
         data=urllib.parse.urlencode(form).encode(),
@@ -665,11 +741,12 @@ def _audit_pay(payload: dict) -> dict:
         with urllib.request.urlopen(req, timeout=15) as r:
             data = json.loads(r.read().decode())
         _journey_event(session_id, 'audit_pay_started',
-                       {'marks': qty, 'unit_pence': unit,
-                        'total_pence': unit * qty,
+                       {'marks': qty, 'lines': lines,
+                        'discount_pence': discount_p,
+                        'net_pence': net_total, 'total_pence': gross_total,
                         'stripe_session': str(data.get('id') or '')})
         return {'ok': True, 'url': data.get('url'),
-                'marks': qty, 'total_pence': unit * qty, 'status': 200}
+                'marks': qty, 'total_pence': gross_total, 'status': 200}
     except urllib.error.HTTPError as e:
         try:
             err = json.loads(e.read().decode()).get('error', {}).get('message', '')
@@ -734,6 +811,8 @@ def _stripe_webhook(raw: bytes, sig_header: str) -> dict:
         'vat_exempt': meta.get('vat_exempt') == '1',
         'billing_entity': meta.get('entity') or cd.get('name') or '',
         'staff_email': meta.get('staff_email') or '',
+        'lines': meta.get('lines') or '',
+        'discount_pence': meta.get('discount_pence') or '0',
         'customer_email': cd.get('email'),
     })
     # Scenario 1's second half: raise the Xero invoice and mark it paid
