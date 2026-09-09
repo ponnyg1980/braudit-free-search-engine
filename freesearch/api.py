@@ -504,12 +504,17 @@ def _staff_gate(enq: dict) -> list:
         if not (consult_d and full(s('consult', 'time')) and full(s('consult', 'adviser'))
                 and bool(s('consult', 'agreed')) and consult_d >= today):
             bad.append('G-07')
-        if not (audit_d and consult_d and audit_d < consult_d):
+        # Same-day delivery + consultation is allowed (point 9, 9 Sep);
+        # delivery just cannot come AFTER the appointment.
+        if not (audit_d and consult_d and audit_d <= consult_d):
             bad.append('G-08')
+    # Point 7 (9 Sep): staff agree dates live on the call — no working-day
+    # guard rails. The agreed date just has to exist and not postdate the
+    # delivery it funds.
     pay_when = s('billing', 'payWhen')
     pay_ok = (pay_when == 'now'
-              or (pay_when == 'date' and pay_d and audit_d
-                  and working_days_after(pay_d, 3) <= audit_d))
+              or (pay_when == 'date' and pay_d
+                  and (not audit_d or pay_d <= audit_d)))
     if not (pay_ok and bool(s('billing', 'agreed'))):
         bad.append('G-09')
     if not (full(s('billing', 'entity')) and email_ok(s('billing', 'email'))
@@ -610,6 +615,19 @@ def _audit_pay(payload: dict) -> dict:
                         'status': 200}
             lines.append({'l': (kl.get(str(m.get('kind')), 'Mark') + ' — '
                                 + str(m.get('text'))[:60]), 'p': pence})
+        if len(lines) > 6:
+            return {'ok': False, 'error': 'six lines maximum — the search '
+                    'contract carries five word phrases plus a logo',
+                    'status': 200}
+        # Point 13: the consultation is always a line — £149 with its £149
+        # discount on by default (£0), removable to charge. Declined
+        # consultations carry no line at all.
+        consult_block = enq.get('consult') or {}
+        if not consult_block.get('declined'):
+            waived = consult_block.get('feeWaived', True)
+            lines.append({'l': 'Audit Consultation'
+                          + (' — discounted to £0' if waived else ''),
+                          'p': 0 if waived else AUDIT_LINE_PENCE})
         if not lines or sum(x['p'] for x in lines) < AUDIT_MIN_PENCE:
             _journey_event(session_id, 'audit_pay_refused',
                            {'unmet': ['G-13']})
@@ -1218,6 +1236,36 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.rstrip('/')
+        if path == '/staff-lookup':
+            # Typed Zoho lookups for the staff form (points 2 & 10, 9 Sep).
+            # Staff token in, candidates out — relayed via the journey so the
+            # engine never holds Zoho credentials.
+            try:
+                length = int(self.headers.get('Content-Length', 0) or 0)
+                payload = json.loads(self.rfile.read(length) or b'{}')
+            except (ValueError, json.JSONDecodeError):
+                self._send({'ok': False, 'error': 'invalid JSON'}, 400)
+                return
+            if not _staff_user(str(payload.get('k') or '')):
+                self._send({'ok': False, 'error': 'forbidden'}, 403)
+                return
+            module = str(payload.get('module') or '')
+            if module not in ('Contacts', 'Leads', 'Accounts'):
+                self._send({'ok': False, 'error': 'bad module'}, 400)
+                return
+            import urllib.request as _ur
+            body = json.dumps({'key': os.environ.get('XERO_PROCESS_KEY', ''),
+                               'module': module,
+                               'q': str(payload.get('q') or '')[:80]}).encode()
+            req = _ur.Request(_JOURNEY_URL.rstrip('/') + '/staff/lookup',
+                              data=body,
+                              headers={'Content-Type': 'application/json'})
+            try:
+                with _ur.urlopen(req, timeout=20) as r:
+                    self._send(json.loads(r.read().decode()))
+            except Exception:
+                self._send({'ok': False, 'error': 'lookup unavailable'}, 200)
+            return
         if path == '/fasttrack/submit':
             # Form-encoded from the decision page; carries its own HMAC, so
             # it sits outside the engine-key gate like the webhook does.
