@@ -517,8 +517,13 @@ def _staff_gate(enq: dict) -> list:
                   and (not audit_d or pay_d <= audit_d)))
     if not (pay_ok and bool(s('billing', 'agreed'))):
         bad.append('G-09')
+    # Structured Xero-format address (point 10, 9 Sep): line 1 + postcode are
+    # the minimum an invoice needs. Legacy single-line `addr` still counts, so
+    # sessions saved before v2.1 are not stranded.
+    addr_ok = (full(s('billing', 'addr1')) and full(s('billing', 'postcode'))) \
+        or full(s('billing', 'addr'))
     if not (full(s('billing', 'entity')) and email_ok(s('billing', 'email'))
-            and full(s('billing', 'addr'))):
+            and addr_ok):
         bad.append('G-10')
     if not bool(s('readback', 'confirmed')):
         bad.append('G-11')
