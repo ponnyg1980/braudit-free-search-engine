@@ -232,6 +232,8 @@ button.route small{display:block;font-weight:400;color:#64748b;margin-top:3px}
     <div class="sel-acts">
       <button class="btn" onclick="openEmail()">Email me my classes</button>
       <button class="btn ghost" onclick="copySelected()">Copy numbers</button>
+      <button class="btn primary" id="send-to-order" style="display:none"
+        onclick="sendToOrder()">Send to order form</button>
     </div>
     <div class="copybar" id="sel-copybar" style="display:none"><code id="sel-copytext"></code></div>
   </div>
@@ -507,6 +509,10 @@ function outHead(title){document.getElementById('out').style.display='';document
    a competitor's mark and class 35 from their own SIC codes.
    ====================================================================== */
 const picked=new Map();          // nice_class -> label
+const pickedTerms=new Map();     // nice_class -> [term strings], captured at
+                                 // pick time from the rendered row — the only
+                                 // moment the route's terms are guaranteed to
+                                 // be on screen (point 5, 9 Sep).
 
 function decorateRows(){
   document.querySelectorAll('#out-body .cls').forEach(row=>{
@@ -522,13 +528,20 @@ function decorateRows(){
     const b=document.createElement('button');
     b.className='pick'+(picked.has(n)?' on':'');
     b.textContent=picked.has(n)?'✓ Added':'+ Add';
-    b.onclick=()=>togglePick(n,label);
+    b.onclick=()=>{
+        const t=[...row.querySelectorAll('.term')].map(e=>e.textContent.trim()).filter(Boolean);
+        togglePick(n,label,t);
+      };
     const h=row.querySelector('.h');
     if(h) h.appendChild(b);
   });
 }
-function togglePick(n,label){
-  if(picked.has(n)) picked.delete(n); else picked.set(n,label||'');
+function togglePick(n,label,terms){
+  if(picked.has(n)){picked.delete(n);pickedTerms.delete(n);}
+  else{
+    picked.set(n,label||'');
+    if(terms&&terms.length) pickedTerms.set(n,terms);
+  }
   renderPicked();
   document.querySelectorAll('#out-body .cls').forEach(r=>{
     if(Number(r.dataset.cls)!==n)return;
@@ -552,6 +565,29 @@ function renderPicked(){
 new MutationObserver(decorateRows).observe(document.getElementById('out-body'),
   {childList:true,subtree:true});
 
+/* Point 5 (9 Sep): opened from the staff order form (?return=staff, with
+   window.opener), the picks — classes AND their terms — post straight back
+   into the form instead of dying in an email. Same-origin only. */
+function sendToOrder(){
+  if(!window.opener) return;
+  const classes=[...picked.keys()].sort((a,b)=>a-b);
+  const terms={};
+  classes.forEach(n=>{ if(pickedTerms.has(n)) terms[n]=pickedTerms.get(n); });
+  try{
+    window.opener.postMessage({brauditScope:{classes:classes,terms:terms}},
+      location.origin);
+    const b=document.getElementById('send-to-order');
+    b.textContent='Sent ✓ — check the order form';
+    setTimeout(()=>{try{window.close();}catch(e){}},900);
+  }catch(e){}
+}
+if(P_QS.get('return')==='staff'&&window.opener){
+  const showBtn=()=>{const b=document.getElementById('send-to-order');
+    if(b)b.style.display='';};
+  if(document.readyState==='loading')
+    document.addEventListener('DOMContentLoaded',showBtn);
+  else showBtn();
+}
 function copySelected(){
   const txt=[...picked.keys()].sort((a,b)=>a-b).join(', ');
   document.getElementById('sel-copytext').textContent=txt||'(none)';
