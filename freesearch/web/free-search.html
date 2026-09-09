@@ -7,6 +7,7 @@
   <!-- Shared design layer. Loads BEFORE this page's own <style>, so
        anything below overrides it — page-specific rules stay local. -->
   <link rel="stylesheet" href="/braudit.css">
+<script src="/demo-banner.js" defer></script>
 <style>
   /* ---- TMH brand tokens (from brand_tokens.py) ---- */
   /* ---- TMH hexagon pulse loader (Jonathan's spec, 10 Aug 2026) ----
@@ -1263,6 +1264,7 @@ function aiUse(tool, outEl, cont){
   const email=state.emailForAI||state.email||'';
   if(!email){ cont(); return; }
   ensureSession().then(function(id){
+    if(window.IS_DEMO&&window.IS_DEMO()) return Promise.resolve({ok:true,allowed:true,demo:true});
     return fetch(journeyBase()+'/ai/use',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({session_id:id||null,email:email,tool:tool,
