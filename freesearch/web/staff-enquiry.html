@@ -240,6 +240,28 @@
       <option value="existing">Existing client</option>
       <option value="returning">Previously enquired, never bought</option>
     </select>
+
+    <!-- Point 2 (9 Sep): existing clients LINK to their Zoho Contact, past
+         enquiries link to the Lead — typed lookups against live Zoho, so the
+         order lands on the right record instead of matching on email luck.
+         A form opened from a search lead arrives pre-linked, with the option
+         to change. -->
+    <div id="f-linkwrap" class="hidden">
+      <label class="fld" id="f-linklabel">Find their record</label>
+      <div id="f-linked" class="hidden" style="display:flex;gap:10px;align-items:center;
+           border:1.5px solid #2f9e63;background:#f2faf5;border-radius:9px;padding:10px 13px">
+        <span style="font-size:13.5px;color:var(--ink)">Linked to
+          <b id="f-linkedname" style="color:var(--navy)"></b></span>
+        <button type="button" class="rm" style="margin-left:auto;background:none;border:0;
+          color:var(--quiet);text-decoration:underline;cursor:pointer;font-family:inherit"
+          onclick="clearLink()">Change</button>
+      </div>
+      <div id="f-linksearch">
+        <input type="text" id="f-linkq" placeholder="Type a name or email — searches Zoho as you type"
+          autocomplete="off">
+        <div id="f-linkresults"></div>
+      </div>
+    </div>
   </section>
 
   <!-- ---------- DISCOVERY ---------- -->
@@ -280,11 +302,14 @@
         </select></div>
     </div>
 
+    <!-- Point 1 (9 Sep): the SAME jurisdiction picklist Free Search and the
+         client audit use — these fields drive search orders, so free text
+         was a data-integrity hole. Codes stored, labels shown. -->
     <div class="sf-row">
       <div><label class="fld">Territories now</label>
-        <input type="text" id="f-terrnow" placeholder="UK"></div>
+        <div id="f-terrnow-box"></div></div>
       <div><label class="fld">Territories planned</label>
-        <input type="text" id="f-terrplan" placeholder="EU, US, none yet…"></div>
+        <div id="f-terrplan-box"></div></div>
     </div>
 
     <label class="fld">Any deadline?</label>
@@ -302,14 +327,14 @@
     <p class="lede">Add a line for every mark. They share one set of classes and terms.</p>
 
     <div class="sf-guide">
-      <div class="gh">One brand, priced by line</div>
+      <div class="gh">One brand, line by line</div>
       <ul>
         <li>Ask what carries the brand — the name, the logo, a tagline, product names.
-          Each is its own line at £149, on ONE deal and ONE invoice.</li>
+          Each becomes its own £149 line on ONE deal and ONE invoice.</li>
         <li><span class="say">"Is it just the one name, or are there a logo and a
           strapline that matter as much?"</span></li>
-        <li>You control the discount per line. Charge the full £149s, or discount down —
-          the order total can never go below £99.</li>
+        <li>Up to six lines — the search contract carries five word phrases plus the
+          logo. Pricing and discounts happen at the Recommendation step.</li>
         <li>A second brand is a separate deal — start a new enquiry for it.</li>
       </ul>
     </div>
@@ -325,8 +350,6 @@
       <a href="#" onclick="openTools();return false;" style="color:var(--pink);font-weight:700">
         Open the class tools</a> if you need to work them out on the call.</div>
     <div id="f-scope" style="margin-top:14px"></div>
-
-    <div class="sf-price" id="f-pricebox"></div>
   </section>
 
   <!-- ---------- ADVICE ---------- -->
@@ -369,17 +392,36 @@
           prevents, not what it contains.</li>
         <li>It covers logos, taglines, social media, marketplaces, domains, company
           registers, international and prior-use risk — the free search covers none of that.</li>
-        <li>It comes with up to an hour of consultation with a specialist.</li>
-        <li><span class="say">"It is £99 a mark, and if you go on to apply through us
-          we take it off your fees."</span></li>
       </ul>
     </div>
 
     <label class="fld">Audit scope — what will we actually cover? <span class="req">*</span></label>
+    <div class="sf-hint" style="margin:-2px 0 6px">What the client hears read back, and what
+      the paralegal delivering the audit works from — marks, classes, territories,
+      anything specific they raised.</div>
     <textarea id="f-scopetext" placeholder="Marks, classes, territories, anything specific they raised."></textarea>
 
     <label class="fld">Why this is the right step for them <span class="req">*</span></label>
+    <div class="sf-hint" style="margin:-2px 0 6px">Your reasoning, on the record — this is
+      the advice trail that lands on the Deal.</div>
     <textarea id="f-rationale" placeholder="In your words — this is read back to them and lands on the Deal."></textarea>
+
+    <!-- Point 8 (9 Sep): the delivery conversation, said properly, with
+         today's realistic day computed live. -->
+    <div class="sf-guide" style="margin-top:20px">
+      <div class="gh">The delivery conversation — say it like this</div>
+      <ul>
+        <li><span class="say">"Our audits do use technology to run the searches, which
+          can bring back thousands of results. We use AI technology to score the
+          results and refine them into five ranges from high to low risk. One of our
+          paralegals then reviews the risks and decides which results need to be in
+          the report before presenting it back to you."</span></li>
+        <li><span class="say">"We're looking at a turnaround of 3 working days at the
+          moment, which would mean us sitting down next on
+          <b id="f-turnday">…</b> — does that work for you, or would you like me to
+          see if I can fast track your report?"</span></li>
+      </ul>
+    </div>
 
     <div class="sf-row">
       <div><label class="fld">Handling</label>
@@ -388,12 +430,24 @@
           <option value="expedited">Expedited (reason required)</option>
         </select></div>
       <div><label class="fld">Audit delivery due <span class="req">*</span></label>
-        <input type="date" id="f-auditdate"></div>
+        <input type="date" id="f-auditdate">
+        <div class="sf-hint">No guard rails here — you're agreeing it live. Same day
+          as the consultation is fine.</div></div>
     </div>
     <div id="f-expwrap" class="hidden">
       <label class="fld">Reason for expediting <span class="req">*</span></label>
       <input type="text" id="f-expreason" placeholder="Genuine reason — this is reviewed by a manager.">
     </div>
+
+    <!-- Point 12 + 13 (9 Sep): the commercial moment lives HERE, with the
+         scope. Every mark line arrives at RRP £149; the staff member applies
+         a discount per line; the consultation is always shown at £149 with
+         its £149 discount on by default — remove it to charge. -->
+    <h3 style="margin:26px 0 4px;font-size:16px;color:var(--navy)">Pricing</h3>
+    <p class="sf-hint" style="margin-bottom:12px">RRP £149 a line. Your discounts, on
+      the record. The order total can never go below £99 net.</p>
+    <div id="f-pricing"></div>
+    <div class="sf-price" id="f-pricebox"></div>
   </section>
 
   <!-- ---------- CONSULTATION ---------- -->
@@ -473,11 +527,55 @@
     </div>
 
     <label class="fld">Billing entity <span class="req">*</span></label>
+    <select id="f-billtype" style="margin-bottom:8px">
+      <option value="new">New client — type the entity</option>
+      <option value="existing">Existing client — find their account</option>
+    </select>
+    <div id="f-acctsearchwrap" class="hidden">
+      <div id="f-acctlinked" class="hidden" style="display:flex;gap:10px;align-items:center;
+           border:1.5px solid #2f9e63;background:#f2faf5;border-radius:9px;padding:10px 13px;
+           margin-bottom:8px">
+        <span style="font-size:13.5px">Billing to account
+          <b id="f-acctname" style="color:var(--navy)"></b></span>
+        <button type="button" style="margin-left:auto;background:none;border:0;
+          color:var(--quiet);text-decoration:underline;cursor:pointer;font-family:inherit"
+          onclick="clearAcct()">Change</button>
+      </div>
+      <div id="f-acctsearch">
+        <input type="text" id="f-acctq" placeholder="Type the account name — searches Zoho"
+          autocomplete="off">
+        <div id="f-acctresults"></div>
+      </div>
+    </div>
     <input type="text" id="f-billentity" placeholder="Who the invoice is addressed to">
     <label class="fld">Invoice recipient email <span class="req">*</span></label>
     <input type="email" id="f-billemail">
     <label class="fld">Billing address <span class="req">*</span></label>
     <textarea id="f-billaddr"></textarea>
+
+    <!-- Point 11 (9 Sep): always confirm whether invoices go to someone
+         else. Departments are people too: accounts@ becomes First name
+         "Accounts", Last name "Department". -->
+    <label class="sf-check" style="margin-top:14px"><input type="checkbox" id="b-icdiff">
+      <span>Invoices go to a <b>different contact</b> — accounts team, bookkeeper,
+        finance department.</span></label>
+    <div id="f-icwrap" class="hidden">
+      <div class="sf-hint" style="margin-bottom:8px">If it's a department rather than a
+        person — accounts@, billing@ — put the department name as the first name
+        ("Accounts", "Billing") and the last name becomes "Department".</div>
+      <div class="sf-row">
+        <div><label class="fld">First name <span class="req">*</span></label>
+          <input type="text" id="f-icfirst" placeholder="Jane — or Accounts"></div>
+        <div><label class="fld">Last name <span class="req">*</span></label>
+          <input type="text" id="f-iclast" placeholder="Smith — or Department"></div>
+      </div>
+      <div class="sf-row">
+        <div><label class="fld">Email <span class="req">*</span></label>
+          <input type="email" id="f-icemail"></div>
+        <div><label class="fld">Phone <span class="opt">(optional)</span></label>
+          <input type="tel" id="f-icphone"></div>
+      </div>
+    </div>
 
     <label class="fld">Where is the client based? <span class="req">*</span></label>
     <select id="f-vatloc">
@@ -592,15 +690,18 @@ const state={
   staff:CONFIG.STAFF||'',
   section:'contact',
   contact:{first:'',last:'',email:'',phone:'',position:'',org:'',clientType:''},
-  discovery:{desc:'',reason:'',trading:'',knowledge:'',terrNow:'',terrPlan:'',deadline:'',risk:''},
+  link:{contact_id:'',contact_name:'',lead_id:'',lead_name:''},
+  discovery:{desc:'',reason:'',trading:'',knowledge:'',terrNow:[],terrPlan:[],deadline:'',risk:''},
   marks:[{text:'',kind:'word',price:149}],
   classes:'',
   scope:{},
   advice:{risks:false,fees:false,noguarantee:false,questions:false,note:''},
   recommend:{scope:'',rationale:'',handling:'normal',auditDate:'',expReason:''},
   consult:{date:'',time:'',adviser:'',method:'phone',agreed:false,
-           declined:false,declineReason:''},
-  billing:{entity:'',email:'',addr:'',location:'',payWhen:'',payDate:'',agreed:false},
+           declined:false,declineReason:'',feeWaived:true},
+  billing:{entity:'',email:'',addr:'',location:'',payWhen:'',payDate:'',agreed:false,
+           accountType:'new',account_id:'',account_name:'',
+           icDiff:false,icFirst:'',icLast:'',icEmail:'',icPhone:''},
   readback:{confirmed:false,at:''}
 };
 
@@ -670,17 +771,17 @@ function gateRules(){
      ok:cn.declined?nonEmpty(state.recommend.auditDate):deliveryBeforeConsult(),
      why:cn.declined
         ?'With no appointment, the delivery date is the promise — it must be set.'
-        :'The audit delivery date must fall before the appointment.'},
+        :'Delivery on or before the appointment day — same day is fine.'},
     {id:'G-09',sec:'billing',label:'Payment agreed',
      ok:(b.payWhen==='now'||(b.payWhen==='date'&&nonEmpty(b.payDate)&&payDateWorks()))&&b.agreed,
-     why:'Either they are paying now, or there is an exact date that still allows delivery.'},
+     why:'Either they are paying now, or there is an exact agreed date, no later than delivery.'},
     {id:'G-10',sec:'billing',label:'Billing details complete',
      ok:nonEmpty(b.entity)&&validEmail(b.email)&&nonEmpty(b.addr),
      why:'We cannot raise anything without an entity, an invoice email and an address.'},
     {id:'G-12',sec:'billing',label:'VAT position confirmed',
      ok:b.location==='uk'||b.location==='nonuk',
      why:'Confirm with the client whether they are UK-based — it changes the total.'},
-    {id:'G-13',sec:'marks',label:'Prices within bounds',
+    {id:'G-13',sec:'recommend',label:'Prices within bounds',
      ok:priceFloorOk(),
      why:'Each line is £0–£149 and the order total cannot go below £99 net.'},
     {id:'G-11',sec:'readback',label:'Read back and accepted',
@@ -702,15 +803,19 @@ function futureAppt(){
   }catch(e){return false;}
 }
 function deliveryBeforeConsult(){
+  /* Point 9 (9 Sep): delivery may be the SAME DAY as the consultation —
+     it just can't be after it. */
   const a=state.recommend.auditDate,c=state.consult.date;
   if(!a||!c) return false;
-  return fromIso(a).getTime()<fromIso(c).getTime();
+  return fromIso(a).getTime()<=fromIso(c).getTime();
 }
-/* The audit needs CONFIG.LEAD_DAYS clear working days after payment lands. */
+/* Point 7 (9 Sep): no working-day guard rails for staff — they agree the
+   dates live on the call. The date just has to exist and not come after
+   the delivery it funds. */
 function payDateWorks(){
   const p=state.billing.payDate,a=state.recommend.auditDate;
-  if(!p||!a) return false;
-  return iso(addWorkingDays(fromIso(p),CONFIG.LEAD_DAYS))<=a;
+  if(!p) return false;
+  return !a || p<=a;
 }
 function gatePasses(){return gateRules().every(r=>r.ok);}
 
@@ -782,7 +887,7 @@ const KINDS=[['word','Word / name'],['logo','Logo'],['tagline','Tagline'],
 function renderMarks(){
   document.getElementById('f-marks').innerHTML=state.marks.map((m,i)=>`
     <div class="sf-mark">
-      <div class="mh"><span class="mn">Line ${i+1} — RRP £149</span>
+      <div class="mh"><span class="mn">Line ${i+1}</span>
         ${state.marks.length>1?`<button class="rm" onclick="removeMark(${i})">Remove</button>`:''}</div>
       <input type="text" value="${esc(m.text)}"
         placeholder="${m.kind==='logo'?'Which mark does the logo belong to?':'Exact mark text as it is used'}"
@@ -790,19 +895,18 @@ function renderMarks(){
       <div class="kinds">${KINDS.map(([k,l])=>`
         <label><input type="radio" name="kind${i}" value="${k}" ${m.kind===k?'checked':''}
           onchange="state.marks[${i}].kind='${k}';touch()">${l}</label>`).join('')}</div>
-      <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
-        <label style="font-size:12.5px;font-weight:700;color:var(--navy);flex:none">Charge £</label>
-        <input type="number" min="0" max="149" step="1" value="${m.price!=null?m.price:149}"
-          style="width:110px" oninput="setLinePrice(${i},this.value)">
-        <span class="sf-hint" style="margin:0">Your discount decision, on the record.</span>
-      </div>
     </div>`).join('');
+  const addBtn=document.querySelector('.sf-add');
+  if(addBtn){
+    const capped=state.marks.length>=6;
+    addBtn.disabled=capped;
+    addBtn.textContent=capped
+      ?'Line limit reached — the search contract carries five word phrases plus a logo'
+      :'+ Add another line';
+  }
   renderPrice();
 }
-function setLinePrice(i,v){
-  const n=Math.max(0,Math.min(149,parseFloat(v)||0));
-  state.marks[i].price=n;renderPrice();touch();
-}
+
 function addMark(){state.marks.push({text:'',kind:'word',price:149});renderMarks();touch();}
 function removeMark(i){state.marks.splice(i,1);if(!state.marks.length)state.marks=[{text:'',kind:'word',price:149}];
   renderMarks();touch();}
@@ -810,31 +914,73 @@ function markChanged(){renderPrice();touch();}
 function liveLines(){return state.marks.filter(m=>nonEmpty(m.text));}
 function markCount(){return Math.max(1,liveLines().length);}
 function vatExempt(){return state.billing.location==='nonuk';}
-function net(){return liveLines().reduce((a,m)=>a+(m.price!=null?m.price:149),0);}
-function rrp(){return liveLines().length*149;}
+/* Point 13: the consultation is ALWAYS a £149 line with a £149 discount on
+   by default — visible value, zero charge — removable to charge it. */
+function consultLine(){
+  if(state.consult.declined) return null;
+  return {label:'Audit Consultation',price:state.consult.feeWaived?0:149};
+}
+function net(){
+  const c=consultLine();
+  return liveLines().reduce((a,m)=>a+(m.price!=null?m.price:149),0)+(c?c.price:0);
+}
+function rrp(){return liveLines().length*149+(consultLine()?149:0);}
 function total(){return vatExempt()?net():net()*(1+CONFIG.VAT);}
 function priceFloorOk(){
-  return liveLines().every(m=>{const p=(m.price!=null?m.price:149);
-    return p>=0&&p<=149;}) && (liveLines().length===0||net()>=CONFIG.MIN_TOTAL);
+  return liveLines().length<=6 &&
+    liveLines().every(m=>{const p=(m.price!=null?m.price:149);
+      return p>=0&&p<=149;}) && (liveLines().length===0||net()>=CONFIG.MIN_TOTAL);
 }
 function renderPrice(){
   const lines=liveLines();
   const KL={word:'Name',logo:'Logo',tagline:'Tagline',product:'Product name',other:'Mark'};
-  const rows=lines.map(m=>{
-    const p=m.price!=null?m.price:149;
-    const disc=149-p;
-    return `<div class="tr"><span>${esc(KL[m.kind]||'Mark')} — ${esc(m.text)}
-      ${disc>0?`<span style="color:var(--quiet);font-size:12.5px"> (RRP £149, −£${disc.toFixed(2)})</span>`:''}</span>
-      <span>£${p.toFixed(2)}</span></div>`;
-  }).join('');
+  /* Editable per-line pricing (point 12) — each mark line at RRP £149 with a
+     discount box; the charge is what's left. */
+  const pr=document.getElementById('f-pricing');
+  if(pr){
+    pr.innerHTML=lines.length?lines.map((m,li)=>{
+      const i=state.marks.indexOf(m);
+      const p=m.price!=null?m.price:149;
+      return `<div class="sf-mark" style="display:grid;grid-template-columns:1fr 90px 110px 90px;
+        gap:10px;align-items:center;padding:12px 16px">
+        <div><b style="color:var(--navy);font-size:14px">${esc(KL[m.kind]||'Mark')}</b>
+          <span style="font-size:13px;color:var(--quiet)"> — ${esc(m.text)}</span></div>
+        <div style="font-size:13px;color:var(--quiet)">RRP £149</div>
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="font-size:12.5px;font-weight:700;color:var(--navy)">−£</span>
+          <input type="number" min="0" max="149" step="1" value="${(149-p).toFixed(0)}"
+            style="width:70px" oninput="setLineDiscount(${i},this.value)"></div>
+        <div style="font-weight:800;color:var(--navy);text-align:right">£${p.toFixed(2)}</div>
+      </div>`;
+    }).join('')+(consultLine()?(()=>{const c=consultLine();return `
+      <div class="sf-mark" style="display:grid;grid-template-columns:1fr 90px 110px 90px;
+        gap:10px;align-items:center;padding:12px 16px;background:var(--pink-tint)">
+        <div><b style="color:var(--navy);font-size:14px">Audit Consultation</b>
+          <span style="font-size:13px;color:var(--quiet)"> — up to one hour with an expert</span></div>
+        <div style="font-size:13px;color:var(--quiet)">RRP £149</div>
+        <div style="font-size:12.5px">
+          <label style="display:flex;gap:6px;align-items:center;cursor:pointer">
+            <input type="checkbox" ${state.consult.feeWaived?'checked':''}
+              onchange="state.consult.feeWaived=this.checked;renderPrice();touch()"
+              style="accent-color:var(--pink)">
+            −£149 discount</label></div>
+        <div style="font-weight:800;color:var(--navy);text-align:right">£${c.price.toFixed(2)}</div>
+      </div>`;})():'')
+    :'<div class="sf-hint">Add the brand lines in Marks &amp; scope first.</div>';
+  }
   const under=lines.length&&net()<CONFIG.MIN_TOTAL;
-  document.getElementById('f-pricebox').innerHTML=rows+
+  document.getElementById('f-pricebox').innerHTML=
     `${under?`<div class="tr" style="color:#b5372a;font-weight:700">
        <span>Below the £${CONFIG.MIN_TOTAL} order minimum</span><span></span></div>`:''}
+    <div class="tr"><span>Net total${net()<rrp()?` <span style="color:var(--quiet);font-size:12.5px">(RRP £${rrp().toFixed(2)})</span>`:''}</span><span>£${net().toFixed(2)}</span></div>
     ${vatExempt()
       ?'<div class="tr"><span>VAT — not applicable (outside the UK)</span><span>£0.00</span></div>'
       :`<div class="tr"><span>VAT at 20%</span><span>£${(net()*CONFIG.VAT).toFixed(2)}</span></div>`}
     <div class="tr grand"><span>Total</span><span>£${total().toFixed(2)}</span></div>`;
+}
+function setLineDiscount(i,v){
+  const d=Math.max(0,Math.min(149,parseFloat(v)||0));
+  state.marks[i].price=149-d;renderPrice();touch();
 }
 
 /* ---------- shared class scope ---------- */
@@ -857,8 +1003,14 @@ function renderReadback(){
     row('Client',[c.first,c.last].filter(Boolean).join(' ')+(c.org?(', '+c.org):''))+
     row('Marks being audited',marks.join(', '))+
     row('Classes',parseClasses(state.classes).join(', '))+
+    row('Territories',
+      ((state.discovery.terrNow||[]).map(jLabel).join(', ')||'—')
+      +((state.discovery.terrPlan||[]).length
+        ?(' · planned: '+(state.discovery.terrPlan||[]).map(jLabel).join(', ')):''))+
     row('Scope',r.scope)+
     row('Audit delivered by',pretty(r.auditDate))+
+    row('Consultation fee',state.consult.declined?'—'
+      :(state.consult.feeWaived?'£149, discounted to £0':'£149 charged'))+
     row('Consultation',cn.declined
       ?('Declined — '+(cn.declineReason||'no reason recorded'))
       :(cn.date?(pretty(cn.date)+' at '+(cn.time||'—')+' with '+(cn.adviser||'—')):''))+
@@ -891,6 +1043,126 @@ function renderWarnings(){
 }
 
 function renderAll(){renderNav();renderGate();renderWarnings();}
+
+/* =====================================================================
+   TERRITORY PICKERS (point 1) — the same /jurisdictions list the client
+   tools use. Codes stored, labels shown, chips removable.
+   ===================================================================== */
+let JURIS=[];
+async function loadJuris(){
+  try{
+    const d=await(await fetch('/jurisdictions')).json();
+    const p=d.picker||{};
+    const seen={};
+    [].concat(p.popular||[],p.regions||[],p.all_countries||[]).forEach(c=>{
+      if(c&&c.code&&!seen[c.code]){seen[c.code]=1;JURIS.push({code:c.code,label:c.label});}
+    });
+  }catch(e){}
+  renderTerr('f-terrnow-box','terrNow');
+  renderTerr('f-terrplan-box','terrPlan');
+}
+function jLabel(code){const j=JURIS.find(x=>x.code===code);return j?j.label:code;}
+function renderTerr(boxId,key){
+  const box=document.getElementById(boxId); if(!box) return;
+  const sel=state.discovery[key]||[];
+  box.innerHTML=`
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">${
+      sel.map(c=>`<span style="display:inline-flex;gap:5px;align-items:center;
+        background:var(--pink-tint);border:1.5px solid var(--pink);border-radius:16px;
+        padding:3px 10px;font-size:12.5px;font-weight:700;color:var(--navy)">${esc(jLabel(c))}
+        <span style="cursor:pointer" onclick="terrDel('${key}','${c}')">&times;</span></span>`).join('')
+      ||'<span class="sf-hint" style="margin:0">None yet</span>'}</div>
+    <input type="text" placeholder="Type to search — UK, EU, United States…"
+      autocomplete="off" oninput="terrSearch(this,'${key}')">
+    <div class="terr-results"></div>`;
+}
+function terrSearch(inp,key){
+  const q=inp.value.trim().toLowerCase();
+  const out=inp.parentElement.querySelector('.terr-results');
+  if(q.length<1){out.innerHTML='';return;}
+  const hits=JURIS.filter(j=>j.label.toLowerCase().includes(q)||j.code.toLowerCase()===q)
+    .filter(j=>!(state.discovery[key]||[]).includes(j.code)).slice(0,8);
+  out.innerHTML=hits.map(j=>`<div style="padding:8px 12px;border:1.5px solid var(--line);
+    border-top:0;background:#fff;cursor:pointer;font-size:13.5px"
+    onclick="terrAdd('${key}','${j.code}')">${esc(j.label)}</div>`).join('');
+}
+function terrAdd(key,code){
+  state.discovery[key]=(state.discovery[key]||[]).concat([code]);
+  renderTerr(key==='terrNow'?'f-terrnow-box':'f-terrplan-box',key);touch();
+}
+function terrDel(key,code){
+  state.discovery[key]=(state.discovery[key]||[]).filter(c=>c!==code);
+  renderTerr(key==='terrNow'?'f-terrnow-box':'f-terrplan-box',key);touch();
+}
+
+/* =====================================================================
+   ZOHO LOOKUPS (points 2 & 10) — typed search against live Zoho through
+   the engine (staff token) and the journey (shared key). Never a guess.
+   ===================================================================== */
+let lkTimer=null;
+async function zohoLookup(module,q){
+  const r=await fetch('/staff-lookup',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({k:CONFIG.TOKEN,module:module,q:q})});
+  const d=await r.json();
+  return (d&&d.ok&&Array.isArray(d.hits))?d.hits:[];
+}
+function linkModule(){return state.contact.clientType==='returning'?'Leads':'Contacts';}
+function renderLinkUI(){
+  const wrap=document.getElementById('f-linkwrap');
+  const ct=state.contact.clientType;
+  wrap.classList.toggle('hidden',!(ct==='existing'||ct==='returning'));
+  document.getElementById('f-linklabel').textContent=
+    ct==='returning'?'Find their previous enquiry (Lead)':'Find their client record (Contact)';
+  const linked=(ct==='returning')?state.link.lead_id:state.link.contact_id;
+  const name=(ct==='returning')?state.link.lead_name:state.link.contact_name;
+  document.getElementById('f-linked').classList.toggle('hidden',!linked);
+  document.getElementById('f-linksearch').classList.toggle('hidden',!!linked);
+  if(linked) document.getElementById('f-linkedname').textContent=name||linked;
+}
+function clearLink(){
+  if(state.contact.clientType==='returning'){state.link.lead_id='';state.link.lead_name='';}
+  else{state.link.contact_id='';state.link.contact_name='';}
+  renderLinkUI();touch();
+}
+function wireLookup(inputId,resultsId,module,onPick){
+  const inp=document.getElementById(inputId);
+  if(!inp) return;
+  inp.addEventListener('input',()=>{
+    clearTimeout(lkTimer);
+    const q=inp.value.trim();
+    const out=document.getElementById(resultsId);
+    if(q.length<2){out.innerHTML='';return;}
+    lkTimer=setTimeout(async()=>{
+      out.innerHTML='<div class="sf-hint">Searching Zoho…</div>';
+      const hits=await zohoLookup(typeof module==='function'?module():module,q);
+      out.innerHTML=hits.length?hits.map((h,i)=>`<div style="padding:9px 12px;
+        border:1.5px solid var(--line);border-top:0;background:#fff;cursor:pointer;
+        font-size:13.5px" data-i="${i}">${esc(h.name||'')}
+        <span style="color:var(--quiet)">${esc(h.email||h.detail||'')}</span></div>`).join('')
+        :'<div class="sf-hint">No match — check the spelling, or carry on as new.</div>';
+      [...out.querySelectorAll('[data-i]')].forEach(el=>{
+        el.onclick=()=>{onPick(hits[+el.dataset.i]);out.innerHTML='';inp.value='';};
+      });
+    },350);
+  });
+}
+
+/* =====================================================================
+   CLASS TOOLS RETURN (point 5) — the assistant opens in a popup and posts
+   the chosen classes AND terms straight back into this form.
+   ===================================================================== */
+window.addEventListener('message',e=>{
+  if(e.origin!==location.origin) return;
+  const sc=e.data&&e.data.brauditScope;
+  if(!sc||!Array.isArray(sc.classes)) return;
+  state.classes=sc.classes.join(', ');
+  const el=document.getElementById('f-classes'); if(el) el.value=state.classes;
+  if(sc.terms){Object.keys(sc.terms).forEach(n=>{
+    state.scope[n]=(sc.terms[n]||[]).join('\n');});}
+  renderScope();renderAll();touch();
+  showSection('marks');
+});
 
 /* =====================================================================
    AUTOSAVE
@@ -1022,6 +1294,18 @@ async function load(){
         if(Array.isArray(s.classes)&&s.classes.length) state.classes=s.classes.join(', ');
         if(s.business_website) state.discovery.desc=
           (state.discovery.desc?state.discovery.desc+' ':'')+'Website: '+s.business_website;
+        /* Point 2: a form launched from a search lead arrives pre-linked. */
+        if(s.zoho_lead_id){
+          state.contact.clientType=state.contact.clientType||'returning';
+          state.link.lead_id=String(s.zoho_lead_id);
+          state.link.lead_name='the search lead for '+(s.name||'this brand');
+        }
+        const z=(lr&&lr.zoho)||{};
+        if(z.contact_id){
+          state.contact.clientType='existing';
+          state.link.contact_id=String(z.contact_id);
+          state.link.contact_name='the linked client record';
+        }
       }
     }
   }catch(e){}
@@ -1035,7 +1319,11 @@ function finishLoad(){
   set('f-first',c.first);set('f-last',c.last);set('f-email',c.email);set('f-phone',c.phone);
   set('f-position',c.position);set('f-org',c.org);set('f-clienttype',c.clientType);
   set('f-desc',d.desc);set('f-reason',d.reason);set('f-trading',d.trading);
-  set('f-knowledge',d.knowledge);set('f-terrnow',d.terrNow);set('f-terrplan',d.terrPlan);
+  set('f-knowledge',d.knowledge);
+  /* v1 stored territories as free text (the exact data-integrity hole this
+     fixes) — migrate anything unparseable to empty and keep going. */
+  if(!Array.isArray(d.terrNow)) d.terrNow=[];
+  if(!Array.isArray(d.terrPlan)) d.terrPlan=[];
   set('f-deadline',d.deadline);set('f-risk',d.risk);
   set('f-classes',state.classes);
   chk('a-risks',a.risks);chk('a-fees',a.fees);chk('a-noguarantee',a.noguarantee);
@@ -1049,6 +1337,19 @@ function finishLoad(){
   document.getElementById('f-consultfields').classList.toggle('hidden',!!cn.declined);
   set('f-billentity',b.entity);set('f-billemail',b.email);set('f-billaddr',b.addr);
   set('f-vatloc',b.location);
+  set('f-billtype',b.accountType||'new');
+  document.getElementById('f-acctsearchwrap').classList
+    .toggle('hidden',(b.accountType||'new')!=='existing');
+  if(b.account_id){
+    document.getElementById('f-acctname').textContent=b.account_name||b.account_id;
+    document.getElementById('f-acctlinked').classList.remove('hidden');
+    document.getElementById('f-acctsearch').classList.add('hidden');
+  }
+  chk('b-icdiff',b.icDiff);
+  document.getElementById('f-icwrap').classList.toggle('hidden',!b.icDiff);
+  set('f-icfirst',b.icFirst);set('f-iclast',b.icLast);
+  set('f-icemail',b.icEmail);set('f-icphone',b.icPhone);
+  renderLinkUI();
   set('f-paywhen',b.payWhen);set('f-paydate',b.payDate);chk('p-agreed',b.agreed);
   chk('r-confirmed',state.readback.confirmed);
 
@@ -1079,14 +1380,14 @@ function bindAll(){
   bind('f-phone',v=>state.contact.phone=v);
   bind('f-position',v=>state.contact.position=v);
   bind('f-org',v=>state.contact.org=v);
-  bind('f-clienttype',v=>state.contact.clientType=v);
+  const ctSel=document.getElementById('f-clienttype');
+  ctSel.addEventListener('change',()=>{
+    state.contact.clientType=ctSel.value;renderLinkUI();touch();});
 
   bind('f-desc',v=>state.discovery.desc=v);
   bind('f-reason',v=>state.discovery.reason=v);
   bind('f-trading',v=>state.discovery.trading=v);
   bind('f-knowledge',v=>state.discovery.knowledge=v);
-  bind('f-terrnow',v=>state.discovery.terrNow=v);
-  bind('f-terrplan',v=>state.discovery.terrPlan=v);
   bind('f-deadline',v=>state.discovery.deadline=v);
   bind('f-risk',v=>state.discovery.risk=v);
 
@@ -1121,6 +1422,21 @@ function bindAll(){
   });
   bind('f-declinereason',v=>state.consult.declineReason=v);
 
+  const btSel=document.getElementById('f-billtype');
+  btSel.addEventListener('change',()=>{
+    state.billing.accountType=btSel.value;
+    document.getElementById('f-acctsearchwrap').classList
+      .toggle('hidden',btSel.value!=='existing');
+    touch();});
+  const icChk=document.getElementById('b-icdiff');
+  icChk.addEventListener('change',()=>{
+    state.billing.icDiff=icChk.checked;
+    document.getElementById('f-icwrap').classList.toggle('hidden',!icChk.checked);
+    touch();});
+  bind('f-icfirst',v=>state.billing.icFirst=v);
+  bind('f-iclast',v=>state.billing.icLast=v);
+  bind('f-icemail',v=>state.billing.icEmail=v);
+  bind('f-icphone',v=>state.billing.icPhone=v);
   bind('f-billentity',v=>state.billing.entity=v);
   bind('f-billemail',v=>state.billing.email=v);
   bind('f-billaddr',v=>state.billing.addr=v);
@@ -1160,8 +1476,11 @@ async function newEnquiry(){
   }catch(e){location.href='/staff-enquiry';}
 }
 function openTools(){
-  const u='/class-assistant'+(state.classes?('?classes='+encodeURIComponent(state.classes)):'');
-  window.open(u,'_blank','noopener');
+  /* Point 5: keep the opener so the tool can post the scope back. */
+  const u='/class-assistant?return=staff'
+    +(state.classes?('&classes='+encodeURIComponent(state.classes)):'')
+    +((window.IS_DEMO&&window.IS_DEMO())?'&demo=1':'');
+  window.open(u,'brauditClassTools','width=1100,height=800');
 }
 /* Scenario 1 (pay now): create the Stripe Checkout session and hand the link
    to the sales person — open it, or copy it to send while the client is still
@@ -1234,6 +1553,41 @@ async function toPayment(){
   const d=await r.json();
   if(d&&d.ok){state.staff=d.name;state.staffEmail=d.email;renderGate();}
 }catch(e){}})();
+function acctPick(h){
+  state.billing.account_id=h.id;state.billing.account_name=h.name||'';
+  state.billing.entity=h.name||state.billing.entity;
+  const el=document.getElementById('f-billentity'); if(el) el.value=state.billing.entity;
+  document.getElementById('f-acctname').textContent=h.name||h.id;
+  document.getElementById('f-acctlinked').classList.remove('hidden');
+  document.getElementById('f-acctsearch').classList.add('hidden');touch();
+}
+function clearAcct(){
+  state.billing.account_id='';state.billing.account_name='';
+  document.getElementById('f-acctlinked').classList.add('hidden');
+  document.getElementById('f-acctsearch').classList.remove('hidden');touch();
+}
+wireLookup('f-linkq','f-linkresults',linkModule,h=>{
+  if(state.contact.clientType==='returning'){
+    state.link.lead_id=h.id;state.link.lead_name=h.name||'';}
+  else{state.link.contact_id=h.id;state.link.contact_name=h.name||'';}
+  if(h.first&&!state.contact.first){state.contact.first=h.first;
+    const el=document.getElementById('f-first'); if(el) el.value=h.first;}
+  if(h.last&&!state.contact.last){state.contact.last=h.last;
+    const el=document.getElementById('f-last'); if(el) el.value=h.last;}
+  if(h.email&&!state.contact.email){state.contact.email=h.email;
+    const el=document.getElementById('f-email'); if(el) el.value=h.email;}
+  if(h.account&&!state.billing.account_name){
+    state.billing.account_id=h.account_id||'';state.billing.account_name=h.account;}
+  renderLinkUI();renderAll();touch();
+});
+wireLookup('f-acctq','f-acctresults','Accounts',acctPick);
+/* The delivery-conversation day: 3 working days out, spoken as a day name. */
+(function(){
+  const el=document.getElementById('f-turnday');
+  if(el) el.textContent=addWorkingDays(new Date(),3).toLocaleDateString('en-GB',
+    {weekday:'long',day:'numeric',month:'long'});
+})();
+loadJuris();
 bindAll();
 load();
 </script>
