@@ -13,6 +13,7 @@
      context. ?s=<session> personalises it from the stored order; without a
      session it still reads correctly, just generically. -->
 <link rel="stylesheet" href="/braudit.css">
+<script src="/demo-banner.js" defer></script>
 <style>
   body{background:#eef2f5}
   .tw{max-width:760px;margin:0 auto;padding:26px 18px 60px}
@@ -114,6 +115,7 @@
     .then(function(r){return r.json();})
     .then(function(d){
       if(!d||!d.ok||!d.session) return;
+      if(String(d.session.tenant_id)==='demo'&&window.markDemo)window.markDemo();
       var lr=d.session.last_result||{};
       var enq=lr.staff_enquiry||null;
       function pretty(s){
@@ -128,7 +130,10 @@
         var marks=(enq.marks||[]).filter(function(m){return m&&String(m.text||'').trim();});
         var n=Math.max(1,marks.length);
         var vatEx=(enq.billing||{}).location==='nonuk';
-        var total=(n*99*(vatEx?1:1.2)).toFixed(2);
+        /* line pricing (9 Sep): each mark row carries its charged price */
+        var netSum=marks.reduce(function(a,m){
+          return a+(m.price!=null?Number(m.price):149);},0)||99;
+        var total=(netSum*(vatEx?1:1.2)).toFixed(2);
         document.getElementById('h-amount').innerHTML=
           '<b>£'+total+'</b> — Trademark Audit'+(n>1?' × '+n+' marks':'')
           +(marks.length?': '+marks.map(function(m){return m.text;}).join(', '):'')
