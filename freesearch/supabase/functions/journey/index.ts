@@ -785,6 +785,13 @@ serve(async (req) => {
     // Read the session back post-merge so any push below reflects the
     // current picture, not just whatever this one event happened to carry.
     const session = await currentSession(session_id);
+    // DEMO TENANT (Jonathan, 9 Sep): sandbox sessions run the full journey
+    // but never touch Zoho — no lead push, no enrichment, nothing. The
+    // guard lives HERE, server-side, so no hand-edited URL can leak a demo
+    // into the CRM.
+    if (session && String(session.tenant_id) === "demo") {
+      return json({ ok: true, demo: true }, 200, origin);
+    }
     if (session) {
       // Zoho gets it the moment real contact info exists — "once a search
       // submits to their contact information it would then fire to Zoho."
@@ -832,7 +839,13 @@ serve(async (req) => {
           trading_now: session.trading_now, planning_to_trade: session.planning_to_trade,
           // Zoho-ready: Flow maps this object straight into the Leads upsert.
           zoho_fields: { ...zohoLeadFields(session, session_id),
-            Brand_Audit_Link: await auditLink(session_id) },
+            Brand_Audit_Link: await auditLink(session_id),
+            // Staff launch-audit link (Jonathan, 9 Sep): opens the STAFF
+            // enquiry form on this same session — search data pre-filled,
+            // partial audits resumed. Token-gated at the engine.
+            Staff_Audit_Link:
+              "https://braudit-free-search.onrender.com/staff-enquiry?s="
+              + session_id },
           scope: scopeBlk,
           register: String(session.register || "UKIPO"),
           // Class Builder sends: the Deluge upsert emails this back to the
@@ -880,6 +893,9 @@ serve(async (req) => {
               Lead_Source: "Search Result Only",
               Email_Source: "Resolver",
               Brand_Audit_Link: await auditLink(session_id),
+              Staff_Audit_Link:
+                "https://braudit-free-search.onrender.com/staff-enquiry?s="
+                + session_id,
               Phone: engineResult.phone || undefined,
               Website: engineResult.website || undefined,
               Company_Number1: engineResult.company_number || undefined,
@@ -1335,6 +1351,19 @@ serve(async (req) => {
       return json({ ok: false, error: "checkout not configured" }, 200, origin);
     }
     const sid = String(body.session_id ?? "");
+    if (sid) {
+      const ds = await currentSession(sid);
+      if (ds && String(ds.tenant_id) === "demo") {
+        // Sandbox: the checkout flow completes end to end on fake ids that
+        // are unmistakably fake. Nothing reaches Zoho.
+        await admin.from("journey_events").insert({
+          session_id: sid, event_type: "demo_checkout_" + String(body.stage),
+          payload: { demo: true } });
+        return json({ ok: true, demo: true, result: {
+          zoho_contact_id: "DEMO-CONTACT", zoho_account_id: "DEMO-ACCOUNT",
+          zoho_deal_id: "DEMO-DEAL", ok: true } }, 200, origin);
+      }
+    }
     const payload = { ...body, audit_link: sid ? await auditLink(sid) : "" };
     // Log it first: the CRM call can fail, the journey record must not.
     if (sid) {
@@ -1360,6 +1389,27 @@ serve(async (req) => {
       if (typeof details?.output === "string") {
         try { result = JSON.parse(details.output as string); }
         catch { result = { raw_output: details.output }; }
+      }
+      // Persist the Zoho ids ON THE SESSION (8 Sep). Until now only the
+      // browser held them, so the payment webhook -- which has no browser --
+      // could not find the Deal to advance. Read-merge on last_result so
+      // search results and staff enquiries are never clobbered.
+      const ids = result as Record<string, unknown> | null;
+      if (sid && ids && (ids.zoho_deal_id || ids.zoho_contact_id)) {
+        try {
+          const cur = await currentSession(sid);
+          const lr = (cur?.last_result && typeof cur.last_result === "object")
+            ? { ...(cur.last_result as Record<string, unknown>) } : {};
+          const z = (lr.zoho && typeof lr.zoho === "object")
+            ? { ...(lr.zoho as Record<string, unknown>) } : {};
+          if (ids.zoho_deal_id) z.deal_id = String(ids.zoho_deal_id);
+          if (ids.zoho_contact_id) z.contact_id = String(ids.zoho_contact_id);
+          if (ids.zoho_account_id) z.account_id = String(ids.zoho_account_id);
+          lr.zoho = z;
+          await admin.from("journey_sessions")
+            .update({ last_result: lr, updated_at: new Date().toISOString() })
+            .eq("session_id", sid);
+        } catch (_e) { /* ids also return to the browser as before */ }
       }
       return json({ ok: r.ok, status: r.status, result, raw: parsed ? undefined : text },
         200, origin);
@@ -1510,6 +1560,18 @@ serve(async (req) => {
       (r.payload as Record<string, unknown>)?.kind === kind);
     if (prior) return json({ ok: true, already: true }, 200, origin);
 
+    {
+      const ds = await currentSession(sid);
+      if (ds && String(ds.tenant_id) === "demo") {
+        const fakeNo = "DEMO-" + sid.slice(0, 6).toUpperCase();
+        await admin.from("journey_events").insert({ session_id: sid,
+          event_type: "xero_invoice_created",
+          payload: { kind, demo: true, invoice_number: fakeNo,
+                     note: "sandbox — no Xero invoice, no Zoho deal" } });
+        return json({ ok: true, demo: true, invoice_number: fakeNo,
+                      marked_paid: kind === "paid" }, 200, origin);
+      }
+    }
     const evType = kind === "paid" ? "audit_paid" : "audit_invoice_requested";
     const { data: evs } = await admin.from("journey_events")
       .select("payload, created_at").eq("session_id", sid)
@@ -1554,25 +1616,53 @@ serve(async (req) => {
       return json({ ok: false, error: "could not resolve Xero contact" }, 502, origin);
     }
 
+    // Line items (9 Sep): one line per TYPE at its charged price — Name,
+    // Logo, Tagline at £149 RRP. The client promotion appears as its own
+    // negative line so the invoice SHOWS the value stack landing on £99;
+    // staff lines already carry their per-line discount decision.
+    // Dedicated nominal pair created 8 Sep — the VAT location decides it.
+    const acct = vatExempt
+      ? (Deno.env.get("XERO_SALES_ACCOUNT_NONUK") ?? "247").trim()
+      : (Deno.env.get("XERO_SALES_ACCOUNT_UK") ?? "227").trim();
+    const taxT = vatExempt
+      ? (Deno.env.get("XERO_TAX_NONUK") ?? "NONE").trim()
+      : (Deno.env.get("XERO_TAX_UK") ?? "OUTPUT2").trim();
+    let pLines: { l: string; p: number }[] = [];
+    try {
+      const rawL = p.lines;
+      const arr = typeof rawL === "string" ? JSON.parse(rawL) : rawL;
+      if (Array.isArray(arr)) {
+        pLines = arr.filter((x) => x && typeof x.p === "number")
+          .map((x) => ({ l: String(x.l ?? "Brand Audit"), p: x.p }));
+      }
+    } catch (_e) { /* fall back below */ }
+    const discountP = Number(p.discount_pence ?? 0) || 0;
+    const items: Record<string, unknown>[] = pLines.length
+      ? pLines.map((x) => ({
+          Description: x.l + " — Brand Audit",
+          Quantity: 1, UnitAmount: x.p / 100,
+          AccountCode: acct, TaxType: taxT,
+        }))
+      : [{
+          Description: "Trademark Audit" + (marks > 1 ? ` × ${marks} marks` : "")
+            + " — Audit Promotion applied"
+            + (vatExempt ? " (VAT not applicable — outside the UK)" : ""),
+          Quantity: marks, UnitAmount: 99.00,
+          AccountCode: acct, TaxType: taxT,
+        }];
+    if (pLines.length && discountP > 0) {
+      items.push({
+        Description: "Audit Promotion applied",
+        Quantity: 1, UnitAmount: -discountP / 100,
+        AccountCode: acct, TaxType: taxT,
+      });
+    }
     const inv: Record<string, unknown> = {
       Type: "ACCREC", Status: "AUTHORISED",
       Contact: { ContactID: contactId },
       Date: today, DueDate: due, Reference: ref,
       LineAmountTypes: "Exclusive",
-      LineItems: [{
-        Description: "Trademark Audit" + (marks > 1 ? ` × ${marks} marks` : "")
-          + " — Audit Promotion applied"
-          + (vatExempt ? " (VAT not applicable — outside the UK)" : ""),
-        Quantity: marks, UnitAmount: 99.00,
-        // Dedicated pair created 8 Sep, matching the chart's UK/Overseas
-        // client split — the VAT location decides the nominal too.
-        AccountCode: vatExempt
-          ? (Deno.env.get("XERO_SALES_ACCOUNT_NONUK") ?? "247").trim()
-          : (Deno.env.get("XERO_SALES_ACCOUNT_UK") ?? "227").trim(),
-        TaxType: vatExempt
-          ? (Deno.env.get("XERO_TAX_NONUK") ?? "NONE").trim()
-          : (Deno.env.get("XERO_TAX_UK") ?? "OUTPUT2").trim(),
-      }],
+      LineItems: items,
     };
     // Simple Invoice theme (Jonathan, 8 Sep).
     const theme = (Deno.env.get("XERO_BRANDING_THEME")
@@ -1625,9 +1715,110 @@ serve(async (req) => {
         invoice_number: invoice.InvoiceNumber, total: invoice.Total,
         marked_paid: paid, due_date: due, contact_id: contactId,
       } });
+
+    // ---- drive the Zoho Deal (Jonathan, 8 Sep, points 2-9) ----------------
+    // Stage/Invoice_Number/Deadline/Next-Action fields move HERE, off the
+    // payment facts, never off a browser returning. The Deluge stage is
+    // order_complete; it can also create the Deal for staff orders.
+    if (ZOHO_CHECKOUT_URL) {
+      try {
+        const sess2 = await currentSession(sid);
+        const lr2 = (sess2?.last_result ?? {}) as Record<string, unknown>;
+        const enq2 = lr2.staff_enquiry as Record<string, unknown> | undefined;
+        const zids = lr2.zoho as Record<string, unknown> | undefined;
+        // Fast track: did this session ask for it?
+        let ftFlag = "";
+        try {
+          const { count: ftc } = await admin.from("journey_events")
+            .select("id", { count: "exact", head: true })
+            .eq("session_id", sid).eq("event_type", "fast_track_requested");
+          if ((ftc ?? 0) > 0) ftFlag = "requested";
+        } catch (_e) { /* no flag */ }
+        // Consultation date -> Deadline. Staff: the booked (or declined ->
+        // delivery) date from the enquiry; client: Deluge falls back to the
+        // Deal's own Audit_Deadline.
+        let deadline = "";
+        if (enq2) {
+          const cn2 = (enq2.consult ?? {}) as Record<string, unknown>;
+          const rc2 = (enq2.recommend ?? {}) as Record<string, unknown>;
+          deadline = String((cn2.declined ? rc2.auditDate : cn2.date) ?? "");
+        }
+        const contact2 = (enq2?.contact ?? {}) as Record<string, unknown>;
+        // Signed one-click approve/reject links for the fast-track email.
+        const mkLink = async (action: string) => {
+          const exp = String(Math.floor(Date.now() / 1000) + 7 * 86400);
+          const keyData = new TextEncoder().encode(
+            (Deno.env.get("XERO_PROCESS_KEY") ?? "").trim());
+          const k = await crypto.subtle.importKey("raw", keyData,
+            { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+          const mac = await crypto.subtle.sign("HMAC", k,
+            new TextEncoder().encode(`${sid}|${action}|${exp}`));
+          const sig = [...new Uint8Array(mac)]
+            .map((b) => b.toString(16).padStart(2, "0")).join("");
+          return "https://braudit-free-search.onrender.com/fasttrack/decide?sid="
+            + encodeURIComponent(sid) + "&action=" + action
+            + "&exp=" + exp + "&sig=" + sig;
+        };
+        // Search contexts (9 Sep): tagline is NOT a third search — it rides
+        // in the word context beside the name. Logo is the image context.
+        const enqMarks = (enq2?.marks ?? []) as { kind?: string }[];
+        const hasImage = enqMarks.some((m) => m?.kind === "logo")
+          || Boolean(sess2?.has_logo);
+        const searchTypes = hasImage ? "word;image" : "word";
+        fireAndForget(ZOHO_CHECKOUT_URL, {
+          stage: "order_complete", session_id: sid, kind,
+          search_types: searchTypes,
+          zoho_deal_id: String(zids?.deal_id ?? ""),
+          email, first_name: String(contact2.first ?? sess2?.first_name ?? ""),
+          last_name: String(contact2.last ?? sess2?.last_name ?? ""),
+          phone: String(contact2.phone ?? sess2?.phone ?? ""),
+          mark: String(sess2?.name ?? ""),
+          invoice_number: invoice.InvoiceNumber ?? "",
+          deadline: deadline || undefined,
+          pay_date: kind === "invoice" ? String(p.pay_date ?? "") : undefined,
+          staff_email: String(p.staff_email ?? ""),
+          fast_track: ftFlag,
+          approve_url: ftFlag ? await mkLink("approve") : "",
+          reject_url: ftFlag ? await mkLink("reject") : "",
+        });
+      } catch (_e) { /* Deal drive is best-effort; the invoice exists */ }
+    }
     return json({ ok: true, invoice_id: invoice.InvoiceID,
                   invoice_number: invoice.InvoiceNumber, marked_paid: paid },
                 200, origin);
+  }
+
+  // POST /fasttrack/decide -- the engine relays a verified one-click
+  // decision here; we resolve the Deal + client from the session and hand
+  // the Deluge stage the exact copy inputs. Guarded by the shared key.
+  if (req.method === "POST" && path === "/fasttrack/decide") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    const sid = String(body?.session_id ?? "").trim();
+    const action = String(body?.action ?? "") === "approve" ? "approve" : "reject";
+    if (!sid) return json({ ok: false, error: "session_id required" }, 400, origin);
+    if (!ZOHO_CHECKOUT_URL) return json({ ok: false, error: "not configured" }, 200, origin);
+    const sess = await currentSession(sid);
+    if (sess && String(sess.tenant_id) === "demo") {
+      await admin.from("journey_events").insert({ session_id: sid,
+        event_type: "demo_fast_track_" + action, payload: { demo: true } });
+      return json({ ok: true, demo: true }, 200, origin);
+    }
+    const lr = (sess?.last_result ?? {}) as Record<string, unknown>;
+    const enq = (lr.staff_enquiry ?? {}) as Record<string, unknown>;
+    const c = (enq.contact ?? {}) as Record<string, unknown>;
+    const zids = (lr.zoho ?? {}) as Record<string, unknown>;
+    await admin.from("journey_events").insert({ session_id: sid,
+      event_type: "fast_track_" + action + "d",
+      payload: { date: body?.date ?? null, time: body?.time ?? null } });
+    fireAndForget(ZOHO_CHECKOUT_URL, {
+      stage: "fast_track_decision", session_id: sid, action,
+      zoho_deal_id: String(zids.deal_id ?? ""),
+      client_email: String(c.email ?? sess?.email ?? ""),
+      client_first: String(c.first ?? sess?.first_name ?? ""),
+      date: String(body?.date ?? ""), time: String(body?.time ?? ""),
+    });
+    return json({ ok: true }, 200, origin);
   }
 
   return json({ ok: false, error: "not found" }, 404, origin);
