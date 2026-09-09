@@ -110,6 +110,11 @@ _PAGES = {
     # Stripe Checkout lands here after payment — a branded "what happens
     # next" page (Jonathan, 8 Sep), never the bare WordPress homepage.
     '/audit-thanks': 'audit-thanks.html',
+    # Sandbox index (Jonathan, 9 Sep): every widget and journey with the
+    # demo switch already on. Server-side, the demo tenant can never reach
+    # Zoho, Xero or Stripe — these links exist so nobody has to remember
+    # the flag.
+    '/demo': 'demo.html',
 }
 
 # Pages that require the staff token. Everything else on this host is public
@@ -664,6 +669,23 @@ def _audit_pay(payload: dict) -> dict:
     mult = 1.0 if vat_exempt else 1.20
     net_total = sum(x['p'] for x in lines) - discount_p
     gross_total = int(round(net_total * mult))
+
+    # DEMO TENANT (Jonathan, 9 Sep): the sandbox completes the whole flow —
+    # gate, pricing, thank-you page, fake DEMO invoice number via the journey
+    # — but no Stripe session is ever created and no card is ever charged.
+    # The tenant on the STORED session decides; a browser flag cannot.
+    demo_sess = sess if not staff else (_journey_session(session_id)
+                                        if session_id else None)
+    if demo_sess and str(demo_sess.get('tenant_id')) == 'demo':
+        _journey_event(session_id, 'demo_pay_completed',
+                       {'demo': True, 'marks': qty, 'lines': lines,
+                        'total_pence': gross_total})
+        _xero_process(session_id, 'paid')
+        return {'ok': True, 'demo': True, 'marks': qty,
+                'total_pence': gross_total,
+                'url': ('https://braudit-free-search.onrender.com/audit-thanks?s='
+                        + session_id + '&paid=1&demo=1'),
+                'status': 200}
     name = ('Trademark Audit & Consultation' if consult else 'Trademark Audit')
     desc = ('Audit Promotion applied'
             + (' — VAT not applicable (outside UK)' if vat_exempt
