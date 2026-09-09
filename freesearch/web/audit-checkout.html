@@ -8,6 +8,7 @@
      system, then the wizard styles copied verbatim from free-search.html.
      Anything below is audit-only. -->
 <link rel="stylesheet" href="/braudit.css">
+<script src="/demo-banner.js" defer></script>
 <link rel="stylesheet" href="/wizard.css">
 <style>
   /* ---------- audit-only additions (prefixed ac- where they could clash) ---------- */
@@ -666,7 +667,7 @@ async function ensureSession(){
   try{
     const r=await fetch(journeyBase()+'/session/start',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({tenant_id:'tmh',source:'brand_audit_direct',
+      body:JSON.stringify({tenant_id:(window.IS_DEMO&&window.IS_DEMO())?'demo':'tmh',source:'brand_audit_direct',
         name:state.name||null,screen:'audit_contact'})});
     const d=await r.json();
     if(d&&d.ok&&d.session_id) state.sessionId=d.session_id;
