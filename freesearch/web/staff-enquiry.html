@@ -20,6 +20,7 @@
      led BY the client, so every section is open at once — except that nothing
      opens until the contact details are captured. -->
 <link rel="stylesheet" href="/braudit.css">
+<script src="/demo-banner.js"></script>
 <link rel="stylesheet" href="/wizard.css">
 <style>
   body{background:#eef2f5}
@@ -915,7 +916,7 @@ async function ensureSession(){
   try{
     const r=await fetch(jb()+'/session/start',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({tenant_id:'tmh',source:'brand_audit_direct',
+      body:JSON.stringify({tenant_id:(window.IS_DEMO&&window.IS_DEMO())?'demo':'tmh',source:'brand_audit_direct',
         name:(state.marks[0]&&state.marks[0].text)||null,screen:'staff_enquiry'})});
     const d=await r.json();
     if(d&&d.ok&&d.session_id){state.sessionId=d.session_id;setRef();}
