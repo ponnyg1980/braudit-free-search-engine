@@ -205,6 +205,9 @@ _EMBED_JS = """(function(){
   // inside an embed. Default is off: a host page normally has both already,
   // and two of each reads as a mistake (developer feedback, 2 Sep).
   if(s.dataset.chrome) q+='&chrome='+encodeURIComponent(s.dataset.chrome);
+  // data-demo="1": sandbox mode — DEMO ONLY banner, demo tenant, and the
+  // server refuses to let a demo session anywhere near Zoho/Xero/Stripe.
+  if(s.dataset.demo) q+='&demo=1';
   // Domain-hosted wizard pages (20 Aug): the search box hands off to a
   // WordPress page carrying ?s=<session>&screen=&q=&journey= — forward those
   // into the iframe so the embedded wizard adopts the session instead of
@@ -326,10 +329,12 @@ _EMBED_JS = """(function(){
 #     stray .py or .env in web/ can never be downloaded
 _ASSET_DIRS = {'/braudit.css': ('', 'braudit.css'),
                '/wizard.css': ('', 'wizard.css'),
+
                '/brand/': ('brand', None),
                '/fonts/': ('fonts', None)}
 _ASSET_TYPES = {
     '.css': 'text/css; charset=utf-8',
+    '.js': 'application/javascript; charset=utf-8',
     '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
     '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp',
     '.ico': 'image/x-icon',
@@ -343,7 +348,7 @@ def _static(path: str):
     None  -> not a static route at all, let the caller carry on routing.
     (None, ct) -> it IS a static route but the file isn't there: a real 404.
     """
-    if path in ('/braudit.css', '/wizard.css'):
+    if path in ('/braudit.css', '/wizard.css', '/demo-banner.js'):
         rel = path.lstrip('/')
     elif path.startswith('/brand/') or path.startswith('/fonts/'):
         rel = path.lstrip('/')
