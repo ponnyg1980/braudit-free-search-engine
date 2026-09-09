@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Sandbox — Braudit demo links</title>
+<!-- The sandbox index (Jonathan, 9 Sep). Every link below carries ?demo=1,
+     which puts the SAME live pages into demo mode: journey sessions run on
+     the `demo` tenant, and the server refuses that tenant at every Zoho,
+     Xero and Stripe path. These are not copies — they cannot drift from
+     live, and they cannot touch it. -->
+<link rel="stylesheet" href="/braudit.css">
+<script src="/demo-banner.js"></script>
+<style>
+  body{background:#eef2f5}
+  .dw{max-width:860px;margin:0 auto;padding:28px 18px 70px}
+  h1{color:var(--navy);font-size:26px;margin:14px 0 6px}
+  .lede{color:var(--quiet);font-size:15px;margin:0 0 26px;max-width:640px}
+  h2{color:var(--navy);font-size:16px;margin:30px 0 10px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px}
+  a.card{display:block;background:#fff;border:1.5px solid var(--line);
+    border-radius:var(--r-md);padding:16px 18px;text-decoration:none}
+  a.card:hover{border-color:var(--pink)}
+  a.card b{display:block;color:var(--navy);font-size:15px;margin-bottom:3px}
+  a.card span{color:var(--quiet);font-size:13.5px;line-height:1.45;display:block}
+  .note{border-left:4px solid var(--navy);background:#f2f6f9;border-radius:0 10px 10px 0;
+    padding:14px 16px;font-size:13.5px;color:var(--ink);margin-top:30px;line-height:1.5}
+  code{background:#eef2f5;border-radius:5px;padding:2px 6px;font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="dw">
+  <h1>Braudit sandbox</h1>
+  <p class="lede">Every journey below runs end to end — searches are real, the
+  wizard is real, checkout completes — but on the <b>demo tenant</b>: nothing
+  reaches Zoho, Xero or Stripe, no card is charged and no email is sent. The
+  striped banner stays on every screen so a demo can never be mistaken for
+  live.</p>
+
+  <h2>Search wizards</h2>
+  <div class="grid">
+    <a class="card" href="/uk-trademark-quick-search?demo=1&tenant=demo">
+      <b>Quick Search</b><span>Name → Classes → Results. The short wizard.</span></a>
+    <a class="card" href="/free-search?demo=1&tenant=demo">
+      <b>Free Search</b><span>The full guided wizard, all steps.</span></a>
+    <a class="card" href="/class-builder?demo=1&tenant=demo">
+      <b>Class Builder</b><span>Name → Classes → Review &amp; Send.</span></a>
+  </div>
+
+  <h2>Class tools</h2>
+  <div class="grid">
+    <a class="card" href="/class-assistant?demo=1&tenant=demo">
+      <b>Class Assistant</b><span>Plain class picker.</span></a>
+    <a class="card" href="/class-assistant-ai?demo=1&tenant=demo">
+      <b>Class Assistant (AI)</b><span>With the AI suggestion panel.</span></a>
+  </div>
+
+  <h2>Checkout &amp; orders</h2>
+  <div class="grid">
+    <a class="card" href="/audit?demo=1">
+      <b>Client audit checkout</b><span>The 9-page client order flow. Completes
+      with a pretend payment and a DEMO invoice number.</span></a>
+    <a class="card" href="/staff-enquiry?demo=1">
+      <b>Staff sales enquiry</b><span>The staff order form (staff token still
+      required). Gate, line pricing and both payment routes, sandboxed.</span></a>
+  </div>
+
+  <h2>Entry-point widgets</h2>
+  <div class="grid">
+    <a class="card" href="/search-box?demo=1&tenant=demo">
+      <b>Search box</b><span>The compact drop-anywhere entry point.</span></a>
+    <a class="card" href="/search-bar?demo=1&tenant=demo">
+      <b>Search bar</b><span>The slim single-line variant.</span></a>
+  </div>
+
+  <div class="note">
+    <b>Embedding a sandbox widget on a page:</b> add
+    <code>data-demo="1"</code> to the normal embed tag —
+    <code>&lt;script src="https://braudit-free-search.onrender.com/embed.js"
+    data-widget="free-search" data-demo="1" async&gt;&lt;/script&gt;</code>.
+    Same script as live; the flag switches the tenant and the server does the
+    rest. The isolation is enforced server-side, so even editing the URL by
+    hand cannot make a demo session create CRM records, invoices or charges.
+  </div>
+</div>
+</body>
+</html>
