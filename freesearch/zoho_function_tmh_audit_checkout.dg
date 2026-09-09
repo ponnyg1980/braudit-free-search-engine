@@ -1021,6 +1021,24 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			dM.put("Owner",ownerId);
 			dM.put("Next_Action_Owner",ownerId);
 			dM.put("Next_Action_Date",zoho.currentdate);
+			// Point 1 (9 Sep): current + planned territories COMBINED, one ISO
+			// vocabulary shared with Leads. Written to Trademark_Jurisdictions.
+			if(p.get("trademark_jurisdictions") != null)
+			{
+				jl = List();
+				jparts = p.get("trademark_jurisdictions").toString().toList(";");
+				for each  jv in jparts
+				{
+					if(jl.contains(jv) == false)
+					{
+						jl.add(jv);
+					}
+				}
+				if(jl.size() > 0)
+				{
+					dM.put("Trademark_Jurisdictions",jl);
+				}
+			}
 			// Search contexts (9 Sep): tagline rides inside the WORD search
 			// beside the name; the logo is the IMAGE context. Billing lines
 			// and search contexts are different things by design.
@@ -1078,6 +1096,37 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			if(upd.get("id") != null)
 			{
 				res.put("deal_updated",true);
+			}
+			// Point 10 (9 Sep): structured billing address onto the Account.
+			if((acc2Id != "") && (p.get("billing_addr1") != null))
+			{
+				aM2 = Map();
+				aM2.put("Billing_Street",p.get("billing_addr1").toString());
+				if(p.get("billing_city") != null)
+				{
+					aM2.put("Billing_City",p.get("billing_city").toString());
+				}
+				if(p.get("billing_region") != null)
+				{
+					aM2.put("Billing_State",p.get("billing_region").toString());
+				}
+				if(p.get("billing_postcode") != null)
+				{
+					aM2.put("Billing_Code",p.get("billing_postcode").toString());
+				}
+				if(p.get("billing_country") != null)
+				{
+					aM2.put("Billing_Country",p.get("billing_country").toString());
+				}
+				if(p.get("company_number") != null)
+				{
+					cnum = p.get("company_number").toString();
+					if(cnum != "")
+					{
+						aM2.put("Company_Number1",cnum);
+					}
+				}
+				zoho.crm.updateRecord("Accounts",acc2Id.toLong(),aM2);
 			}
 			// Point 3 (9 Sep): the discovery answers -- deadline, risk,
 			// territories, invoice contact -- land as a Note on the Deal.
