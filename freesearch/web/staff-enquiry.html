@@ -213,6 +213,38 @@
       </ul>
     </div>
 
+    <label class="fld">Existing client or new?</label>
+    <select id="f-clienttype">
+      <option value="">Choose…</option>
+      <option value="new">New — no history with us</option>
+      <option value="existing">Existing client</option>
+      <option value="returning">Previously enquired, never bought</option>
+    </select>
+
+    <!-- Point 2 (9 Sep): existing clients LINK to their Zoho Contact, past
+         enquiries link to the Lead — typed lookups against live Zoho, so the
+         order lands on the right record instead of matching on email luck.
+         A form opened from a search lead arrives pre-linked, with the option
+         to change. -->
+    <div id="f-linkwrap" class="hidden">
+      <label class="fld" id="f-linklabel">Find their record</label>
+      <div id="f-linked" class="hidden" style="display:flex;gap:10px;align-items:center;
+           border:1.5px solid #2f9e63;background:#f2faf5;border-radius:9px;padding:10px 13px">
+        <span style="font-size:13.5px;color:var(--ink)">Linked to
+          <b id="f-linkedname" style="color:var(--navy)"></b>
+          <span id="f-linkcompare" style="display:block;font-size:12px;color:var(--quiet);
+            margin-top:3px"></span></span>
+        <button type="button" class="rm" style="margin-left:auto;background:none;border:0;
+          color:var(--quiet);text-decoration:underline;cursor:pointer;font-family:inherit"
+          onclick="clearLink()">Change</button>
+      </div>
+      <div id="f-linksearch">
+        <input type="text" id="f-linkq" placeholder="Type a name or email — searches Zoho as you type"
+          autocomplete="off">
+        <div id="f-linkresults"></div>
+      </div>
+    </div>
+
     <div class="sf-row">
       <div><label class="fld">First name <span class="req">*</span></label>
         <input type="text" id="f-first" autocomplete="off"></div>
@@ -232,36 +264,6 @@
         <input type="text" id="f-org"></div>
     </div>
     <div class="sf-hint">Organisation is optional — plenty of enquiries are pre-incorporation.</div>
-
-    <label class="fld">Existing client or new?</label>
-    <select id="f-clienttype">
-      <option value="">Choose…</option>
-      <option value="new">New — no history with us</option>
-      <option value="existing">Existing client</option>
-      <option value="returning">Previously enquired, never bought</option>
-    </select>
-
-    <!-- Point 2 (9 Sep): existing clients LINK to their Zoho Contact, past
-         enquiries link to the Lead — typed lookups against live Zoho, so the
-         order lands on the right record instead of matching on email luck.
-         A form opened from a search lead arrives pre-linked, with the option
-         to change. -->
-    <div id="f-linkwrap" class="hidden">
-      <label class="fld" id="f-linklabel">Find their record</label>
-      <div id="f-linked" class="hidden" style="display:flex;gap:10px;align-items:center;
-           border:1.5px solid #2f9e63;background:#f2faf5;border-radius:9px;padding:10px 13px">
-        <span style="font-size:13.5px;color:var(--ink)">Linked to
-          <b id="f-linkedname" style="color:var(--navy)"></b></span>
-        <button type="button" class="rm" style="margin-left:auto;background:none;border:0;
-          color:var(--quiet);text-decoration:underline;cursor:pointer;font-family:inherit"
-          onclick="clearLink()">Change</button>
-      </div>
-      <div id="f-linksearch">
-        <input type="text" id="f-linkq" placeholder="Type a name or email — searches Zoho as you type"
-          autocomplete="off">
-        <div id="f-linkresults"></div>
-      </div>
-    </div>
   </section>
 
   <!-- ---------- DISCOVERY ---------- -->
@@ -550,8 +552,33 @@
     <input type="text" id="f-billentity" placeholder="Who the invoice is addressed to">
     <label class="fld">Invoice recipient email <span class="req">*</span></label>
     <input type="email" id="f-billemail">
-    <label class="fld">Billing address <span class="req">*</span></label>
-    <textarea id="f-billaddr"></textarea>
+    <label class="fld">Billing is for</label>
+    <select id="f-billkind" style="margin-bottom:6px">
+      <option value="company">A company</option>
+      <option value="individual">An individual</option>
+    </select>
+    <div id="f-chwrap">
+      <label class="fld">Find the company on Companies House <span class="opt">(fills the
+        address for you)</span></label>
+      <input type="text" id="f-chq" placeholder="Company name or number" autocomplete="off">
+      <div id="f-chresults"></div>
+      <div class="sf-hint" id="f-chnum"></div>
+    </div>
+    <label class="fld" style="margin-top:14px">Billing address
+      <span class="req">*</span> <span class="opt">(Xero format — flows to the
+      invoice and the account record)</span></label>
+    <div class="sf-row">
+      <div><input type="text" id="f-addr1" placeholder="Address line 1 *"></div>
+      <div><input type="text" id="f-addr2" placeholder="Address line 2"></div>
+    </div>
+    <div class="sf-row" style="margin-top:8px">
+      <div><input type="text" id="f-addrcity" placeholder="Town / city"></div>
+      <div><input type="text" id="f-addrregion" placeholder="County / region"></div>
+    </div>
+    <div class="sf-row" style="margin-top:8px">
+      <div><input type="text" id="f-addrpost" placeholder="Postcode *"></div>
+      <div><input type="text" id="f-addrcountry" placeholder="Country" value="United Kingdom"></div>
+    </div>
 
     <!-- Point 11 (9 Sep): always confirm whether invoices go to someone
          else. Departments are people too: accounts@ becomes First name
@@ -701,6 +728,8 @@ const state={
            declined:false,declineReason:'',feeWaived:true},
   billing:{entity:'',email:'',addr:'',location:'',payWhen:'',payDate:'',agreed:false,
            accountType:'new',account_id:'',account_name:'',
+           kind:'company',company_number:'',
+           addr1:'',addr2:'',city:'',region:'',postcode:'',country:'United Kingdom',
            icDiff:false,icFirst:'',icLast:'',icEmail:'',icPhone:''},
   readback:{confirmed:false,at:''}
 };
@@ -776,8 +805,8 @@ function gateRules(){
      ok:(b.payWhen==='now'||(b.payWhen==='date'&&nonEmpty(b.payDate)&&payDateWorks()))&&b.agreed,
      why:'Either they are paying now, or there is an exact agreed date, no later than delivery.'},
     {id:'G-10',sec:'billing',label:'Billing details complete',
-     ok:nonEmpty(b.entity)&&validEmail(b.email)&&nonEmpty(b.addr),
-     why:'We cannot raise anything without an entity, an invoice email and an address.'},
+     ok:nonEmpty(b.entity)&&validEmail(b.email)&&nonEmpty(b.addr1)&&nonEmpty(b.postcode),
+     why:'Entity, invoice email, address line 1 and postcode — the invoice cannot exist without them.'},
     {id:'G-12',sec:'billing',label:'VAT position confirmed',
      ok:b.location==='uk'||b.location==='nonuk',
      why:'Confirm with the client whether they are UK-based — it changes the total.'},
@@ -1014,7 +1043,11 @@ function renderReadback(){
     row('Consultation',cn.declined
       ?('Declined — '+(cn.declineReason||'no reason recorded'))
       :(cn.date?(pretty(cn.date)+' at '+(cn.time||'—')+' with '+(cn.adviser||'—')):''))+
-    row('Invoice to',b.entity?(b.entity+' · '+b.email):'')+
+    row('Invoice to',b.entity?(b.entity
+      +(state.billing.company_number?(' ('+state.billing.company_number+')'):'')
+      +' · '+b.email):'')+
+    row('Billing address',[b.addr1,b.addr2,b.city,b.region,b.postcode,
+      b.country].filter(Boolean).join(', '))+
     row('VAT treatment',b.location==='uk'?'UK — VAT at 20%'
       :(b.location==='nonuk'?'Outside the UK — no VAT':''))+
     row('Payment',b.payWhen==='now'?'Paying now':(b.payDate?('Invoice — payment agreed for '+pretty(b.payDate)):''))+
@@ -1118,7 +1151,19 @@ function renderLinkUI(){
   const name=(ct==='returning')?state.link.lead_name:state.link.contact_name;
   document.getElementById('f-linked').classList.toggle('hidden',!linked);
   document.getElementById('f-linksearch').classList.toggle('hidden',!!linked);
-  if(linked) document.getElementById('f-linkedname').textContent=name||linked;
+  if(linked){
+    document.getElementById('f-linkedname').textContent=name||linked;
+    /* Point 2: show what THEIR record holds so staff can compare against
+       anything the client already typed — the pick never overwrites a
+       filled field. */
+    const h=state.link.picked||null;
+    const cmp=document.getElementById('f-linkcompare');
+    if(cmp) cmp.innerHTML=h?('Record holds: '+[h.first&&('First: '+h.first),
+      h.last&&('Last: '+h.last),h.email&&('Email: '+h.email),
+      h.phone&&('Phone: '+h.phone),h.mobile&&('Mobile: '+h.mobile)]
+      .filter(Boolean).map(esc).join(' · ')
+      +'<br>Only empty form fields were filled — anything the client gave us stays.') : '';
+  }
 }
 function clearLink(){
   if(state.contact.clientType==='returning'){state.link.lead_id='';state.link.lead_name='';}
@@ -1138,8 +1183,11 @@ function wireLookup(inputId,resultsId,module,onPick){
       const hits=await zohoLookup(typeof module==='function'?module():module,q);
       out.innerHTML=hits.length?hits.map((h,i)=>`<div style="padding:9px 12px;
         border:1.5px solid var(--line);border-top:0;background:#fff;cursor:pointer;
-        font-size:13.5px" data-i="${i}">${esc(h.name||'')}
-        <span style="color:var(--quiet)">${esc(h.email||h.detail||'')}</span></div>`).join('')
+        font-size:13.5px;line-height:1.5" data-i="${i}"><b>${esc(h.name||'')}</b>
+        <span style="color:var(--quiet)">${esc(h.detail||h.account||'')}</span><br>
+        <span style="color:var(--quiet);font-size:12.5px">${
+          [h.email,h.phone?('☎ '+h.phone):'',h.mobile?('📱 '+h.mobile):'']
+          .filter(Boolean).map(esc).join(' · ')||'no contact details on record'}</span></div>`).join('')
         :'<div class="sf-hint">No match — check the spelling, or carry on as new.</div>';
       [...out.querySelectorAll('[data-i]')].forEach(el=>{
         el.onclick=()=>{onPick(hits[+el.dataset.i]);out.innerHTML='';inp.value='';};
@@ -1335,7 +1383,16 @@ function finishLoad(){
   chk('c-declined',cn.declined);set('f-declinereason',cn.declineReason);
   document.getElementById('f-declinewrap').classList.toggle('hidden',!cn.declined);
   document.getElementById('f-consultfields').classList.toggle('hidden',!!cn.declined);
-  set('f-billentity',b.entity);set('f-billemail',b.email);set('f-billaddr',b.addr);
+  if(b.addr&&!b.addr1){b.addr1=b.addr;}
+  set('f-billentity',b.entity);set('f-billemail',b.email);
+  set('f-addr1',b.addr1);set('f-addr2',b.addr2);set('f-addrcity',b.city);
+  set('f-addrregion',b.region);set('f-addrpost',b.postcode);
+  set('f-addrcountry',b.country||'United Kingdom');
+  set('f-billkind',b.kind||'company');
+  document.getElementById('f-chwrap').classList
+    .toggle('hidden',(b.kind||'company')!=='company');
+  if(b.company_number) document.getElementById('f-chnum').textContent=
+    'Company number '+b.company_number;
   set('f-vatloc',b.location);
   set('f-billtype',b.accountType||'new');
   document.getElementById('f-acctsearchwrap').classList
@@ -1439,7 +1496,40 @@ function bindAll(){
   bind('f-icphone',v=>state.billing.icPhone=v);
   bind('f-billentity',v=>state.billing.entity=v);
   bind('f-billemail',v=>state.billing.email=v);
-  bind('f-billaddr',v=>state.billing.addr=v);
+  bind('f-addr1',v=>state.billing.addr1=v);
+  bind('f-addr2',v=>state.billing.addr2=v);
+  bind('f-addrcity',v=>state.billing.city=v);
+  bind('f-addrregion',v=>state.billing.region=v);
+  bind('f-addrpost',v=>state.billing.postcode=v);
+  bind('f-addrcountry',v=>state.billing.country=v);
+  const bk=document.getElementById('f-billkind');
+  bk.addEventListener('change',()=>{
+    state.billing.kind=bk.value;
+    document.getElementById('f-chwrap').classList.toggle('hidden',bk.value!=='company');
+    touch();});
+  let chT=null;
+  document.getElementById('f-chq').addEventListener('input',function(){
+    clearTimeout(chT);const q=this.value.trim();
+    const out=document.getElementById('f-chresults');
+    if(q.length<2){out.innerHTML='';return;}
+    chT=setTimeout(async()=>{
+      out.innerHTML='<div class="sf-hint">Searching Companies House…</div>';
+      try{
+        const r=await fetch('/lookup/company?q='+encodeURIComponent(q));
+        const d=await r.json();
+        const items=(d.companies||d.items||[]).slice(0,6);
+        out.innerHTML=items.length?items.map((c,i)=>`<div style="padding:9px 12px;
+          border:1.5px solid var(--line);border-top:0;background:#fff;cursor:pointer;
+          font-size:13.5px" data-i="${i}"><b>${esc(c.name||c.title||'')}</b>
+          <span style="color:var(--quiet)">${esc(c.number||c.company_number||'')}
+          ${c.address?' — '+esc(typeof c.address==='string'?c.address:(c.address.address_line_1||'')):''}</span></div>`).join('')
+          :'<div class="sf-hint">No match on Companies House.</div>';
+        [...out.querySelectorAll('[data-i]')].forEach(el=>{
+          el.onclick=()=>{chPick(items[+el.dataset.i]);out.innerHTML='';};
+        });
+      }catch(e){out.innerHTML='';}
+    },320);
+  });
   const vl=document.getElementById('f-vatloc');
   vl.addEventListener('change',()=>{state.billing.location=vl.value;renderPrice();touch();});
   bind('f-paydate',v=>state.billing.payDate=v);
@@ -1553,6 +1643,30 @@ async function toPayment(){
   const d=await r.json();
   if(d&&d.ok){state.staff=d.name;state.staffEmail=d.email;renderGate();}
 }catch(e){}})();
+function chPick(c){
+  const set=(id,v)=>{const el=document.getElementById(id);
+    if(el&&v){el.value=v;}};
+  state.billing.entity=c.name||c.title||state.billing.entity;
+  state.billing.company_number=String(c.number||c.company_number||'');
+  set('f-billentity',state.billing.entity);
+  document.getElementById('f-chnum').textContent=state.billing.company_number
+    ?('Company number '+state.billing.company_number):'';
+  const a=c.address;
+  if(a&&typeof a==='object'){
+    state.billing.addr1=a.address_line_1||a.line1||'';
+    state.billing.addr2=a.address_line_2||a.line2||'';
+    state.billing.city=a.locality||a.city||'';
+    state.billing.region=a.region||'';
+    state.billing.postcode=a.postal_code||a.postcode||'';
+    state.billing.country=a.country||'United Kingdom';
+  }else if(typeof a==='string'&&a){
+    state.billing.addr1=a;
+  }
+  set('f-addr1',state.billing.addr1);set('f-addr2',state.billing.addr2);
+  set('f-addrcity',state.billing.city);set('f-addrregion',state.billing.region);
+  set('f-addrpost',state.billing.postcode);set('f-addrcountry',state.billing.country);
+  touch();
+}
 function acctPick(h){
   state.billing.account_id=h.id;state.billing.account_name=h.name||'';
   state.billing.entity=h.name||state.billing.entity;
@@ -1567,6 +1681,7 @@ function clearAcct(){
   document.getElementById('f-acctsearch').classList.remove('hidden');touch();
 }
 wireLookup('f-linkq','f-linkresults',linkModule,h=>{
+  state.link.picked=h;
   if(state.contact.clientType==='returning'){
     state.link.lead_id=h.id;state.link.lead_name=h.name||'';}
   else{state.link.contact_id=h.id;state.link.contact_name=h.name||'';}
