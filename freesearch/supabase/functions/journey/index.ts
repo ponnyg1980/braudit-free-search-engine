@@ -504,6 +504,21 @@ function classCsv(scope: { classes?: { n: number; label: string; terms?: string[
   return lines.join("\r\n");
 }
 
+// Picker code -> Trademark_Jurisdictions actual_value (ISO-2 with Zoho's
+// regional quirks: EM=EUIPO, AP=ARIPO, OA=OAPI, GC=GCC, WO=WIPO). Same
+// vocabulary on Deals and (since 9 Sep) Leads, so values map over cleanly.
+const JUR_TO_ZOHO: Record<string, string> = {
+  EU: "EM", ARIPO: "AP", OAPI: "OA", GCC: "GC", WIPO: "WO", MADRID: "WO",
+};
+function mapJurisdictions(codes: unknown): string[] {
+  const outSet = new Set<string>();
+  for (const c of Array.isArray(codes) ? codes : []) {
+    const k = String(c).trim();
+    if (k) outSet.add(JUR_TO_ZOHO[k] ?? k);
+  }
+  return [...outSet];
+}
+
 function splitLocations(codes: unknown): { mapped: string[]; unmapped: string[] } {
   const mapped: string[] = [], unmapped: string[] = [];
   for (const c of Array.isArray(codes) ? codes : []) {
@@ -519,6 +534,12 @@ function splitLocations(codes: unknown): { mapped: string[]; unmapped: string[] 
 // Undefined keys vanish in JSON.stringify, so absent data simply isn't sent.
 function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
   const lr = (session.last_result ?? {}) as Record<string, unknown>;
+  // Point 1 (9 Sep): current + planned territories COMBINED, in the same
+  // ISO vocabulary as the Deals field, so lead -> deal maps over 1:1.
+  const jurAll = mapJurisdictions([
+    ...(Array.isArray(session.trading_now) ? session.trading_now as unknown[] : []),
+    ...(Array.isArray(session.planning_to_trade) ? session.planning_to_trade as unknown[] : []),
+  ]);
   const summary = (lr.summary ?? {}) as Record<string, unknown>;
   const viability = (lr.viability ?? {}) as Record<string, unknown>;
   const channels = (session.channels ?? {}) as Record<string, unknown>;
@@ -549,6 +570,7 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
   const score = (viability as { score?: unknown }).score;
 
   return {
+    Trademark_Jurisdictions: jurAll.length ? jurAll : undefined,
     First_Name: session.first_name || undefined,
     Last_Name: lastName,
     Email: session.email || undefined,
@@ -1581,7 +1603,21 @@ serve(async (req) => {
 
     const marks = Math.max(1, Number(p.marks ?? 1) || 1);
     const vatExempt = p.vat_exempt === true;
-    const email = String(p.billing_email ?? p.customer_email ?? "").trim();
+    // The stored enquiry (staff orders) is needed for the invoice contact,
+    // the Deal linkage and the discovery note -- load it ONCE here.
+    const sessX = await currentSession(sid);
+    const lrX = (sessX?.last_result ?? {}) as Record<string, unknown>;
+    const enqX = (lrX.staff_enquiry ?? null) as Record<string, unknown> | null;
+    const billX = (enqX?.billing ?? {}) as Record<string, unknown>;
+    // Point 11 (9 Sep): a different invoice contact -- department-as-person
+    // pattern included -- becomes the Xero contact's named person + email.
+    const ic = billX.icDiff ? {
+      first: String(billX.icFirst ?? "").trim(),
+      last: String(billX.icLast ?? "").trim(),
+      email: String(billX.icEmail ?? "").trim(),
+      phone: String(billX.icPhone ?? "").trim(),
+    } : null;
+    const email = (ic?.email || String(p.billing_email ?? p.customer_email ?? "")).trim();
     const entity = String(p.billing_entity ?? "").trim() || (email || "Audit client");
     const ref = String(p.invoice_ref ?? sid.slice(0, 8));
     const today = new Date().toISOString().slice(0, 10);
@@ -1597,8 +1633,19 @@ serve(async (req) => {
       if (q.ok && hits?.length) contactId = hits[0].ContactID;
     }
     if (!contactId) {
+      const addr1 = String(billX.addr1 ?? billX.addr ?? "").trim();
+      const xAddr = addr1 ? [{ AddressType: "POBOX",
+        AddressLine1: addr1,
+        AddressLine2: String(billX.addr2 ?? "") || undefined,
+        City: String(billX.city ?? "") || undefined,
+        Region: String(billX.region ?? "") || undefined,
+        PostalCode: String(billX.postcode ?? "") || undefined,
+        Country: String(billX.country ?? "") || undefined }] : undefined;
       const c = await xeroApi("/Contacts", "POST",
-        { Contacts: [{ Name: entity, EmailAddress: email || undefined }] },
+        { Contacts: [{ Name: entity, EmailAddress: email || undefined,
+          FirstName: ic?.first || undefined, LastName: ic?.last || undefined,
+          CompanyNumber: String(billX.company_number ?? "") || undefined,
+          Addresses: xAddr }] },
         `contact_${sid}`);
       const made = (c.data as { Contacts?: { ContactID: string }[] })?.Contacts;
       if (c.ok && made?.length) contactId = made[0].ContactID;
@@ -1722,10 +1769,24 @@ serve(async (req) => {
     // order_complete; it can also create the Deal for staff orders.
     if (ZOHO_CHECKOUT_URL) {
       try {
-        const sess2 = await currentSession(sid);
-        const lr2 = (sess2?.last_result ?? {}) as Record<string, unknown>;
-        const enq2 = lr2.staff_enquiry as Record<string, unknown> | undefined;
+        const sess2 = sessX, lr2 = lrX;
+        const enq2 = enqX as Record<string, unknown> | undefined;
         const zids = lr2.zoho as Record<string, unknown> | undefined;
+        const link2 = (enq2?.link ?? {}) as Record<string, unknown>;
+        const disc2 = (enq2?.discovery ?? {}) as Record<string, unknown>;
+        // Point 3 (9 Sep): the discovery answers were dying inside the
+        // session JSON -- they now travel to a Note on the Deal.
+        const discoveryNote = enq2 ? [
+          disc2.desc ? `What they do: ${disc2.desc}` : "",
+          disc2.reason ? `Why now: ${disc2.reason}` : "",
+          disc2.deadline ? `Deadline: ${disc2.deadline}` : "",
+          disc2.risk ? `Risk / threat / dispute: ${disc2.risk}` : "",
+          Array.isArray(disc2.terrNow) && disc2.terrNow.length
+            ? `Territories now: ${(disc2.terrNow as string[]).join(", ")}` : "",
+          Array.isArray(disc2.terrPlan) && disc2.terrPlan.length
+            ? `Territories planned: ${(disc2.terrPlan as string[]).join(", ")}` : "",
+          ic ? `Invoice contact: ${ic.first} ${ic.last} <${ic.email}> ${ic.phone}` : "",
+        ].filter(Boolean).join("\n") : "";
         // Fast track: did this session ask for it?
         let ftFlag = "";
         try {
@@ -1769,6 +1830,25 @@ serve(async (req) => {
           stage: "order_complete", session_id: sid, kind,
           search_types: searchTypes,
           zoho_deal_id: String(zids?.deal_id ?? ""),
+          zoho_contact_id: String(link2.contact_id ?? ""),
+          zoho_lead_id: String(link2.lead_id ?? ""),
+          zoho_account_id: String(billX.account_id ?? ""),
+          discovery_note: discoveryNote || undefined,
+          trademark_jurisdictions: (() => {
+            const j = mapJurisdictions([
+              ...(Array.isArray(disc2.terrNow) ? disc2.terrNow as unknown[] : []),
+              ...(Array.isArray(disc2.terrPlan) ? disc2.terrPlan as unknown[] : []),
+            ]);
+            return j.length ? j.join(";") : undefined;
+          })(),
+          billing_kind: String(billX.kind ?? ""),
+          company_number: String(billX.company_number ?? ""),
+          billing_addr1: String(billX.addr1 ?? billX.addr ?? ""),
+          billing_addr2: String(billX.addr2 ?? ""),
+          billing_city: String(billX.city ?? ""),
+          billing_region: String(billX.region ?? ""),
+          billing_postcode: String(billX.postcode ?? ""),
+          billing_country: String(billX.country ?? ""),
           email, first_name: String(contact2.first ?? sess2?.first_name ?? ""),
           last_name: String(contact2.last ?? sess2?.last_name ?? ""),
           phone: String(contact2.phone ?? sess2?.phone ?? ""),
@@ -1786,6 +1866,34 @@ serve(async (req) => {
     return json({ ok: true, invoice_id: invoice.InvoiceID,
                   invoice_number: invoice.InvoiceNumber, marked_paid: paid },
                 200, origin);
+  }
+
+  // POST /staff/lookup -- typed Zoho lookups for the staff form (points 2 &
+  // 10, 9 Sep). Engine-authenticated by the shared key; the Deluge stage
+  // does the searchRecords and returns up to six candidates.
+  if (req.method === "POST" && path === "/staff/lookup") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    if (!ZOHO_CHECKOUT_URL) return json({ ok: false, error: "not configured" }, 200, origin);
+    try {
+      const r = await fetch(ZOHO_CHECKOUT_URL, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: "staff_lookup",
+          module: String(body?.module ?? ""), q: String(body?.q ?? "") }),
+      });
+      const text = await r.text();
+      let parsed: Record<string, unknown> | null = null;
+      try { parsed = JSON.parse(text); } catch { parsed = null; }
+      let result: unknown = parsed;
+      const det = parsed?.details as Record<string, unknown> | undefined;
+      if (typeof det?.output === "string") {
+        try { result = JSON.parse(det.output as string); } catch { result = null; }
+      }
+      const hits = (result as { hits?: unknown[] })?.hits;
+      return json({ ok: true, hits: Array.isArray(hits) ? hits : [] }, 200, origin);
+    } catch (_e) {
+      return json({ ok: false, hits: [] }, 200, origin);
+    }
   }
 
   // POST /fasttrack/decide -- the engine relays a verified one-click
