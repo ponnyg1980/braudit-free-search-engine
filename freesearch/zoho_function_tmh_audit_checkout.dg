@@ -850,7 +850,21 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			// then create a Deal owned by the right user.
 			cid = "";
 			acc2Id = "";
-			srch = zoho.crm.searchRecords("Contacts","(Email:starts_with:" + emPre + ")");
+			// Point 2/10 (9 Sep): the staff form may hand us the EXACT records
+			// the staff member linked -- use them, never re-guess from email.
+			if(p.get("zoho_contact_id") != null)
+			{
+				cid = p.get("zoho_contact_id").toString();
+			}
+			if(p.get("zoho_account_id") != null)
+			{
+				acc2Id = p.get("zoho_account_id").toString();
+			}
+			srch = List();
+			if(cid == "")
+			{
+				srch = zoho.crm.searchRecords("Contacts","(Email:starts_with:" + emPre + ")");
+			}
 			for each  rec in srch
 			{
 				if((rec.get("Email") != null) && rec.get("Email").toString().equalsIgnoreCase(emIn))
@@ -864,6 +878,45 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			// duplicate behind. Same pattern as the contact stage, including
 			// the AI-fields carry-over (conversion drops them -- proven
 			// 30 Aug).
+			// The staff member may have linked the exact Lead -- convert THAT one.
+			if((cid == "") && (p.get("zoho_lead_id") != null))
+			{
+				ldIdIn = p.get("zoho_lead_id").toString();
+				if(ldIdIn != "")
+				{
+					aiBlk3 = false;
+					aiSafe3 = false;
+					ldRec3 = zoho.crm.getRecordById("Leads",ldIdIn.toLong());
+					if(ldRec3.get("AI_Tools_Blocked") != null)
+					{
+						aiBlk3 = ldRec3.get("AI_Tools_Blocked").toString().equalsIgnoreCase("true");
+					}
+					if(ldRec3.get("AI_Safe_Sender") != null)
+					{
+						aiSafe3 = ldRec3.get("AI_Safe_Sender").toString().equalsIgnoreCase("true");
+					}
+					cMap3 = Map();
+					cMap3.put("overwrite",false);
+					cMap3.put("notify_lead_owner",false);
+					cMap3.put("notify_new_entity_owner",false);
+					cv3 = zoho.crm.convertLead(ldIdIn.toLong(),cMap3);
+					if(cv3.get("Contacts") != null)
+					{
+						cid = cv3.get("Contacts").toString();
+					}
+					if(cv3.get("Accounts") != null)
+					{
+						acc2Id = cv3.get("Accounts").toString();
+					}
+					if((cid != "") && (aiBlk3 || aiSafe3))
+					{
+						aiC3 = Map();
+						aiC3.put("AI_Tools_Blocked",aiBlk3);
+						aiC3.put("AI_Safe_Sender",aiSafe3);
+						zoho.crm.updateRecord("Contacts",cid.toLong(),aiC3);
+					}
+				}
+			}
 			if(cid == "")
 			{
 				fndLd2 = zoho.crm.searchRecords("Leads","(Email:starts_with:" + emPre + ")");
@@ -1026,6 +1079,17 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			{
 				res.put("deal_updated",true);
 			}
+			// Point 3 (9 Sep): the discovery answers -- deadline, risk,
+			// territories, invoice contact -- land as a Note on the Deal.
+			if(p.get("discovery_note") != null)
+			{
+				dnM = Map();
+				dnM.put("Note_Title","Sales discovery");
+				dnM.put("Note_Content",p.get("discovery_note").toString());
+				dnM.put("Parent_Id",dealId);
+				dnM.put("$se_module","Deals");
+				zoho.crm.createRecord("Notes",dnM);
+			}
 			// Paid orders get the research task + inbox nudge, same as the
 			// browser 'paid' stage (which stays for sessions mid-flight).
 			if(kind == "paid")
@@ -1142,6 +1206,85 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				message :"<p>" + greet + ",</p><p>Thank you for your recent request to Fast Track your Audit, unfortunately due to high demand we can not accommodate your request on this occasion. However, your audit has been requested as a priority and one of our team will be in touch with you as soon as your audit is prepared, we estimate no more than 1 working day.</p><p>If you have any questions please do not hesitate to reach out.</p><p>Kind regards,<br>Laura Spencer<br>The Trademark Helpline<br>0161 833 5400</p>"
 			]
 		}
+		res.put("ok",true);
+	}
+	else if(stg == "staff_lookup")
+	{
+		//
+		// -------------------------------------------- stage: staff_lookup
+		//
+		// Typed lookups for the staff order form (9 Sep): Contacts, Leads or
+		// Accounts by name or email, six candidates max. Read-only.
+		modIn = "";
+		if(p.get("module") != null)
+		{
+			modIn = p.get("module").toString();
+		}
+		qIn = "";
+		if(p.get("q") != null)
+		{
+			qIn = p.get("q").toString().trim();
+		}
+		hits = List();
+		if((qIn != "") && (modIn == "Accounts"))
+		{
+			srchA = zoho.crm.searchRecords("Accounts","(Account_Name:starts_with:" + qIn + ")");
+			for each  arow in srchA
+			{
+				if(hits.size() < 6)
+				{
+					hM = Map();
+					hM.put("id",arow.get("id").toString());
+					hM.put("name",ifnull(arow.get("Account_Name"),""));
+					hits.add(hM);
+				}
+			}
+		}
+		else if((qIn != "") && ((modIn == "Contacts") || (modIn == "Leads")))
+		{
+			crit = "((Last_Name:starts_with:" + qIn + ")or(First_Name:starts_with:" + qIn + "))";
+			if(qIn.contains("@"))
+			{
+				qPre = qIn;
+				if(qIn.contains("+"))
+				{
+					qPre = qIn.getPrefix("+");
+				}
+				crit = "(Email:starts_with:" + qPre + ")";
+			}
+			srchP = zoho.crm.searchRecords(modIn,crit);
+			for each  prow in srchP
+			{
+				if(hits.size() < 6)
+				{
+					hM = Map();
+					hM.put("id",prow.get("id").toString());
+					nm = ifnull(prow.get("Full_Name"),"");
+					if(nm == "")
+					{
+						nm = ifnull(prow.get("First_Name"),"") + " " + ifnull(prow.get("Last_Name"),"");
+					}
+					hM.put("name",nm.trim());
+					hM.put("first",ifnull(prow.get("First_Name"),""));
+					hM.put("last",ifnull(prow.get("Last_Name"),""));
+					hM.put("email",ifnull(prow.get("Email"),""));
+					if(modIn == "Contacts")
+					{
+						if(prow.get("Account_Name") != null)
+						{
+							hM.put("account",ifnull(prow.get("Account_Name").get("name"),""));
+							hM.put("account_id",ifnull(prow.get("Account_Name").get("id"),""));
+						}
+					}
+					else
+					{
+						hM.put("detail",ifnull(prow.get("Company"),""));
+					}
+					hits.add(hM);
+				}
+			}
+		}
+		res.put("hits",hits);
 		res.put("ok",true);
 	}
 	else if((stg == "ai_block") && (emIn != ""))
