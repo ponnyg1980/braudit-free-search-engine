@@ -7,6 +7,7 @@
   <!-- Shared design layer. Loads BEFORE this page's own <style>, so
        anything below overrides it — page-specific rules stay local. -->
   <link rel="stylesheet" href="/braudit.css">
+<script src="/demo-banner.js" defer></script>
 <style>
 :root{--radius:12px;   /* this page only: tighter cards */
   --a:#C5E0B4;--b:#DBE9CE;--c:#FFF2CC;--d:#EFEFEF; /* tier colours, page-local */}
@@ -664,6 +665,7 @@ async function aiGate(){
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
     aiFail('Please enter your email address to use the AI tools.'); return null; }
   try{
+    if(window.IS_DEMO&&window.IS_DEMO()) return {ok:true,allowed:true,demo:true};
     const r=await fetch(journeyBase()+'/ai/use',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({email:email,tool:'class_assistant_ai'})});
