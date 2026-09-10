@@ -97,6 +97,9 @@
   .sf-check.on{border-color:var(--pink);background:var(--pink-tint)}
   .sf-check input{width:17px;height:17px;accent-color:var(--pink);margin-top:2px;flex:none}
   .sf-check span{font-size:13.5px;color:var(--ink);line-height:1.45}
+  .sf-plat{border:1.5px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:8px}
+  .sf-plat.on{border-color:var(--pink);background:var(--pink-tint)}
+  .sf-plat input[type=text]{margin-top:9px}
 
   /* ---------- mark lines (multi-audit) ---------- */
   .sf-mark{border:1.5px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px;
@@ -352,6 +355,43 @@
       <a href="#" onclick="openTools();return false;" style="color:var(--pink);font-weight:700">
         Open the class tools</a> if you need to work them out on the call.</div>
     <div id="f-scope" style="margin-top:14px"></div>
+  </section>
+
+  <!-- ---------- THEIR BRAND ONLINE ---------- -->
+  <section class="sf-card hidden" data-sec="platforms">
+    <h2>Their brand online</h2>
+    <p class="lede">Where their brand already lives. Optional — take what they
+      know on the call, add the rest afterwards.</p>
+
+    <div class="sf-guide">
+      <div class="gh">Why this matters — say it plainly</div>
+      <ul>
+        <li>Their own website, socials and shops get recorded as <b>theirs</b>.
+          Without that, the audit can report their own Instagram or Amazon shop
+          back to them as a possible infringement.</li>
+        <li>Ticking a platform also tells the audit to <b>search</b> it. Nothing
+          ticked means that platform is not covered.</li>
+        <li><span class="say">"So we don't hand you back your own shop as a risk —
+          what do you actually run? Website, socials, anywhere you sell?"</span></li>
+        <li>Blank is fine. Leave it and finish after the call — this form resumes
+          from the same link.</li>
+      </ul>
+    </div>
+
+    <label class="fld">Their website / domain</label>
+    <input type="text" id="f-domain" placeholder="e.g. acmebrand.co.uk" autocomplete="off">
+    <div class="sf-hint">Recorded as an exclusion covering the domain and its subdomains.</div>
+    <label class="sf-check" style="margin-top:10px"><input type="checkbox" id="f-domain-none">
+      <span>They don't have a website.</span></label>
+
+    <h3 style="margin:26px 0 4px;font-size:16px;color:var(--navy)">Social platforms</h3>
+    <p class="sf-hint" style="margin-bottom:10px">Tick the ones they use. Add the URL
+      where they know it — a ticked platform with no URL is still searched.</p>
+    <div id="f-soc"></div>
+
+    <h3 style="margin:26px 0 4px;font-size:16px;color:var(--navy)">Selling platforms</h3>
+    <p class="sf-hint" style="margin-bottom:10px">Marketplaces and shops they sell on.</p>
+    <div id="f-shop"></div>
   </section>
 
   <!-- ---------- ADVICE ---------- -->
@@ -697,10 +737,18 @@ const CONFIG=(function(){
 if(CONFIG.STAFF) try{localStorage.setItem('tmh_staff',CONFIG.STAFF);}catch(e){}
 const jb=()=>CONFIG.JOURNEY.replace(/\/$/,'');
 
+/* Same platform lists as the client wizard (audit-checkout.html) so a staff
+   order and a self-serve order produce the same layers and exclusions. */
+const SOCIALS=[['facebook','Facebook'],['instagram','Instagram'],['youtube','YouTube'],
+  ['tiktok','TikTok'],['linkedin','LinkedIn']];
+const SHOPS=[['amazon','Amazon'],['etsy','Etsy'],['temu','Temu'],['tiktokshop','TikTok Shop'],
+  ['ebay','eBay'],['alibaba','Alibaba']];
+
 const SECTIONS=[
   ['contact',   'Contact'],
   ['discovery', 'Discovery'],
   ['marks',     'Marks & scope'],
+  ['platforms', 'Their brand online'],
   ['advice',    'Advice given'],
   ['recommend', 'Recommendation'],
   ['consult',   'Consultation'],
@@ -722,6 +770,14 @@ const state={
   marks:[{text:'',kind:'word',price:149}],
   classes:'',
   scope:{},
+  /* Their brand online (10 Sep). The client wizard captures the client's OWN
+     domain, socials and marketplaces; the staff form captured none of it, so
+     a staff-placed audit reached the analyst with no search layers and NO
+     exclusions at all -- meaning the client's own shop could come back as a
+     conflict. Two jobs, same as the client side: a ticked platform switches
+     that search layer on, and a URL becomes a Client-Owned exclusion.
+     Deliberately NOT gated -- staff are on a call and can finish it later. */
+  platforms:{domain:'',domainNone:false,soc:{},shop:{}},
   advice:{risks:false,fees:false,noguarantee:false,questions:false,note:''},
   recommend:{scope:'',rationale:'',handling:'normal',auditDate:'',expReason:''},
   consult:{date:'',time:'',adviser:'',method:'phone',agreed:false,
@@ -1022,6 +1078,55 @@ function renderScope(){
     ).join(''):'<div class="sf-hint">Enter classes above and the terms boxes appear here.</div>';
 }
 
+/* ---------- their brand online ---------- */
+/* One row per platform: a tick (search this layer) and an optional URL (their
+   own property -> Client-Owned exclusion). No URL is fine; the layer is still
+   searched. Nothing here is gated. */
+function platRow(group,key,label){
+  const rec=state.platforms[group][key]||{on:false,url:''};
+  return `<div class="sf-plat${rec.on?' on':''}">
+    <label class="sf-check" style="margin:0;border:0;padding:0;background:none">
+      <input type="checkbox" ${rec.on?'checked':''}
+        onchange="togglePlat('${group}','${key}',this.checked)">
+      <span style="font-weight:700;color:var(--navy)">${label}</span></label>
+    ${rec.on?`<input type="text" placeholder="Their ${label} URL (optional)"
+        value="${esc(rec.url||'')}" autocomplete="off"
+        oninput="state.platforms['${group}']['${key}'].url=this.value;touch()">`:''}
+  </div>`;
+}
+function renderPlatforms(){
+  SOCIALS.forEach(([k])=>{if(!state.platforms.soc[k])state.platforms.soc[k]={on:false,url:''};});
+  SHOPS.forEach(([k])=>{if(!state.platforms.shop[k])state.platforms.shop[k]={on:false,url:''};});
+  const s=document.getElementById('f-soc'),h=document.getElementById('f-shop');
+  if(s)s.innerHTML=SOCIALS.map(([k,l])=>platRow('soc',k,l)).join('');
+  if(h)h.innerHTML=SHOPS.map(([k,l])=>platRow('shop',k,l)).join('');
+}
+function togglePlat(group,key,on){
+  if(!state.platforms[group][key])state.platforms[group][key]={on:false,url:''};
+  state.platforms[group][key].on=on;
+  renderPlatforms();touch();
+}
+/* Mirrors audit-checkout.html's buildScope(): the layers the audit covers and
+   the client-owned exclusions, derived from what staff ticked. Read by the
+   journey when it stamps the deal. */
+function platformScope(){
+  const p=state.platforms,layers=[],exclusions=[];
+  layers.push('Companies House UK');
+  layers.push('Domain Registers');
+  SOCIALS.forEach(([k,l])=>{if(p.soc[k]&&p.soc[k].on)layers.push(l);});
+  SHOPS.forEach(([k,l])=>{if(p.shop[k]&&p.shop[k].on)layers.push(l);});
+  const cn=String(state.billing.company_number||'').trim();
+  if(cn)exclusions.push({type:'Company Number',value:cn,match_mode:'Exact'});
+  const dom=String(p.domain||'').trim();
+  if(dom)exclusions.push({type:'Domain',value:dom,match_mode:'Domain and Subdomains'});
+  SOCIALS.concat(SHOPS).forEach(([k])=>{
+    const g=p.soc[k]?'soc':'shop',rec=p[g]&&p[g][k];
+    if(rec&&rec.on&&String(rec.url||'').trim())
+      exclusions.push({type:'URL',value:String(rec.url).trim(),match_mode:'Exact'});
+  });
+  return {search_layers:[...new Set(layers)],exclusions:exclusions};
+}
+
 /* ---------- read-back ---------- */
 function renderReadback(){
   const c=state.contact,r=state.recommend,cn=state.consult,b=state.billing;
@@ -1274,7 +1379,11 @@ async function saveNow(explicit){
       if(gd&&gd.ok&&gd.session&&gd.session.last_result&&typeof gd.session.last_result==='object')
         lr=gd.session.last_result;
     }catch(e){}
-    lr.staff_enquiry=Object.assign({},state,{savedAt:new Date().toISOString()});
+    /* platform_scope is DERIVED here, not in the journey, so the staff form
+       stays the single source of truth for what the audit covers and what is
+       excluded — the journey just forwards it to the Zoho 'scope' stage. */
+    lr.staff_enquiry=Object.assign({},state,
+      {platform_scope:platformScope(),savedAt:new Date().toISOString()});
 
     const c=state.contact;
     const snapshot={
@@ -1374,6 +1483,14 @@ function finishLoad(){
   if(!Array.isArray(d.terrPlan)) d.terrPlan=[];
   set('f-deadline',d.deadline);set('f-risk',d.risk);
   set('f-classes',state.classes);
+  /* Their brand online — older sessions have no platforms block; the defaults
+     in state cover that and renderPlatforms() backfills any missing keys. */
+  if(!state.platforms) state.platforms={domain:'',domainNone:false,soc:{},shop:{}};
+  if(!state.platforms.soc) state.platforms.soc={};
+  if(!state.platforms.shop) state.platforms.shop={};
+  set('f-domain',state.platforms.domain);
+  chk('f-domain-none',!!state.platforms.domainNone);
+  renderPlatforms();
   chk('a-risks',a.risks);chk('a-fees',a.fees);chk('a-noguarantee',a.noguarantee);
   chk('a-questions',a.questions);set('f-advicenote',a.note);
   set('f-scopetext',r.scope);set('f-rationale',r.rationale);set('f-handling',r.handling);
@@ -1450,6 +1567,9 @@ function bindAll(){
 
   const cl=document.getElementById('f-classes');
   cl.addEventListener('input',()=>{state.classes=cl.value;renderScope();touch();});
+
+  bind('f-domain',v=>state.platforms.domain=v);
+  bind('f-domain-none',v=>state.platforms.domainNone=v);
 
   bind('a-risks',v=>state.advice.risks=v);
   bind('a-fees',v=>state.advice.fees=v);
