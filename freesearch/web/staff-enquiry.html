@@ -100,6 +100,12 @@
   .sf-plat{border:1.5px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:8px}
   .sf-plat.on{border-color:var(--pink);background:var(--pink-tint)}
   .sf-plat input[type=text]{margin-top:9px}
+  .sf-opts{display:flex;gap:8px;flex-wrap:wrap;margin:9px 0 0}
+  .sf-opt{font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;
+    padding:6px 12px;border-radius:999px;border:1.5px solid var(--line);
+    background:#fff;color:var(--quiet)}
+  .sf-opt.on{border-color:var(--pink);background:var(--pink);color:#fff}
+  #f-domain-opts{margin-bottom:10px}
 
   /* ---------- mark lines (multi-audit) ---------- */
   .sf-mark{border:1.5px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px;
@@ -379,10 +385,9 @@
     </div>
 
     <label class="fld">Their website / domain</label>
+    <div id="f-domain-opts" class="sf-opts"></div>
     <input type="text" id="f-domain" placeholder="e.g. acmebrand.co.uk" autocomplete="off">
     <div class="sf-hint">Recorded as an exclusion covering the domain and its subdomains.</div>
-    <label class="sf-check" style="margin-top:10px"><input type="checkbox" id="f-domain-none">
-      <span>They don't have a website.</span></label>
 
     <h3 style="margin:26px 0 4px;font-size:16px;color:var(--navy)">Social platforms</h3>
     <p class="sf-hint" style="margin-bottom:10px">Tick the ones they use. Add the URL
@@ -777,7 +782,12 @@ const state={
      conflict. Two jobs, same as the client side: a ticked platform switches
      that search layer on, and a URL becomes a Client-Owned exclusion.
      Deliberately NOT gated -- staff are on a call and can finish it later. */
-  platforms:{domain:'',domainNone:false,soc:{},shop:{}},
+  /* Per platform: on = search this layer; mode = how we got (or didn't get)
+     their URL -- 'url' | 'later' | 'none'. 'later' is deliberately first-class
+     (Jonathan, 10 Sep): a missing URL gets excluded at search review anyway,
+     and it is quicker for staff that way round, so nothing here blocks an
+     order. Anything left on 'later' is listed for follow-up on the deal. */
+  platforms:{domain:'',domainMode:'',soc:{},shop:{}},
   advice:{risks:false,fees:false,noguarantee:false,questions:false,note:''},
   recommend:{scope:'',rationale:'',handling:'normal',auditDate:'',expReason:''},
   consult:{date:'',time:'',adviser:'',method:'phone',agreed:false,
@@ -1082,35 +1092,62 @@ function renderScope(){
 /* One row per platform: a tick (search this layer) and an optional URL (their
    own property -> Client-Owned exclusion). No URL is fine; the layer is still
    searched. Nothing here is gated. */
+/* The same three choices everywhere, and none of them block: Add (we have the
+   URL), Add Later (they have one, we'll capture it after the call), Don't have
+   one yet (nothing of theirs to exclude). */
+const PLAT_MODES=[['url','Add'],['later','Add later'],['none',"Don't have one yet"]];
 function platRow(group,key,label){
-  const rec=state.platforms[group][key]||{on:false,url:''};
+  const rec=state.platforms[group][key]||{on:false,mode:'',url:''};
   return `<div class="sf-plat${rec.on?' on':''}">
     <label class="sf-check" style="margin:0;border:0;padding:0;background:none">
       <input type="checkbox" ${rec.on?'checked':''}
         onchange="togglePlat('${group}','${key}',this.checked)">
       <span style="font-weight:700;color:var(--navy)">${label}</span></label>
-    ${rec.on?`<input type="text" placeholder="Their ${label} URL (optional)"
+    ${rec.on?'<div class="sf-opts">'+PLAT_MODES.map(([m,l])=>
+        `<button type="button" class="sf-opt${rec.mode===m?' on':''}"
+           onclick="platMode('${group}','${key}','${m}')">${l}</button>`).join('')+'</div>':''}
+    ${rec.on&&rec.mode==='url'?`<input type="text" placeholder="Their ${label} URL"
         value="${esc(rec.url||'')}" autocomplete="off"
         oninput="state.platforms['${group}']['${key}'].url=this.value;touch()">`:''}
   </div>`;
 }
+function platMode(group,key,mode){
+  if(!state.platforms[group][key])state.platforms[group][key]={on:true,mode:'',url:''};
+  state.platforms[group][key].mode=mode;
+  if(mode!=='url')state.platforms[group][key].url='';
+  renderPlatforms();touch();
+}
+function domainMode(mode){
+  state.platforms.domainMode=mode;
+  if(mode!=='url')state.platforms.domain='';
+  renderPlatforms();touch();
+}
 function renderPlatforms(){
-  SOCIALS.forEach(([k])=>{if(!state.platforms.soc[k])state.platforms.soc[k]={on:false,url:''};});
-  SHOPS.forEach(([k])=>{if(!state.platforms.shop[k])state.platforms.shop[k]={on:false,url:''};});
+  SOCIALS.forEach(([k])=>{if(!state.platforms.soc[k])
+    state.platforms.soc[k]={on:false,mode:'',url:''};});
+  SHOPS.forEach(([k])=>{if(!state.platforms.shop[k])
+    state.platforms.shop[k]={on:false,mode:'',url:''};});
   const s=document.getElementById('f-soc'),h=document.getElementById('f-shop');
   if(s)s.innerHTML=SOCIALS.map(([k,l])=>platRow('soc',k,l)).join('');
   if(h)h.innerHTML=SHOPS.map(([k,l])=>platRow('shop',k,l)).join('');
+  const d=document.getElementById('f-domain-opts');
+  if(d)d.innerHTML=PLAT_MODES.map(([m,l])=>
+    `<button type="button" class="sf-opt${state.platforms.domainMode===m?' on':''}"
+       onclick="domainMode('${m}')">${l}</button>`).join('');
+  const di=document.getElementById('f-domain');
+  if(di)di.classList.toggle('hidden',state.platforms.domainMode!=='url');
 }
 function togglePlat(group,key,on){
-  if(!state.platforms[group][key])state.platforms[group][key]={on:false,url:''};
+  if(!state.platforms[group][key])state.platforms[group][key]={on:false,mode:'',url:''};
   state.platforms[group][key].on=on;
+  if(!on){state.platforms[group][key].mode='';state.platforms[group][key].url='';}
   renderPlatforms();touch();
 }
 /* Mirrors audit-checkout.html's buildScope(): the layers the audit covers and
    the client-owned exclusions, derived from what staff ticked. Read by the
    journey when it stamps the deal. */
 function platformScope(){
-  const p=state.platforms,layers=[],exclusions=[];
+  const p=state.platforms,layers=[],exclusions=[],pending=[];
   layers.push('Companies House UK');
   layers.push('Domain Registers');
   SOCIALS.forEach(([k,l])=>{if(p.soc[k]&&p.soc[k].on)layers.push(l);});
@@ -1118,13 +1155,19 @@ function platformScope(){
   const cn=String(state.billing.company_number||'').trim();
   if(cn)exclusions.push({type:'Company Number',value:cn,match_mode:'Exact'});
   const dom=String(p.domain||'').trim();
-  if(dom)exclusions.push({type:'Domain',value:dom,match_mode:'Domain and Subdomains'});
-  SOCIALS.concat(SHOPS).forEach(([k])=>{
+  if(p.domainMode==='url'&&dom)
+    exclusions.push({type:'Domain',value:dom,match_mode:'Domain and Subdomains'});
+  if(p.domainMode==='later')pending.push('Website / domain');
+  SOCIALS.concat(SHOPS).forEach(([k,l])=>{
     const g=p.soc[k]?'soc':'shop',rec=p[g]&&p[g][k];
-    if(rec&&rec.on&&String(rec.url||'').trim())
+    if(!rec||!rec.on)return;
+    if(rec.mode==='url'&&String(rec.url||'').trim())
       exclusions.push({type:'URL',value:String(rec.url).trim(),match_mode:'Exact'});
+    /* 'later' AND not-yet-answered both need chasing -- an unanswered row is
+       not evidence they have nothing. 'none' needs nothing. */
+    else if(rec.mode!=='none')pending.push(l);
   });
-  return {search_layers:[...new Set(layers)],exclusions:exclusions};
+  return {search_layers:[...new Set(layers)],exclusions:exclusions,pending:pending};
 }
 
 /* ---------- read-back ---------- */
@@ -1485,11 +1528,17 @@ function finishLoad(){
   set('f-classes',state.classes);
   /* Their brand online — older sessions have no platforms block; the defaults
      in state cover that and renderPlatforms() backfills any missing keys. */
-  if(!state.platforms) state.platforms={domain:'',domainNone:false,soc:{},shop:{}};
+  if(!state.platforms) state.platforms={domain:'',domainMode:'',soc:{},shop:{}};
   if(!state.platforms.soc) state.platforms.soc={};
   if(!state.platforms.shop) state.platforms.shop={};
+  /* Sessions saved before the three-way choice existed carried a domainNone
+     tick — migrate it so nothing regresses mid-rollout. */
+  if(state.platforms.domainMode===undefined) state.platforms.domainMode='';
+  if(state.platforms.domainNone&&!state.platforms.domainMode)
+    state.platforms.domainMode='none';
+  if(state.platforms.domain&&!state.platforms.domainMode)
+    state.platforms.domainMode='url';
   set('f-domain',state.platforms.domain);
-  chk('f-domain-none',!!state.platforms.domainNone);
   renderPlatforms();
   chk('a-risks',a.risks);chk('a-fees',a.fees);chk('a-noguarantee',a.noguarantee);
   chk('a-questions',a.questions);set('f-advicenote',a.note);
@@ -1569,7 +1618,6 @@ function bindAll(){
   cl.addEventListener('input',()=>{state.classes=cl.value;renderScope();touch();});
 
   bind('f-domain',v=>state.platforms.domain=v);
-  bind('f-domain-none',v=>state.platforms.domainNone=v);
 
   bind('a-risks',v=>state.advice.risks=v);
   bind('a-fees',v=>state.advice.fees=v);
