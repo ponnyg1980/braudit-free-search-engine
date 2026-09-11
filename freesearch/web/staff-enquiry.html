@@ -1161,8 +1161,14 @@ function platformScope(){
   SOCIALS.concat(SHOPS).forEach(([k,l])=>{
     const g=p.soc[k]?'soc':'shop',rec=p[g]&&p[g][k];
     if(!rec||!rec.on)return;
+    /* Target_Type vocabulary per EXCLUSIONS - source of truth (11 Sep):
+       Trademark Reference | Company Number | Domain | Profile | Storefront |
+       URL. A social is a Profile and a marketplace is a Storefront -- writing
+       both as generic 'URL' would land them in the portfolio but lose the
+       distinction the report and monitoring read. */
     if(rec.mode==='url'&&String(rec.url||'').trim())
-      exclusions.push({type:'URL',value:String(rec.url).trim(),match_mode:'Exact'});
+      exclusions.push({type:g==='soc'?'Profile':'Storefront',
+                       value:String(rec.url).trim(),match_mode:'Exact'});
     /* 'later' AND not-yet-answered both need chasing -- an unanswered row is
        not evidence they have nothing. 'none' needs nothing. */
     else if(rec.mode!=='none')pending.push(l);
