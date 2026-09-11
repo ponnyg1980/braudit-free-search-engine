@@ -222,7 +222,8 @@ _EMBED_JS = """(function(){
     // 'fs' is the WordPress-safe alias for the session param: WP reserves
     // ?s= for site search and 404s page URLs carrying it (21 Aug). The
     // host page uses fs; the iframe wizard still receives s.
-    ['s','fs','screen','q','journey','searchbase','deal'].forEach(function(k){
+    ['s','fs','screen','q','journey','searchbase','deal',
+     'utm_source','utm_medium','utm_campaign'].forEach(function(k){
       var v=hp.get(k); if(v) q+='&'+(k==='fs'?'s':k)+'='+encodeURIComponent(v);
     });
   }catch(e){}
@@ -1255,12 +1256,15 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send({'ok': False, 'error': 'forbidden'}, 403)
                 return
             module = str(payload.get('module') or '')
-            if module not in ('Contacts', 'Leads', 'Accounts'):
+            # AccountContacts (11 Sep): the people ON an account, so an audit
+            # anchored on the Account still ends up attached to a person.
+            if module not in ('Contacts', 'Leads', 'Accounts', 'AccountContacts'):
                 self._send({'ok': False, 'error': 'bad module'}, 400)
                 return
             import urllib.request as _ur
             body = json.dumps({'key': os.environ.get('XERO_PROCESS_KEY', ''),
                                'module': module,
+                               'account_id': str(payload.get('account_id') or '')[:32],
                                'q': str(payload.get('q') or '')[:80]}).encode()
             req = _ur.Request(_JOURNEY_URL.rstrip('/') + '/staff/lookup',
                               data=body,
