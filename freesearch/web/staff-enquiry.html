@@ -237,6 +237,21 @@
          to change. -->
     <div id="f-linkwrap" class="hidden">
       <label class="fld" id="f-linklabel">Find their record</label>
+      <!-- 11 Sep: search Account as well as Contact/Lead. Anchoring on the
+           Account is what brings the client's trademark portfolio and their
+           existing Client-Owned exclusions into the call, so the adviser knows
+           what the client already owns. The audit still attaches to a person —
+           picking an Account leads straight to its contacts. -->
+      <div id="f-linkmode" class="sf-opts" style="margin:0 0 10px"></div>
+      <div id="f-acctpick" class="hidden" style="margin-bottom:10px">
+        <div class="sf-hint" style="margin-bottom:6px">Account:
+          <b id="f-linkacctname" style="color:var(--navy)"></b>
+          <button type="button" onclick="clearAccount()" style="background:none;border:0;
+            color:var(--quiet);text-decoration:underline;cursor:pointer;
+            font-family:inherit">change</button></div>
+        <label class="fld">Who are we speaking to?</label>
+        <div id="f-acctcontacts"></div>
+      </div>
       <div id="f-linked" class="hidden" style="display:flex;gap:10px;align-items:center;
            border:1.5px solid #2f9e63;background:#f2faf5;border-radius:9px;padding:10px 13px">
         <span style="font-size:13.5px;color:var(--ink)">Linked to
@@ -770,7 +785,11 @@ const state={
   staff:CONFIG.STAFF||'',
   section:'contact',
   contact:{first:'',last:'',email:'',phone:'',position:'',org:'',clientType:''},
-  link:{contact_id:'',contact_name:'',lead_id:'',lead_name:''},
+  /* searchIn (11 Sep): which module the typed lookup hits. Account is offered
+     for the portfolio it carries; account_id survives the contact pick so the
+     Portfolio tab knows which client's assets to load. */
+  link:{contact_id:'',contact_name:'',lead_id:'',lead_name:'',
+        account_id:'',account_name:'',searchIn:''},
   discovery:{desc:'',reason:'',trading:'',knowledge:'',terrNow:[],terrPlan:[],deadline:'',risk:''},
   marks:[{text:'',kind:'word',price:149}],
   classes:'',
@@ -1294,17 +1313,92 @@ async function zohoLookup(module,q){
   const d=await r.json();
   return (d&&d.ok&&Array.isArray(d.hits))?d.hits:[];
 }
-function linkModule(){return state.contact.clientType==='returning'?'Leads':'Contacts';}
+/* Default: a returning enquiry is a Lead, an existing client is best anchored
+   on their Account. Staff can override with the toggle. */
+function defaultSearchIn(){
+  return state.contact.clientType==='returning'?'Leads':'Accounts';
+}
+function searchIn(){
+  if(!state.link.searchIn) state.link.searchIn=defaultSearchIn();
+  return state.link.searchIn;
+}
+function linkModule(){return searchIn();}
+function setSearchIn(m){
+  state.link.searchIn=m;
+  /* Switching where we search clears any half-made link so the picked record
+     and the mode can never disagree. */
+  state.link.contact_id='';state.link.contact_name='';
+  state.link.lead_id='';state.link.lead_name='';
+  state.link.account_id='';state.link.account_name='';
+  const q=document.getElementById('f-linkq'); if(q)q.value='';
+  const r=document.getElementById('f-linkresults'); if(r)r.innerHTML='';
+  renderLinkUI();touch();
+}
+function clearAccount(){
+  state.link.account_id='';state.link.account_name='';
+  state.link.contact_id='';state.link.contact_name='';
+  const r=document.getElementById('f-acctcontacts'); if(r)r.innerHTML='';
+  renderLinkUI();touch();
+}
+/* Account chosen -> list its people. The audit belongs to a person even when
+   the portfolio belongs to the account. */
+async function loadAccountContacts(){
+  const box=document.getElementById('f-acctcontacts');
+  if(!box||!state.link.account_id)return;
+  box.innerHTML='<div class="sf-hint">Loading contacts…</div>';
+  let hits=[];
+  try{
+    const r=await fetch('/staff-lookup',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({k:CONFIG.TOKEN,module:'AccountContacts',
+                           account_id:state.link.account_id,q:''})});
+    const d=await r.json(); hits=(d&&d.ok&&Array.isArray(d.hits))?d.hits:[];
+  }catch(e){hits=[];}
+  if(!hits.length){
+    box.innerHTML='<div class="sf-hint">No contacts on this account — '
+      +'take their details below and we\'ll add them.</div>';
+    return;
+  }
+  box.innerHTML=hits.map((h,i)=>`<div class="sf-plat" style="cursor:pointer" data-i="${i}">
+    <b style="color:var(--navy)">${esc(h.name||'')}</b>
+    <span style="color:var(--quiet);font-size:12.5px">${esc([h.detail,h.email,h.phone]
+      .filter(Boolean).join(' · '))}</span></div>`).join('');
+  [...box.children].forEach(el=>el.addEventListener('click',()=>{
+    const h=hits[+el.dataset.i];
+    state.link.contact_id=h.id; state.link.contact_name=h.name; state.link.picked=h;
+    fillFromRecord(h);
+    renderLinkUI();renderAll();touch();
+  }));
+}
 function renderLinkUI(){
   const wrap=document.getElementById('f-linkwrap');
   const ct=state.contact.clientType;
   wrap.classList.toggle('hidden',!(ct==='existing'||ct==='returning'));
+  const mode=searchIn();
+  const MODES=[['Accounts','Account'],['Contacts','Contact'],['Leads','Lead']];
+  const mv=document.getElementById('f-linkmode');
+  if(mv)mv.innerHTML=MODES.map(([m,l])=>
+    `<button type="button" class="sf-opt${mode===m?' on':''}"
+       onclick="setSearchIn('${m}')">${l}</button>`).join('');
   document.getElementById('f-linklabel').textContent=
-    ct==='returning'?'Find their previous enquiry (Lead)':'Find their client record (Contact)';
-  const linked=(ct==='returning')?state.link.lead_id:state.link.contact_id;
-  const name=(ct==='returning')?state.link.lead_name:state.link.contact_name;
+    mode==='Leads'?'Find their previous enquiry (Lead)'
+    :mode==='Accounts'?'Find their company (Account) — brings their portfolio'
+    :'Find their client record (Contact)';
+  /* An Account on its own is not a finished link: we still need the person. */
+  const acctOnly=(mode==='Accounts'&&state.link.account_id&&!state.link.contact_id);
+  const ap=document.getElementById('f-acctpick');
+  if(ap){
+    ap.classList.toggle('hidden',!(mode==='Accounts'&&state.link.account_id));
+    const an=document.getElementById('f-linkacctname');
+    if(an)an.textContent=state.link.account_name||'';
+  }
+  const linked=(mode==='Leads')?state.link.lead_id:state.link.contact_id;
+  const name=(mode==='Leads')?state.link.lead_name:state.link.contact_name;
   document.getElementById('f-linked').classList.toggle('hidden',!linked);
-  document.getElementById('f-linksearch').classList.toggle('hidden',!!linked);
+  /* Hide the search box once linked, and also while an Account is chosen but
+     its person isn't — that step is the contact list, not another search. */
+  document.getElementById('f-linksearch').classList
+    .toggle('hidden',!!linked||acctOnly);
   if(linked){
     document.getElementById('f-linkedname').textContent=name||linked;
     /* Point 2: show what THEIR record holds so staff can compare against
@@ -1320,9 +1414,23 @@ function renderLinkUI(){
   }
 }
 function clearLink(){
-  if(state.contact.clientType==='returning'){state.link.lead_id='';state.link.lead_name='';}
+  if(searchIn()==='Leads'){state.link.lead_id='';state.link.lead_name='';}
   else{state.link.contact_id='';state.link.contact_name='';}
   renderLinkUI();touch();
+}
+/* Fill ONLY empty fields — anything the client already gave us on the call
+   outranks the stored record (point 2, 9 Sep). */
+function fillFromRecord(h){
+  if(h.first&&!state.contact.first){state.contact.first=h.first;
+    const el=document.getElementById('f-first'); if(el) el.value=h.first;}
+  if(h.last&&!state.contact.last){state.contact.last=h.last;
+    const el=document.getElementById('f-last'); if(el) el.value=h.last;}
+  if(h.email&&!state.contact.email){state.contact.email=h.email;
+    const el=document.getElementById('f-email'); if(el) el.value=h.email;}
+  if(h.phone&&!state.contact.phone){state.contact.phone=h.phone;
+    const el=document.getElementById('f-phone'); if(el) el.value=h.phone;}
+  if(h.account&&!state.billing.account_name){
+    state.billing.account_id=h.account_id||'';state.billing.account_name=h.account;}
 }
 function wireLookup(inputId,resultsId,module,onPick){
   const inp=document.getElementById(inputId);
@@ -1856,17 +1964,19 @@ function clearAcct(){
 }
 wireLookup('f-linkq','f-linkresults',linkModule,h=>{
   state.link.picked=h;
-  if(state.contact.clientType==='returning'){
-    state.link.lead_id=h.id;state.link.lead_name=h.name||'';}
+  const mode=searchIn();
+  if(mode==='Accounts'){
+    /* An Account is not the audit's subject — it is the client it belongs to.
+       Record it (the Portfolio tab reads it) then ask who we're speaking to. */
+    state.link.account_id=h.id;state.link.account_name=h.name||'';
+    if(!state.billing.account_name){
+      state.billing.account_id=h.id;state.billing.account_name=h.name||'';}
+    renderLinkUI();loadAccountContacts();renderAll();touch();
+    return;
+  }
+  if(mode==='Leads'){state.link.lead_id=h.id;state.link.lead_name=h.name||'';}
   else{state.link.contact_id=h.id;state.link.contact_name=h.name||'';}
-  if(h.first&&!state.contact.first){state.contact.first=h.first;
-    const el=document.getElementById('f-first'); if(el) el.value=h.first;}
-  if(h.last&&!state.contact.last){state.contact.last=h.last;
-    const el=document.getElementById('f-last'); if(el) el.value=h.last;}
-  if(h.email&&!state.contact.email){state.contact.email=h.email;
-    const el=document.getElementById('f-email'); if(el) el.value=h.email;}
-  if(h.account&&!state.billing.account_name){
-    state.billing.account_id=h.account_id||'';state.billing.account_name=h.account;}
+  fillFromRecord(h);
   renderLinkUI();renderAll();touch();
 });
 wireLookup('f-acctq','f-acctresults','Accounts',acctPick);
