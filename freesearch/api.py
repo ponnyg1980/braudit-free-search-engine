@@ -1275,6 +1275,35 @@ class _Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send({'ok': False, 'error': 'lookup unavailable'}, 200)
             return
+        if path == '/staff-searches':
+            # A client's prior searches, for the staff form's picker (11 Sep).
+            # Repeat searches overwrite each other on the Lead, so the CRM only
+            # ever points at the newest; the journey still holds them all.
+            try:
+                length = int(self.headers.get('Content-Length', 0) or 0)
+                payload = json.loads(self.rfile.read(length) or b'{}')
+            except (ValueError, json.JSONDecodeError):
+                self._send({'ok': False, 'error': 'invalid JSON'}, 400)
+                return
+            if not _staff_user(str(payload.get('k') or '')):
+                self._send({'ok': False, 'error': 'forbidden'}, 403)
+                return
+            emails = payload.get('emails')
+            if not isinstance(emails, list):
+                emails = []
+            emails = [str(e)[:120] for e in emails][:25]
+            import urllib.request as _ur
+            body = json.dumps({'key': os.environ.get('XERO_PROCESS_KEY', ''),
+                               'emails': emails}).encode()
+            req = _ur.Request(_JOURNEY_URL.rstrip('/') + '/staff/searches',
+                              data=body,
+                              headers={'Content-Type': 'application/json'})
+            try:
+                with _ur.urlopen(req, timeout=20) as r:
+                    self._send(json.loads(r.read().decode()))
+            except Exception:
+                self._send({'ok': False, 'searches': []}, 200)
+            return
         if path == '/fasttrack/submit':
             # Form-encoded from the decision page; carries its own HMAC, so
             # it sits outside the engine-key gate like the webhook does.
