@@ -269,6 +269,17 @@
       </div>
     </div>
 
+    <!-- 11 Sep: a client who has searched more than once has more than one
+         possible starting point, but the Lead only ever points at the newest
+         (the push upserts on Email and overwrites the launch links). Every
+         search still exists in the journey, so we list them here and let staff
+         start the audit from whichever one the client is actually ringing
+         about. -->
+    <div id="f-searchwrap" class="hidden">
+      <label class="fld">Their previous searches</label>
+      <div id="f-searches"></div>
+    </div>
+
     <div class="sf-row">
       <div><label class="fld">First name <span class="req">*</span></label>
         <input type="text" id="f-first" autocomplete="off"></div>
@@ -1354,6 +1365,10 @@ async function loadAccountContacts(){
                            account_id:state.link.account_id,q:''})});
     const d=await r.json(); hits=(d&&d.ok&&Array.isArray(d.hits))?d.hits:[];
   }catch(e){hits=[];}
+  /* Keep every address on the account: any of them may have run the search
+     the client is ringing about. */
+  state.link.acctEmails=hits.map(h=>h.email).filter(Boolean);
+  loadPriorSearches();
   if(!hits.length){
     box.innerHTML='<div class="sf-hint">No contacts on this account — '
       +'take their details below and we\'ll add them.</div>';
@@ -1367,7 +1382,7 @@ async function loadAccountContacts(){
     const h=hits[+el.dataset.i];
     state.link.contact_id=h.id; state.link.contact_name=h.name; state.link.picked=h;
     fillFromRecord(h);
-    renderLinkUI();renderAll();touch();
+    renderLinkUI();renderAll();loadPriorSearches();touch();
   }));
 }
 function renderLinkUI(){
@@ -1418,6 +1433,61 @@ function clearLink(){
   else{state.link.contact_id='';state.link.contact_name='';}
   renderLinkUI();touch();
 }
+/* ---------- their previous searches ---------- */
+/* Every address we know for this client: what's typed, whoever we linked to,
+   and (when anchored on an Account) everyone on that account. */
+function knownEmails(){
+  const out=[];
+  const add=e=>{e=String(e||'').trim().toLowerCase();
+    if(e.includes('@')&&out.indexOf(e)<0)out.push(e);};
+  add(state.contact.email);
+  if(state.link.picked)add(state.link.picked.email);
+  (state.link.acctEmails||[]).forEach(add);
+  return out;
+}
+let searchesFor='';
+async function loadPriorSearches(){
+  const wrap=document.getElementById('f-searchwrap'),box=document.getElementById('f-searches');
+  if(!wrap||!box)return;
+  const emails=knownEmails();
+  const sig=emails.join(',');
+  if(!emails.length){wrap.classList.add('hidden');searchesFor='';return;}
+  if(sig===searchesFor)return;           /* already showing these */
+  searchesFor=sig;
+  let list=[];
+  try{
+    const r=await fetch('/staff-searches',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({k:CONFIG.TOKEN,emails:emails})});
+    const d=await r.json(); list=(d&&d.ok&&Array.isArray(d.searches))?d.searches:[];
+  }catch(e){list=[];}
+  /* The session this form is already on is not a "previous" search. */
+  list=list.filter(s=>s.session_id!==state.sessionId);
+  if(!list.length){wrap.classList.add('hidden');return;}
+  wrap.classList.remove('hidden');
+  const when=t=>{try{return new Date(t).toLocaleDateString('en-GB',
+    {day:'numeric',month:'short',year:'numeric'});}catch(e){return '';}};
+  const kind=s=>s.source==='quick_search'?'Quick Search':'Free Search';
+  box.innerHTML=list.map((s,i)=>`<div class="sf-plat" style="display:flex;gap:10px;
+    align-items:center"><div style="flex:1">
+      <b style="color:var(--navy)">${esc(s.mark||'(no mark)')}</b>
+      <span style="color:var(--quiet);font-size:12.5px">${esc(kind(s))}${
+        s.created_at?' · '+esc(when(s.created_at)):''}${
+        s.classes?' · classes '+esc(String(s.classes)):''}</span></div>
+    <button type="button" class="sf-opt" data-i="${i}">Start audit from this</button>
+    </div>`).join('');
+  [...box.querySelectorAll('button[data-i]')].forEach(b=>b.addEventListener('click',()=>{
+    const s=list[+b.dataset.i];
+    /* Re-opening the form ON that session is the existing, proven launch path
+       (it pre-fills mark, classes and the search result). This enquiry is
+       already autosaved under its own session, so nothing is lost. */
+    if(!confirm('Start the audit from the '+kind(s)+' for "'+(s.mark||'')+'"?\n\n'
+      +'This enquiry stays saved and can be reopened.'))return;
+    location.href='/staff-enquiry?k='+encodeURIComponent(CONFIG.TOKEN||'')
+      +'&s='+encodeURIComponent(s.session_id);
+  }));
+}
+
 /* Fill ONLY empty fields — anything the client already gave us on the call
    outranks the stored record (point 2, 9 Sep). */
 function fillFromRecord(h){
@@ -1654,6 +1724,9 @@ function finishLoad(){
     state.platforms.domainMode='url';
   set('f-domain',state.platforms.domain);
   renderPlatforms();
+  /* Resumed forms already know who the client is — show their other searches
+     without waiting for someone to retype the address. */
+  loadPriorSearches();
   chk('a-risks',a.risks);chk('a-fees',a.fees);chk('a-noguarantee',a.noguarantee);
   chk('a-questions',a.questions);set('f-advicenote',a.note);
   set('f-scopetext',r.scope);set('f-rationale',r.rationale);set('f-handling',r.handling);
@@ -1713,7 +1786,9 @@ function bind(id,fn){
 function bindAll(){
   bind('f-first',v=>state.contact.first=v);
   bind('f-last',v=>state.contact.last=v);
-  bind('f-email',v=>state.contact.email=v);
+  /* An email is the key to their search history, so look it up as soon as we
+     have one — debounced inside loadPriorSearches by the address signature. */
+  bind('f-email',v=>{state.contact.email=v;loadPriorSearches();});
   bind('f-phone',v=>state.contact.phone=v);
   bind('f-position',v=>state.contact.position=v);
   bind('f-org',v=>state.contact.org=v);
@@ -1977,7 +2052,7 @@ wireLookup('f-linkq','f-linkresults',linkModule,h=>{
   if(mode==='Leads'){state.link.lead_id=h.id;state.link.lead_name=h.name||'';}
   else{state.link.contact_id=h.id;state.link.contact_name=h.name||'';}
   fillFromRecord(h);
-  renderLinkUI();renderAll();touch();
+  renderLinkUI();renderAll();loadPriorSearches();touch();
 });
 wireLookup('f-acctq','f-acctresults','Accounts',acctPick);
 /* The delivery-conversation day: 3 working days out, spoken as a day name. */
