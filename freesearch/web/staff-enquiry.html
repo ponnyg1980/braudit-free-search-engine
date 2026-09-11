@@ -757,6 +757,12 @@ const CONFIG=(function(){
   return {
     JOURNEY:'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey',
     SESSION:q.get('s')||'',
+    /* Opened from the "New Trademark Audit" button on a Zoho Account
+       (11 Sep). The account is the client; the contact picker then says who
+       we're speaking to. The staff gate preserves these params, so the button
+       needs no token in its URL. */
+    ACCOUNT:q.get('account')||'',
+    ACCOUNT_NAME:q.get('account_name')||'',
     STAFF:q.get('u')||localStorage.getItem('tmh_staff')||'',
     TOKEN:q.get('k')||localStorage.getItem('tmh_staff_token')||'',
     PRICE:149,           /* RRP per line item (Jonathan, 9 Sep) */
@@ -1724,6 +1730,23 @@ function finishLoad(){
     state.platforms.domainMode='url';
   set('f-domain',state.platforms.domain);
   renderPlatforms();
+  /* Arrived from an Account's "New Trademark Audit" button: pre-link the
+     account and go straight to picking the person. Never overrides an account
+     already on the form (a resumed enquiry keeps what it had). */
+  if(CONFIG.ACCOUNT&&!state.link.account_id){
+    state.contact.clientType=state.contact.clientType||'existing';
+    const ctEl=document.getElementById('f-clienttype');
+    if(ctEl)ctEl.value=state.contact.clientType;
+    state.link.searchIn='Accounts';
+    state.link.account_id=CONFIG.ACCOUNT;
+    state.link.account_name=CONFIG.ACCOUNT_NAME||CONFIG.ACCOUNT;
+    if(!state.billing.account_name){
+      state.billing.account_id=CONFIG.ACCOUNT;
+      state.billing.account_name=CONFIG.ACCOUNT_NAME||'';
+    }
+    loadAccountContacts();
+  }
+  renderLinkUI();
   /* Resumed forms already know who the client is — show their other searches
      without waiting for someone to retype the address. */
   loadPriorSearches();
