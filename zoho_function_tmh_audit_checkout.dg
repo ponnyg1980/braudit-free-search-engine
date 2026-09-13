@@ -1229,9 +1229,10 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				dnM.put("$se_module","Deals");
 				zoho.crm.createRecord("Notes",dnM);
 			}
-			// Paid orders get the research task + inbox nudge, same as the
-			// browser 'paid' stage (which stays for sessions mid-flight).
-			if(kind == "paid")
+			// Paid orders that PASSED the validation gate get the research task.
+			// A held order (Set Up Order) already has its own task listing what
+			// is missing -- two tasks would contradict each other (13 Sep 2026).
+			if((kind == "paid") && (missing.size() == 0))
 			{
 				dn = "this audit";
 				if(dealRec.get("Deal_Name") != null)
