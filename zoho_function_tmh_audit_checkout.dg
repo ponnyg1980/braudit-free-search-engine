@@ -1145,7 +1145,12 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 					dM.put("Audit_Search_Layers",lyrS);
 				}
 			}
-			upd = zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
+			// trigger workflow explicitly: Zoho suppresses workflow rules on updates made
+			// from Deluge unless asked (proven 13 Sep 2026 -- the Send for Research
+			// webhook fired from the API/UI but not from this function).
+			trigMap = Map();
+			trigMap.put("trigger",{"workflow"});
+			upd = zoho.crm.updateRecord("Deals",dealId.toLong(),dM,trigMap);
 			if(upd.get("id") != null)
 			{
 				res.put("deal_updated",true);
