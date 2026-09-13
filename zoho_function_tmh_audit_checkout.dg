@@ -277,6 +277,12 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			dM.put("Lead_Source","Request Brand Audit Website Form");
 			dM.put("Closing_Date",zoho.currentdate.addDay(30));
 			dM.put("Braudit_Trigger_Status","not_ready");
+			// Layout-mandatory fields (13 Sep 2026): without these the Deal cannot be
+			// saved from the UI until staff fill them. Type is refined at the scope stage.
+			dM.put("Lead_Source_Group","Website Forms");
+			dM.put("Do_Not_Contact","Safe to Contact");
+			dM.put("User_Type","Direct Client");
+			dM.put("Type","Word Only");
 			if(auditLink != "")
 			{
 				dM.put("Brand_Audit_Link",auditLink);
@@ -351,6 +357,14 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			}
 			dM.put("Braudit_Search_Types",types);
 			dM.put("Logo_Awaited",logoLater);
+			if(hasLogo)
+			{
+				dM.put("Type","Combined Word and Logo");
+			}
+			else
+			{
+				dM.put("Type","Word Only");
+			}
 		}
 		// Jurisdictions -- trading now + planned, ISO codes.
 		jur = List();
@@ -937,6 +951,21 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			dNew.put("Stage","Prospect");
 			dNew.put("Pipeline","Standard (Standard)");
 			dNew.put("Owner",ownerId);
+			// Layout-mandatory fields (13 Sep 2026). Staff orders: source Email unless the form says otherwise.
+			lsg = "Email";
+			if(p.get("lead_source_group") != null)
+			{
+				lsg = p.get("lead_source_group").toString();
+			}
+			dNew.put("Lead_Source_Group",lsg);
+			dNew.put("Do_Not_Contact","Safe to Contact");
+			dNew.put("User_Type","Staff");
+			tyNew = "Word Only";
+			if((p.get("search_types") != null) && p.get("search_types").toString().containsIgnoreCase("image"))
+			{
+				tyNew = "Combined Word and Logo";
+			}
+			dNew.put("Type",tyNew);
 			if(cid != "")
 			{
 				dNew.put("Contact_Name",cid);
@@ -1090,6 +1119,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				if(missing.size() == 0)
 				{
 					dM.put("Next_Action","Send for Research");
+					dM.put("Braudit_Trigger_Status","ready");
+					dM.put("Braudit_Last_Error","");
 				}
 				else
 				{
