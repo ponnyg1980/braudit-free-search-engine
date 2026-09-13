@@ -1438,10 +1438,10 @@ function submitOrder(){
          clicking. Phone and invoice are confirmed later by staff, so only the
          online route advances the deal to Paid here — and only once we can
          see the Stripe session was created. */
-      if(state.payment.method==='online'&&state.payment.stripeUrl){
-        crm('paid',{payment_method:'Online (Stripe)',order_ref:invoiceRef(),
-          paid_on:iso(new Date())});
-      }
+      /* 13 Sep 2026 (Jonathan): the browser never marks a Deal Paid. Stripe's
+         checkout.session.completed webhook (engine /stripe-webhook) and Xero
+         confirmation drive the Deal through the journey's /xero/process ->
+         Deluge stage order_complete. Creating a Stripe session is not payment. */
     });
   logEvent('audit_checkout_submitted','audit_summary',{
     order:{
