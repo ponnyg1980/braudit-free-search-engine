@@ -799,6 +799,27 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			ft = p.get("fast_track").toString();
 		}
 		// ---- resolve or create the Deal --------------------------------
+		// Reconcile path (13 Sep 2026): a Xero invoice paid later by GoCardless or
+		// bank transfer arrives here with only the invoice number. The Deal already
+		// exists from the invoice stage -- find it by Invoice_Number, never recreate.
+		if((dealId == "") && (p.get("invoice_number") != null))
+		{
+			invNo = p.get("invoice_number").toString().trim();
+			if(invNo != "")
+			{
+				fndInv = zoho.crm.searchRecords("Deals","(Invoice_Number:equals:" + invNo + ")");
+				if(fndInv.toString().contains("id"))
+				{
+					fi0 = fndInv.get(0);
+					if((fi0 != null) && (fi0.get("id") != null))
+					{
+						dealId = fi0.get("id").toString();
+						res.put("zoho_deal_id",dealId);
+						res.put("deal_found_by","invoice_number");
+					}
+				}
+			}
+		}
 		if((dealId == "") && (emIn != ""))
 		{
 			// Staff orders have no browser-built Deal. Find the Contact by
