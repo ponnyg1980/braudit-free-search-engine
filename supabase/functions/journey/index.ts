@@ -1919,6 +1919,78 @@ serve(async (req) => {
                 200, origin);
   }
 
+  // POST /xero/reconcile -- the bookkeeper (13 Sep 2026, Jonathan). Invoice-route
+  // orders (GoCardless, bank transfer) are marked Paid only when Xero says the
+  // invoice is PAID. Finds every xero_invoice_created(kind=invoice) without a
+  // later xero_invoice_paid event, asks Xero, and hands paid ones to the same
+  // Deluge order_complete kind=paid the Stripe path uses (gate, tasks, workflow).
+  // Deluge finds the Deal by Invoice_Number, so nothing is recreated. Called
+  // from the engine droplet on a timer with the shared key; dry_run lists
+  // candidates and writes nothing.
+  if (req.method === "POST" && path === "/xero/reconcile") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    const dry = body?.dry_run === true;
+    const limit = Math.min(Number(body?.limit ?? 50) || 50, 200);
+    const since = new Date(Date.now() - 180 * 86400 * 1000).toISOString();
+    const { data: created } = await admin.from("journey_events")
+      .select("session_id, payload, created_at").eq("event_type", "xero_invoice_created")
+      .gte("created_at", since).order("created_at", { ascending: false }).limit(500);
+    const { data: paidEv } = await admin.from("journey_events")
+      .select("session_id, payload").eq("event_type", "xero_invoice_paid").gte("created_at", since);
+    const donePaid = new Set((paidEv ?? []).map((r: { payload?: Record<string, unknown> }) =>
+      String((r.payload as Record<string, unknown>)?.invoice_id ?? "")));
+    const out: Record<string, unknown>[] = [];
+    let checked = 0;
+    for (const row of (created ?? []) as { session_id: string; payload: Record<string, unknown> }[]) {
+      const pl = row.payload ?? {};
+      if (String(pl.kind) !== "invoice" || pl.marked_paid === true || pl.demo === true) continue;
+      const invId = String(pl.invoice_id ?? "");
+      if (!invId || donePaid.has(invId)) continue;
+      if (checked >= limit) break;
+      checked++;
+      const r = await xeroApi(`/Invoices/${invId}`, "GET");
+      const inv = (r.data as { Invoices?: { Status?: string; AmountDue?: number; AmountPaid?: number;
+        FullyPaidOnDate?: string; InvoiceNumber?: string }[] })?.Invoices?.[0];
+      const status = String(inv?.Status ?? (r.ok ? "UNKNOWN" : "ERROR"));
+      const item: Record<string, unknown> = { session_id: row.session_id, invoice_id: invId,
+        invoice_number: String(pl.invoice_number ?? inv?.InvoiceNumber ?? ""), status,
+        amount_due: inv?.AmountDue, amount_paid: inv?.AmountPaid };
+      if (status === "PAID" && !dry) {
+        const sess = await currentSession(row.session_id);
+        const lr = (sess?.last_result ?? {}) as Record<string, unknown>;
+        const zids = lr.zoho as Record<string, unknown> | undefined;
+        const enq = lr.staff_enquiry as Record<string, unknown> | undefined;
+        const marks = (enq?.marks ?? []) as { kind?: string }[];
+        const hasImage = marks.some((m) => m?.kind === "logo") || Boolean(sess?.has_logo);
+        // staff_email lives on the audit_invoice_requested event, as it does on the Stripe path
+        const { data: reqEv } = await admin.from("journey_events").select("payload")
+          .eq("session_id", row.session_id).eq("event_type", "audit_invoice_requested")
+          .order("created_at", { ascending: false }).limit(1);
+        const reqP = ((reqEv?.[0]?.payload ?? {}) as Record<string, unknown>);
+        await admin.from("journey_events").insert({ session_id: row.session_id,
+          event_type: "xero_invoice_paid", payload: { invoice_id: invId,
+            invoice_number: item.invoice_number, amount_paid: inv?.AmountPaid,
+            fully_paid_on: inv?.FullyPaidOnDate ?? null, via: "xero_reconcile" } });
+        if (ZOHO_CHECKOUT_URL) {
+          fireAndForget(ZOHO_CHECKOUT_URL, {
+            stage: "order_complete", kind: "paid", session_id: row.session_id,
+            zoho_deal_id: String(zids?.deal_id ?? ""),
+            invoice_number: item.invoice_number,
+            search_types: hasImage ? "word;image" : "word",
+            staff_email: String(reqP.staff_email ?? ""),
+            email: String(sess?.email ?? ""),
+          });
+        }
+        item.action = "marked_paid";
+      } else {
+        item.action = status === "PAID" ? "would_mark_paid" : "waiting";
+      }
+      out.push(item);
+    }
+    return json({ ok: true, dry_run: dry, checked, items: out }, 200, origin);
+  }
+
   // POST /staff/lookup -- typed Zoho lookups for the staff form (points 2 &
   // 10, 9 Sep). Engine-authenticated by the shared key; the Deluge stage
   // does the searchRecords and returns up to six candidates.
