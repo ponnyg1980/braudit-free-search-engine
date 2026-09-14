@@ -277,6 +277,12 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			dM.put("Lead_Source","Request Brand Audit Website Form");
 			dM.put("Closing_Date",zoho.currentdate.addDay(30));
 			dM.put("Braudit_Trigger_Status","not_ready");
+			// Layout-mandatory fields (13 Sep 2026): without these the Deal cannot be
+			// saved from the UI until staff fill them. Type is refined at the scope stage.
+			dM.put("Lead_Source_Group","Website Forms");
+			dM.put("Do_Not_Contact","Safe to Contact");
+			dM.put("User_Type","Direct Client");
+			dM.put("Type","Word Only");
 			if(auditLink != "")
 			{
 				dM.put("Brand_Audit_Link",auditLink);
@@ -331,24 +337,35 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			dM.put("Search_Operator_2","Exact Match");
 		}
 		// Search types: word always; image when a logo exists or is coming.
-		types = List();
-		types.add("word");
-		hasLogo = false;
+		// F1 (13 Sep 2026): ONLY when this call carries has_logo. The scope
+		// stage is called twice (searches page, then consultation page); the
+		// second call has no has_logo and used to reset every Deal to
+		// word-only and Logo_Awaited=false.
 		if(p.get("has_logo") != null)
 		{
+			types = List();
+			types.add("word");
 			hasLogo = p.get("has_logo").toString().equalsIgnoreCase("true");
+			logoLater = false;
+			if(p.get("logo_later") != null)
+			{
+				logoLater = p.get("logo_later").toString().equalsIgnoreCase("true");
+			}
+			if(hasLogo)
+			{
+				types.add("image");
+			}
+			dM.put("Braudit_Search_Types",types);
+			dM.put("Logo_Awaited",logoLater);
+			if(hasLogo)
+			{
+				dM.put("Type","Combined Word and Logo");
+			}
+			else
+			{
+				dM.put("Type","Word Only");
+			}
 		}
-		logoLater = false;
-		if(p.get("logo_later") != null)
-		{
-			logoLater = p.get("logo_later").toString().equalsIgnoreCase("true");
-		}
-		if(hasLogo)
-		{
-			types.add("image");
-		}
-		dM.put("Braudit_Search_Types",types);
-		dM.put("Logo_Awaited",logoLater);
 		// Jurisdictions -- trading now + planned, ISO codes.
 		jur = List();
 		if(p.get("trading_now") != null)
@@ -545,7 +562,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 					xM.put("Match_Mode",mm);
 					xM.put("Reason","Client-Owned");
 					xM.put("Active",true);
-					xM.put("Source_Type","Client Declared");
+					xM.put("Source_Type","Client-Auto-Promoted");
 					if(accountId != "")
 					{
 						xM.put("Account",accountId);
@@ -721,78 +738,17 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		//
 		// ----------------------------------------------- stage: paid
 		//
-		// 'When paid, they move to Paid, Send for Research and an immediate task
-		// is created for admin@ to send for research.'
-		//
-		// Stage = Paid with Next_Action = 'Send for Research' -- the value
-		// already in live use on paid audits. Braudit_Trigger_Status advances to
-		// awaiting_logo when a logo is still coming (the word context can still
-		// be frozen and sent; a missing logo never delays it), otherwise ready.
-		logoAwaited = false;
-		dealRec = zoho.crm.getRecordById("Deals",dealId.toLong());
-		if(dealRec.get("Logo_Awaited") != null)
-		{
-			logoAwaited = dealRec.get("Logo_Awaited").toString().equalsIgnoreCase("true");
-		}
-		trig = "ready";
-		if(logoAwaited)
-		{
-			trig = "awaiting_logo";
-		}
-		dM = Map();
-		dM.put("Stage","Paid");
-		dM.put("Next_Action","Send for Research");
-		dM.put("Next_Action_Date",zoho.currentdate);
-		dM.put("Braudit_Trigger_Status",trig);
-		if(p.get("payment_method") != null)
-		{
-			dM.put("Audit_Payment_Method",p.get("payment_method").toString());
-		}
-		if(p.get("paid_on") != null)
-		{
-			dM.put("Paid",p.get("paid_on").toString().toDate());
-		}
-		if(p.get("payment_due") != null)
-		{
-			dM.put("Payment_Due_Date",p.get("payment_due").toString().toDate());
-		}
-		if(p.get("order_ref") != null)
-		{
-			dM.put("Audit_Order_Ref",p.get("order_ref").toString());
-		}
-		zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
-		// The immediate admin task. Owner = Admin Support (support@) -- there
-		// is no admin@ CRM user; the shared inbox is notified by email below.
-		dn = "this audit";
-		if(dealRec.get("Deal_Name") != null)
-		{
-			dn = dealRec.get("Deal_Name").toString();
-		}
-		tM = Map();
-		tM.put("Subject","Send for Research -- " + dn);
-		tM.put("Status","Not Started");
-		tM.put("Priority","High");
-		tM.put("Due_Date",zoho.currentdate);
-		tM.put("What_Id",dealId);
-		tM.put("$se_module","Deals");
-		tM.put("Owner","1964745000036444001");
-		tM.put("Description","Audit paid -- send for research." + nl + "Deal: " + dn + nl + "Order ref: " + p.get("order_ref").toString() + nl + "Deadline: " + dealRec.get("Audit_Deadline").toString());
-		tr = zoho.crm.createRecord("Tasks",tM);
-		if(tr.get("id") != null)
-		{
-			res.put("task_id",tr.get("id").toString());
-		}
-		// Shared-inbox nudge. sendmail's from-line only accepts the CRM
-		// login/admin user (documented 26 Aug) -- the reply-to carries the
-		// team address instead.
-		sendmail
-		[
-			from :zoho.loginuserid
-			to :"admin@thetrademarkhelpline.com"
-			subject :"Audit paid -- send for research: " + dn
-			message :"<p>A Trademark Audit has been paid and is ready to send for research.</p><p><b>Deal:</b> " + dn + "<br><b>Order ref:</b> " + p.get("order_ref").toString() + "<br><b>Deadline:</b> " + dealRec.get("Audit_Deadline").toString() + "</p><p><a href='https://crm.zoho.com/crm/org628887698/tab/Potentials/" + dealId + "'>Open the deal in Zoho</a></p>"
-		]
-		res.put("ok",true);
+		// REFUSED since 13 Sep 2026 (Jonathan): a Deal becomes Paid only on
+		// a payment FACT -- the Stripe webhook or Xero confirmation -- which
+		// arrive through /xero/process -> stage order_complete. A browser
+		// saying "paid" is not evidence of anything. The old browser-driven
+		// Paid + Send for Research + task + admin email lived here until
+		// 13 Sep 2026 (repo history: zoho_function_tmh_audit_checkout.dg
+		// before commit fd9c6efb). NOTE: Zoho's Deluge compiler rejects
+		// statements after a return ("Improper Statement", proven 13 Sep),
+		// so the old body is removed rather than short-circuited.
+		res.put("ok",false);
+		res.put("error","stage 'paid' is not accepted from the checkout; payment is confirmed server-side");
 	}
 	else if(stg == "order_complete")
 	{
@@ -843,6 +799,27 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			ft = p.get("fast_track").toString();
 		}
 		// ---- resolve or create the Deal --------------------------------
+		// Reconcile path (13 Sep 2026): a Xero invoice paid later by GoCardless or
+		// bank transfer arrives here with only the invoice number. The Deal already
+		// exists from the invoice stage -- find it by Invoice_Number, never recreate.
+		if((dealId == "") && (p.get("invoice_number") != null))
+		{
+			invNo = p.get("invoice_number").toString().trim();
+			if(invNo != "")
+			{
+				fndInv = zoho.crm.searchRecords("Deals","(Invoice_Number:equals:" + invNo + ")");
+				if(fndInv.toString().contains("id"))
+				{
+					fi0 = fndInv.get(0);
+					if((fi0 != null) && (fi0.get("id") != null))
+					{
+						dealId = fi0.get("id").toString();
+						res.put("zoho_deal_id",dealId);
+						res.put("deal_found_by","invoice_number");
+					}
+				}
+			}
+		}
 		if((dealId == "") && (emIn != ""))
 		{
 			// Staff orders have no browser-built Deal. Find the Contact by
@@ -995,6 +972,24 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			dNew.put("Stage","Prospect");
 			dNew.put("Pipeline","Standard (Standard)");
 			dNew.put("Owner",ownerId);
+			// Layout-mandatory fields (13 Sep 2026). The staff form asks for the
+			// lead source (14 Sep 2026) and sends it; "Other" is only reached by
+			// an older saved enquiry, and says "not captured" rather than
+			// inventing an email lead in the source reporting.
+			lsg = "Other";
+			if(p.get("lead_source_group") != null)
+			{
+				lsg = p.get("lead_source_group").toString();
+			}
+			dNew.put("Lead_Source_Group",lsg);
+			dNew.put("Do_Not_Contact","Safe to Contact");
+			dNew.put("User_Type","Staff");
+			tyNew = "Word Only";
+			if((p.get("search_types") != null) && p.get("search_types").toString().containsIgnoreCase("image"))
+			{
+				tyNew = "Combined Word and Logo";
+			}
+			dNew.put("Type",tyNew);
 			if(cid != "")
 			{
 				dNew.put("Contact_Name",cid);
@@ -1072,8 +1067,102 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			if(kind == "paid")
 			{
 				dM.put("Stage","Paid");
-				dM.put("Next_Action","Send for Research");
 				dM.put("Paid",zoho.currentdate);
+				// VALIDATION GATE (13 Sep 2026): 'Send for Research' only when
+				// everything research needs is on the Deal; otherwise the Deal
+				// waits at 'Set Up Order' and the Owner gets a task listing
+				// what is missing. The audit engine applies the same rules as a
+				// backstop (audit_engine/deal_reader.validate).
+				missing = List();
+				sw1 = "";
+				if(dealRec.get("Search_Word_1") != null)
+				{
+					sw1 = dealRec.get("Search_Word_1").toString().trim();
+				}
+				if(sw1 == "")
+				{
+					missing.add("search word (Search Word 1)");
+				}
+				ctRows = dealRec.get("Classes_Terms");
+				if((ctRows == null) || (ctRows.size() == 0))
+				{
+					missing.add("Nice classes and terms (Classes Terms)");
+				}
+				if(dealRec.get("Account_Name") == null)
+				{
+					missing.add("Account");
+				}
+				wantsImg = false;
+				stypes = dealRec.get("Braudit_Search_Types");
+				if(stypes != null)
+				{
+					for each st in stypes
+					{
+						if(st.toString().equalsIgnoreCase("image"))
+						{
+							wantsImg = true;
+						}
+					}
+				}
+				if(p.get("search_types") != null && p.get("search_types").toString().containsIgnoreCase("image"))
+				{
+					wantsImg = true;
+				}
+				if(wantsImg)
+				{
+					hasFile = false;
+					hasVienna = false;
+					imRows = dealRec.get("Image_Mark_Information");
+					if(imRows != null)
+					{
+						for each im in imRows
+						{
+							if((im.get("Image_JPEG") != null) && (im.get("Image_JPEG").size() > 0))
+							{
+								hasFile = true;
+							}
+							if((im.get("Vienna_Codes") != null) && (im.get("Vienna_Codes").size() > 0))
+							{
+								hasVienna = true;
+							}
+							if((im.get("Post_S_Img_Class_Div_Sub_Div") != null) && (im.get("Post_S_Img_Class_Div_Sub_Div").toString().trim() != ""))
+							{
+								hasVienna = true;
+							}
+						}
+					}
+					if(!hasFile)
+					{
+						missing.add("logo image (Image Mark Information)");
+					}
+					if(!hasVienna)
+					{
+						missing.add("Vienna codes for the logo");
+					}
+				}
+				if(missing.size() == 0)
+				{
+					dM.put("Next_Action","Send for Research");
+					dM.put("Braudit_Trigger_Status","ready");
+					dM.put("Braudit_Last_Error","");
+				}
+				else
+				{
+					dM.put("Next_Action","Set Up Order");
+					dM.put("Braudit_Trigger_Status","not_ready");
+					dM.put("Braudit_Last_Error","Missing: " + missing.toString(", "));
+					tM = Map();
+					tM.put("Subject","Complete audit order information before research");
+					tM.put("Description","Paid, but not sent for research. Missing: " + missing.toString(", ") + nl + "Add the information in the Deal (Triage Form) and set Next Action Sub Status to 'Send for Research'.");
+					tM.put("Status","Not Started");
+					tM.put("Priority","High");
+					tM.put("Due_Date",zoho.currentdate);
+					tM.put("What_Id",dealId);
+					tM.put("$se_module","Deals");
+					tM.put("Owner",ownerId);
+					zoho.crm.createRecord("Tasks",tM);
+					res.put("held_for","Set Up Order: " + missing.toString(", "));
+				}
 			}
 			else
 			{
@@ -1092,10 +1181,71 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			{
 				dM.put("NEXT_ACTION1","Send for Research");
 			}
-			upd = zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
+			// Their brand online (10 Sep). The staff form now derives the same
+			// search layers and client-owned exclusions the client wizard does,
+			// and the journey forwards them here. Before this, a staff-placed
+			// audit carried no layers and no exclusions at all -- so the
+			// client's own domain, socials and shops could be reported back to
+			// them as conflicts.
+			if(p.get("search_layers") != null)
+			{
+				lyrS = List();
+				lst_ls = p.get("search_layers").toList();
+				for each ls in lst_ls
+				{
+					lyrS.add(ls.toString());
+				}
+				if(lyrS.size() > 0)
+				{
+					dM.put("Audit_Search_Layers",lyrS);
+				}
+			}
+			// trigger workflow explicitly: Zoho suppresses workflow rules on updates made
+			// from Deluge unless asked (proven 13 Sep 2026 -- the Send for Research
+			// webhook fired from the API/UI but not from this function).
+			trigMap = Map();
+			trigMap.put("trigger",{"workflow"});
+			upd = zoho.crm.updateRecord("Deals",dealId.toLong(),dM,trigMap);
 			if(upd.get("id") != null)
 			{
 				res.put("deal_updated",true);
+			}
+			// Same records the 'scope' stage writes, so a staff order and a
+			// self-serve order are indistinguishable downstream.
+			if(p.get("exclusions") != null)
+			{
+				lst_x2 = p.get("exclusions").toList();
+				for each x2 in lst_x2
+				{
+					x2m = x2.toMap();
+					v2 = "";
+					if(x2m.get("value") != null)
+					{
+						v2 = x2m.get("value").toString().trim();
+					}
+					if(v2 != "")
+					{
+						xM2 = Map();
+						xM2.put("Name",v2);
+						xM2.put("Exclusion_Value",v2);
+						xM2.put("Target_Type",x2m.get("type").toString());
+						mm2 = "Exact";
+						if(x2m.get("match_mode") != null)
+						{
+							mm2 = x2m.get("match_mode").toString();
+						}
+						xM2.put("Match_Mode",mm2);
+						xM2.put("Reason","Client-Owned");
+						xM2.put("Active",true);
+						xM2.put("Source_Type","Client-Auto-Promoted");
+						if(acc2Id != "")
+						{
+							xM2.put("Account",acc2Id);
+						}
+						xM2.put("Exclusion_Notes","Declared on the staff audit form, deal " + dealId);
+						zoho.crm.createRecord("Client_Search_Exclusions",xM2);
+					}
+				}
 			}
 			// Point 10 (9 Sep): structured billing address onto the Account.
 			if((acc2Id != "") && (p.get("billing_addr1") != null))
@@ -1139,9 +1289,10 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				dnM.put("$se_module","Deals");
 				zoho.crm.createRecord("Notes",dnM);
 			}
-			// Paid orders get the research task + inbox nudge, same as the
-			// browser 'paid' stage (which stays for sessions mid-flight).
-			if(kind == "paid")
+			// Paid orders that PASSED the validation gate get the research task.
+			// A held order (Set Up Order) already has its own task listing what
+			// is missing -- two tasks would contradict each other (13 Sep 2026).
+			if((kind == "paid") && (missing.size() == 0))
 			{
 				dn = "this audit";
 				if(dealRec.get("Deal_Name") != null)
@@ -1330,6 +1481,43 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 						hM.put("detail",ifnull(prow.get("Company"),""));
 					}
 					hits.add(hM);
+				}
+			}
+		}
+		// Contacts OF an Account (11 Sep). Anchoring an audit on the Account is
+		// what brings the client's portfolio and their existing Client-Owned
+		// exclusions into the call -- but the audit still belongs to a person,
+		// so once the Account is chosen staff pick the contact from it.
+		if(modIn == "AccountContacts")
+		{
+			accQ = "";
+			if(p.get("account_id") != null)
+			{
+				accQ = p.get("account_id").toString().trim();
+			}
+			if(accQ != "")
+			{
+				rel = zoho.crm.getRelatedRecords("Contacts","Accounts",accQ.toLong());
+				for each  crow in rel
+				{
+					if(hits.size() < 25)
+					{
+						cM = Map();
+						cM.put("id",crow.get("id").toString());
+						cn2 = ifnull(crow.get("Full_Name"),"");
+						if(cn2 == "")
+						{
+							cn2 = ifnull(crow.get("First_Name"),"") + " " + ifnull(crow.get("Last_Name"),"");
+						}
+						cM.put("name",cn2.trim());
+						cM.put("first",ifnull(crow.get("First_Name"),""));
+						cM.put("last",ifnull(crow.get("Last_Name"),""));
+						cM.put("email",ifnull(crow.get("Email"),""));
+						cM.put("phone",ifnull(crow.get("Phone"),""));
+						cM.put("mobile",ifnull(crow.get("Mobile"),""));
+						cM.put("detail",ifnull(crow.get("Title"),""));
+						hits.add(cM);
+					}
 				}
 			}
 		}
