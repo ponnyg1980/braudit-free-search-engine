@@ -1,5 +1,24 @@
 """Who gets onboarded first, and who has already had report one.
 
+THE SERVICE HERE IS TRADEMARK WATCH, NOT MONITORING. They are two products
+and this file only touches one of them:
+
+  Watch       one fortnightly automated report per APPLICANT ACCOUNT, run on
+              word mark text, with every mark's results consolidated into a
+              single email (config.SERVICE_NAME = "Trademark Watch"). This
+              module, fortnightly.py and the rest of uk_monitor are Watch.
+  Monitoring  a per-trademark service - word, image and tagline, many
+              keywords fed to international registers, domains, socials,
+              Companies House and marketplaces. It runs through the audit
+              engine for Deals in the "Monitoring or Representation"
+              pipeline, and nothing here touches it.
+
+The Zoho modules are called Monitoring_Schedules / Monitoring_Reports /
+Monitoring_Results because they were built on 22 Aug 2026, four days before
+the service was renamed from "Trademark Monitoring" to "Trademark Watch"
+(config.py, Jonathan, 26 Aug). The module names are Watch data despite what
+they say. Do not read them as the Monitoring product.
+
 Two questions the fortnightly runner has to answer before it sends anything,
 both of which used to be answered wrongly:
 
@@ -120,17 +139,18 @@ def create_check_task(account_id: str, account_name: str, owner_id: str | None,
     details before the first report is allowed out.
 
     Deliberately NOT a held Monitoring_Report record. The Zoho rule "Send
-    fortnightly monitoring report email" runs on CREATE only, so a record
+    fortnightly monitoring report email" - the Zoho rule's own name, Watch
+    reports being what it sends - runs on CREATE only, so a record
     written with Should_Send false can never be released by flipping the
     flag later - editing it re-fires nothing. Withholding the record is the
     only hold that can be undone, and re-running the reports stage with
     --release is how it is undone."""
-    body = {"Subject": f"Check client details before first monitoring report - {account_name}"[:255],
+    body = {"Subject": f"Check client details before first Watch report - {account_name}"[:255],
             "Status": "Not Started", "Priority": "High",
             "Due_Date": date.today().isoformat(),
             "What_Id": account_id, "$se_module": "Accounts",
             "Description": (
-                "This account is due its FIRST fortnightly monitoring report. "
+                "This account is due its FIRST fortnightly Trademark Watch report. "
                 "Nothing has been emailed.\n\n"
                 "Check the client information is correct - name, contact, and "
                 "that the marks listed are theirs - then release the report:\n"
