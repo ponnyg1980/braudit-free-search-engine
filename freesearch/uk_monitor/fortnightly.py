@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""The fortnightly job, start to finish, in one resumable orchestrator.
+"""The fortnightly Trademark Watch job, start to finish, in one resumable
+orchestrator.
+
+Watch, not Monitoring - they are different services. Watch is ONE automated
+fortnightly report per applicant account, run on word mark text, with every
+mark consolidated into a single email. Monitoring is the per-trademark
+service (word, image, tagline; many keywords across international registers,
+domains, socials, Companies House and marketplaces) and runs through the
+audit engine on the "Monitoring or Representation" pipeline - not here. The
+Zoho Monitoring_* modules predate the 26 Aug rename and hold Watch data.
 
 Stage order matters and is not arbitrary:
 
