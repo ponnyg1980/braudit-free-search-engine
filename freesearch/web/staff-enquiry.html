@@ -230,6 +230,35 @@
       <option value="returning">Previously enquired, never bought</option>
     </select>
 
+    <!-- Lead Source Group (14 Sep 2026, Jonathan). The Deal layout makes this
+         mandatory, so something has to go in it. It used to be defaulted to
+         "Email" on every staff order, which quietly invented email leads in
+         the attribution reporting. The person taking the call knows the real
+         answer, so the form asks rather than the code guessing. Values are
+         the Zoho Lead_Source_Group picklist verbatim - anything else is
+         rejected on save. -->
+    <label class="fld">How did this enquiry reach us?</label>
+    <select id="f-leadsource">
+      <option value="">Choose…</option>
+      <option value="Email">Email</option>
+      <option value="Whatsapp SMS">WhatsApp / SMS</option>
+      <option value="Bookings Meetings">Booking or meeting</option>
+      <option value="Website Forms">Website form</option>
+      <option value="Website Chat">Website chat</option>
+      <option value="Google Organic">Google — organic</option>
+      <option value="Google Ads">Google — ads</option>
+      <option value="AI Search">AI search</option>
+      <option value="Social Media">Social media</option>
+      <option value="Referral">Referral</option>
+      <option value="Networking">Networking</option>
+      <option value="Reseller">Reseller / partner</option>
+      <option value="Advertisement">Advertisement</option>
+      <option value="Press Advertising">Press advertising</option>
+      <option value="Existing Contact">Existing contact</option>
+      <option value="Existing Account">Existing client</option>
+      <option value="Other">Other</option>
+    </select>
+
     <!-- Point 2 (9 Sep): existing clients LINK to their Zoho Contact, past
          enquiries link to the Lead — typed lookups against live Zoho, so the
          order lands on the right record instead of matching on email luck.
@@ -801,6 +830,7 @@ const state={
   ref:'',
   staff:CONFIG.STAFF||'',
   section:'contact',
+  leadSource:'',          /* Zoho Lead_Source_Group, asked not guessed */
   contact:{first:'',last:'',email:'',phone:'',position:'',org:'',clientType:''},
   /* searchIn (11 Sep): which module the typed lookup hits. Account is offered
      for the portfolio it carries; account_id survives the contact pick so the
@@ -871,6 +901,10 @@ function gateRules(){
     {id:'G-00',sec:'contact',label:'Contact details taken',
      ok:nonEmpty(c.first)&&nonEmpty(c.last)&&validEmail(c.email)&&nonEmpty(c.phone)&&nonEmpty(c.position),
      why:'First name, last name, email, phone and position are all needed before anything else.'},
+    {id:'G-00b',sec:'contact',label:'Lead source recorded',
+     ok:nonEmpty(state.leadSource),
+     why:'Say how this enquiry reached us. It is mandatory on the Deal and it is what the '
+         +'source reporting counts, so it must not be guessed for you.'},
     {id:'G-01',sec:'discovery',label:'Business and reason understood',
      ok:meaningful(d.desc)&&meaningful(d.reason),
      why:'Write a real sentence for what the business does and why they are calling.'},
@@ -1708,6 +1742,7 @@ function finishLoad(){
         b=state.billing,a=state.advice;
   set('f-first',c.first);set('f-last',c.last);set('f-email',c.email);set('f-phone',c.phone);
   set('f-position',c.position);set('f-org',c.org);set('f-clienttype',c.clientType);
+  set('f-leadsource',state.leadSource);
   set('f-desc',d.desc);set('f-reason',d.reason);set('f-trading',d.trading);
   set('f-knowledge',d.knowledge);
   /* v1 stored territories as free text (the exact data-integrity hole this
@@ -1815,6 +1850,7 @@ function bindAll(){
   bind('f-phone',v=>state.contact.phone=v);
   bind('f-position',v=>state.contact.position=v);
   bind('f-org',v=>state.contact.org=v);
+  bind('f-leadsource',v=>state.leadSource=v);
   const ctSel=document.getElementById('f-clienttype');
   ctSel.addEventListener('change',()=>{
     state.contact.clientType=ctSel.value;renderLinkUI();touch();});
