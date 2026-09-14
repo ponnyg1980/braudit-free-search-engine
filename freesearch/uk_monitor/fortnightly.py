@@ -264,10 +264,13 @@ def stage_reports(run_id, accounts, dry, log):
     if not RELEASE_FIRST:
         import ramp_priority
         had_report = ramp_priority.first_report_accounts()
+        hold_ids = {((r.get("Client_Account") or {}).get("id") or "")
+                    for r in recs} - had_report
         held = [r for r in recs
-                if ((r.get("Client_Account") or {}).get("id") or "") not in had_report]
+                if ((r.get("Client_Account") or {}).get("id") or "") in hold_ids]
         if held:
-            recs = [r for r in recs if r not in held]
+            recs = [r for r in recs
+                    if ((r.get("Client_Account") or {}).get("id") or "") not in hold_ids]
             seen = set()
             for r in held:
                 aid = (r.get("Client_Account") or {}).get("id") or ""
