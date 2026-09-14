@@ -87,6 +87,15 @@ const TENANT_ALLOWLIST = new Set(
   (Deno.env.get("TENANT_ALLOWLIST") ?? "tmh").split(",").map((s) => s.trim()),
 );
 const ZOHO_FLOW_URL = Deno.env.get("ZOHO_FLOW_URL") ?? "";
+
+// Campaign source map (Jonathan, 10 Sep). utm_source -> the governed
+// Lead_Source / Lead_Source_Group picklist values. Marketing's finite set of
+// named campaigns; introducers are handled separately (a referral code to an
+// Account, never a picklist value). Raw UTMs are ALSO stored on every lead
+// regardless, so an unmapped campaign is never lost.
+const UTM_SOURCE_MAP: Record<string, { source: string; group: string }> = {
+  your_business_magazine: { source: "Your Business", group: "Press Advertising" },
+};
 // Brand Audits do NOT become Leads (Jonathan, 27 Aug 2026): an audit is
 // buying intent, so it lands as Contact + Account + one Deal per brand via
 // its own CRM function. Falls back to the lead pipe if unset, so deploying
@@ -534,6 +543,12 @@ function splitLocations(codes: unknown): { mapped: string[]; unmapped: string[] 
 // Undefined keys vanish in JSON.stringify, so absent data simply isn't sent.
 function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
   const lr = (session.last_result ?? {}) as Record<string, unknown>;
+  // Campaign tracking (10 Sep): UTMs travel in last_result.utm (no schema
+  // change). Raw values go on every lead; a mapped utm_source also sets the
+  // governed Lead_Source / Lead_Source_Group.
+  const utm = (lr.utm ?? {}) as Record<string, unknown>;
+  const utmSource = String(utm.source ?? "").trim();
+  const utmCampaignMap = UTM_SOURCE_MAP[utmSource.toLowerCase()];
   // Point 1 (9 Sep): current + planned territories COMBINED, in the same
   // ISO vocabulary as the Deals field, so lead -> deal maps over 1:1.
   const jurAll = mapJurisdictions([
@@ -655,9 +670,15 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
     Resale: ZOHO_RESALE[String(channels.resale ?? "")] || undefined,
     // "Website - Search" retired 20 Aug — the picklist now separates the
     // two wizards so reporting can tell a considered search from a quick one.
-    Lead_Source: session.source === "quick_search" ? "Quick Search"
+    // A mapped campaign wins over the default form source; unmapped keeps
+    // the form default and the raw UTMs still record where it came from.
+    Lead_Source: utmCampaignMap ? utmCampaignMap.source
+      : session.source === "quick_search" ? "Quick Search"
       : session.source === "class_tools" ? "Class Tools" : "Free Search",
-    Lead_Source_Group: "Website Forms",
+    Lead_Source_Group: utmCampaignMap ? utmCampaignMap.group : "Website Forms",
+    UTM_Source: utmSource || undefined,
+    UTM_Medium: String(utm.medium ?? "").trim() || undefined,
+    UTM_Campaign: String(utm.campaign ?? "").trim() || undefined,
     // actual_value, not the "Consent - Obtained" display label
     Data_Processing_Basis: session.consent_marketing ? "Obtained"
       : "Legitimate Interests",
@@ -1369,6 +1390,13 @@ serve(async (req) => {
     if (!body || !body.stage) {
       return json({ ok: false, error: "stage required" }, 400, origin);
     }
+    // 13 Sep 2026 (Jonathan): payment stages are server-only. A Deal becomes
+    // Paid on a payment FACT (Stripe webhook / Xero confirmation) via
+    // /xero/process -> Deluge order_complete, never from a browser. This relay
+    // is public (any session id can call it), so it must not pass them on.
+    if (["paid", "order_complete"].includes(String(body.stage).toLowerCase())) {
+      return json({ ok: false, error: "payment stages are server-only" }, 403, origin);
+    }
     if (!ZOHO_CHECKOUT_URL) {
       return json({ ok: false, error: "checkout not configured" }, 200, origin);
     }
@@ -1786,6 +1814,14 @@ serve(async (req) => {
           Array.isArray(disc2.terrPlan) && disc2.terrPlan.length
             ? `Territories planned: ${(disc2.terrPlan as string[]).join(", ")}` : "",
           ic ? `Invoice contact: ${ic.first} ${ic.last} <${ic.email}> ${ic.phone}` : "",
+          // Their brand online (10 Sep): platforms the client HAS but whose URL
+          // we did not capture on the call. Named here so they get chased or
+          // excluded at search review rather than silently forgotten.
+          (() => {
+            const ps = (enq2?.platform_scope ?? {}) as Record<string, unknown>;
+            const pend = Array.isArray(ps.pending) ? ps.pending as string[] : [];
+            return pend.length ? `URLs still to capture: ${pend.join(", ")}` : "";
+          })(),
         ].filter(Boolean).join("\n") : "";
         // Fast track: did this session ask for it?
         let ftFlag = "";
@@ -1841,6 +1877,21 @@ serve(async (req) => {
             ]);
             return j.length ? j.join(";") : undefined;
           })(),
+          // Their brand online (10 Sep). The staff form derives these exactly
+          // as the client wizard does; we only forward them. Without this a
+          // staff order reached the analyst with no search layers and no
+          // client-owned exclusions, so the client's own shop could be
+          // reported back to them as a conflict.
+          search_layers: (() => {
+            const ps = (enq2?.platform_scope ?? {}) as Record<string, unknown>;
+            const l = Array.isArray(ps.search_layers) ? ps.search_layers : [];
+            return l.length ? l : undefined;
+          })(),
+          exclusions: (() => {
+            const ps = (enq2?.platform_scope ?? {}) as Record<string, unknown>;
+            const x = Array.isArray(ps.exclusions) ? ps.exclusions : [];
+            return x.length ? x : undefined;
+          })(),
           billing_kind: String(billX.kind ?? ""),
           company_number: String(billX.company_number ?? ""),
           billing_addr1: String(billX.addr1 ?? billX.addr ?? ""),
@@ -1857,6 +1908,9 @@ serve(async (req) => {
           deadline: deadline || undefined,
           pay_date: kind === "invoice" ? String(p.pay_date ?? "") : undefined,
           staff_email: String(p.staff_email ?? ""),
+          // Lead_Source_Group (14 Sep 2026): the staff form asks; the Deluge
+          // only falls back when this is absent (an older saved enquiry).
+          lead_source_group: String(enq2?.leadSource ?? "") || undefined,
           fast_track: ftFlag,
           approve_url: ftFlag ? await mkLink("approve") : "",
           reject_url: ftFlag ? await mkLink("reject") : "",
@@ -1866,6 +1920,78 @@ serve(async (req) => {
     return json({ ok: true, invoice_id: invoice.InvoiceID,
                   invoice_number: invoice.InvoiceNumber, marked_paid: paid },
                 200, origin);
+  }
+
+  // POST /xero/reconcile -- the bookkeeper (13 Sep 2026, Jonathan). Invoice-route
+  // orders (GoCardless, bank transfer) are marked Paid only when Xero says the
+  // invoice is PAID. Finds every xero_invoice_created(kind=invoice) without a
+  // later xero_invoice_paid event, asks Xero, and hands paid ones to the same
+  // Deluge order_complete kind=paid the Stripe path uses (gate, tasks, workflow).
+  // Deluge finds the Deal by Invoice_Number, so nothing is recreated. Called
+  // from the engine droplet on a timer with the shared key; dry_run lists
+  // candidates and writes nothing.
+  if (req.method === "POST" && path === "/xero/reconcile") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    const dry = body?.dry_run === true;
+    const limit = Math.min(Number(body?.limit ?? 50) || 50, 200);
+    const since = new Date(Date.now() - 180 * 86400 * 1000).toISOString();
+    const { data: created } = await admin.from("journey_events")
+      .select("session_id, payload, created_at").eq("event_type", "xero_invoice_created")
+      .gte("created_at", since).order("created_at", { ascending: false }).limit(500);
+    const { data: paidEv } = await admin.from("journey_events")
+      .select("session_id, payload").eq("event_type", "xero_invoice_paid").gte("created_at", since);
+    const donePaid = new Set((paidEv ?? []).map((r: { payload?: Record<string, unknown> }) =>
+      String((r.payload as Record<string, unknown>)?.invoice_id ?? "")));
+    const out: Record<string, unknown>[] = [];
+    let checked = 0;
+    for (const row of (created ?? []) as { session_id: string; payload: Record<string, unknown> }[]) {
+      const pl = row.payload ?? {};
+      if (String(pl.kind) !== "invoice" || pl.marked_paid === true || pl.demo === true) continue;
+      const invId = String(pl.invoice_id ?? "");
+      if (!invId || donePaid.has(invId)) continue;
+      if (checked >= limit) break;
+      checked++;
+      const r = await xeroApi(`/Invoices/${invId}`, "GET");
+      const inv = (r.data as { Invoices?: { Status?: string; AmountDue?: number; AmountPaid?: number;
+        FullyPaidOnDate?: string; InvoiceNumber?: string }[] })?.Invoices?.[0];
+      const status = String(inv?.Status ?? (r.ok ? "UNKNOWN" : "ERROR"));
+      const item: Record<string, unknown> = { session_id: row.session_id, invoice_id: invId,
+        invoice_number: String(pl.invoice_number ?? inv?.InvoiceNumber ?? ""), status,
+        amount_due: inv?.AmountDue, amount_paid: inv?.AmountPaid };
+      if (status === "PAID" && !dry) {
+        const sess = await currentSession(row.session_id);
+        const lr = (sess?.last_result ?? {}) as Record<string, unknown>;
+        const zids = lr.zoho as Record<string, unknown> | undefined;
+        const enq = lr.staff_enquiry as Record<string, unknown> | undefined;
+        const marks = (enq?.marks ?? []) as { kind?: string }[];
+        const hasImage = marks.some((m) => m?.kind === "logo") || Boolean(sess?.has_logo);
+        // staff_email lives on the audit_invoice_requested event, as it does on the Stripe path
+        const { data: reqEv } = await admin.from("journey_events").select("payload")
+          .eq("session_id", row.session_id).eq("event_type", "audit_invoice_requested")
+          .order("created_at", { ascending: false }).limit(1);
+        const reqP = ((reqEv?.[0]?.payload ?? {}) as Record<string, unknown>);
+        await admin.from("journey_events").insert({ session_id: row.session_id,
+          event_type: "xero_invoice_paid", payload: { invoice_id: invId,
+            invoice_number: item.invoice_number, amount_paid: inv?.AmountPaid,
+            fully_paid_on: inv?.FullyPaidOnDate ?? null, via: "xero_reconcile" } });
+        if (ZOHO_CHECKOUT_URL) {
+          fireAndForget(ZOHO_CHECKOUT_URL, {
+            stage: "order_complete", kind: "paid", session_id: row.session_id,
+            zoho_deal_id: String(zids?.deal_id ?? ""),
+            invoice_number: item.invoice_number,
+            search_types: hasImage ? "word;image" : "word",
+            staff_email: String(reqP.staff_email ?? ""),
+            email: String(sess?.email ?? ""),
+          });
+        }
+        item.action = "marked_paid";
+      } else {
+        item.action = status === "PAID" ? "would_mark_paid" : "waiting";
+      }
+      out.push(item);
+    }
+    return json({ ok: true, dry_run: dry, checked, items: out }, 200, origin);
   }
 
   // POST /staff/lookup -- typed Zoho lookups for the staff form (points 2 &
@@ -1879,7 +2005,9 @@ serve(async (req) => {
       const r = await fetch(ZOHO_CHECKOUT_URL, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stage: "staff_lookup",
-          module: String(body?.module ?? ""), q: String(body?.q ?? "") }),
+          module: String(body?.module ?? ""), q: String(body?.q ?? ""),
+          // AccountContacts (11 Sep) needs the account, not a search string.
+          account_id: String(body?.account_id ?? "") }),
       });
       const text = await r.text();
       let parsed: Record<string, unknown> | null = null;
@@ -1893,6 +2021,48 @@ serve(async (req) => {
       return json({ ok: true, hits: Array.isArray(hits) ? hits : [] }, 200, origin);
     } catch (_e) {
       return json({ ok: false, hits: [] }, 200, origin);
+    }
+  }
+
+  // POST /staff/searches -- a client's prior searches, for the staff form's
+  // "start an audit from which search?" picker (11 Sep).
+  //
+  // Why this reads the journey and not Zoho: the lead push upserts on Email,
+  // so a second search OVERWRITES Free_Search_Session and both launch links on
+  // the same Lead -- only the newest is reachable from the CRM. Every search
+  // still exists here, with its own id. Mirroring them into Zoho would create
+  // exactly the kind of second writer the 11 Sep exclusions decision was
+  // written to stop, so the picker reads this and Zoho keeps only "latest".
+  if (req.method === "POST" && path === "/staff/searches") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    const emails = (Array.isArray(body?.emails) ? body.emails : [])
+      .map((e: unknown) => String(e ?? "").trim().toLowerCase())
+      .filter((e: string) => e.includes("@")).slice(0, 25);
+    if (!emails.length) return json({ ok: true, searches: [] }, 200, origin);
+    try {
+      const { data, error } = await admin.from("journey_sessions")
+        .select("session_id, source, name, classes, status, email, created_at")
+        .in("email", emails)
+        // free_search and quick_search are the two that produce a searchable
+        // result; a staff enquiry session is an audit, not a search.
+        .in("source", ["free_search", "quick_search"])
+        .order("created_at", { ascending: false })
+        .limit(25);
+      if (error) return json({ ok: false, searches: [] }, 200, origin);
+      const searches = (data ?? []).filter((r) => String(r.name ?? "").trim())
+        .map((r) => ({
+          session_id: r.session_id,
+          source: r.source,
+          mark: r.name,
+          classes: r.classes ?? null,
+          status: r.status ?? null,
+          email: r.email ?? null,
+          created_at: r.created_at ?? null,
+        }));
+      return json({ ok: true, searches }, 200, origin);
+    } catch (_e) {
+      return json({ ok: false, searches: [] }, 200, origin);
     }
   }
 
