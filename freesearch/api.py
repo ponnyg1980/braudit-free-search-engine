@@ -1304,6 +1304,41 @@ class _Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send({'ok': False, 'searches': []}, 200)
             return
+        if path == '/staff-deal':
+            # Read an existing audit Deal back for EDIT mode (15 Sep). Shared
+            # by both staff forms. Staff-token gated like /staff-lookup and
+            # /staff-searches -- this returns a client's whole audit scope, so
+            # it is never reachable without a token.
+            try:
+                length = int(self.headers.get('Content-Length', 0) or 0)
+                payload = json.loads(self.rfile.read(length) or b'{}')
+            except (ValueError, json.JSONDecodeError):
+                self._send({'ok': False, 'error': 'invalid JSON'}, 400)
+                return
+            if not _staff_user(str(payload.get('k') or '')):
+                self._send({'ok': False, 'error': 'forbidden'}, 403)
+                return
+            deal_id = str(payload.get('deal_id') or '').strip()
+            if not deal_id.isdigit():
+                self._send({'ok': False, 'error': 'deal_id required'}, 400)
+                return
+            import urllib.request as _ur
+            body = json.dumps({'key': os.environ.get('XERO_PROCESS_KEY', ''),
+                               'deal_id': deal_id}).encode()
+            req = _ur.Request(_JOURNEY_URL.rstrip('/') + '/staff/deal',
+                              data=body,
+                              headers={'Content-Type': 'application/json'})
+            try:
+                # Longer than the other relays: the load stage reads the Deal,
+                # its subform and three related lists in one pass.
+                with _ur.urlopen(req, timeout=30) as r:
+                    self._send(json.loads(r.read().decode()))
+            except Exception:
+                # Fail CLOSED, not empty. An empty-but-ok response would look
+                # to the form like "this deal has no criteria", and a staff
+                # member could then save that emptiness over a real audit.
+                self._send({'ok': False, 'error': 'could not load deal'}, 200)
+            return
         if path == '/fasttrack/submit':
             # Form-encoded from the decision page; carries its own HMAC, so
             # it sits outside the engine-key gate like the webhook does.
