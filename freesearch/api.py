@@ -107,6 +107,11 @@ _PAGES = {
     # guided call workspace, ad-hoc completion, multiple marks on one order,
     # and a payment gate. Token-gated below — see _STAFF_PATHS.
     '/staff-enquiry': 'staff-enquiry.html',
+    # Quick Audit (Jonathan, 15 Sep): the SAME page in its audit-schema-only
+    # mode -- contact, marks, platforms, billing, read-back. The page detects
+    # the path. One file, one Deal shape, so a change to the shape changes
+    # both staff forms. Token-gated like /staff-enquiry.
+    '/quick-audit': 'staff-enquiry.html',
     # Stripe Checkout lands here after payment — a branded "what happens
     # next" page (Jonathan, 8 Sep), never the bare WordPress homepage.
     '/audit-thanks': 'audit-thanks.html',
@@ -121,7 +126,7 @@ _PAGES = {
 # by design (the wizards are embedded on partner sites), so the check is an
 # explicit allow-list rather than a default-deny that someone could forget to
 # extend. A wrong or missing token gets the sign-in page, never the form.
-_STAFF_PATHS = {'/staff-enquiry'}
+_STAFF_PATHS = {'/staff-enquiry', '/quick-audit'}
 
 def _staff_user(token: str) -> dict | None:
     """Resolve a staff token to a user, constant-time.
@@ -472,23 +477,31 @@ def _staff_gate(enq: dict) -> list:
     pay_d = d(s('billing', 'payDate'))
     today = _dt.date.today()
 
+    # Quick Audit (15 Sep 2026): the audit schema only. The fact-find rules
+    # (G-01, G-04..G-08) do not apply -- there was no discovery call. The
+    # flag is on the STORED enquiry, stamped by the page from its route, so
+    # a Fact Find enquiry cannot be waved through by a browser claiming to
+    # be quick: the stored form decides, as everywhere else in this gate.
+    quick = bool(enq.get('quick'))
+
     bad = []
     if not (full(s('contact', 'first')) and full(s('contact', 'last'))
             and email_ok(s('contact', 'email')) and full(s('contact', 'phone'))
-            and full(s('contact', 'position'))):
+            and (quick or full(s('contact', 'position')))):
         bad.append('G-00')
-    if not (real(s('discovery', 'desc')) and real(s('discovery', 'reason'))):
+    if not quick and not (real(s('discovery', 'desc')) and real(s('discovery', 'reason'))):
         bad.append('G-01')
     if not marks:
         bad.append('G-02')
     if not classes:
         bad.append('G-03')
-    if not all(bool(s('advice', k))
-               for k in ('risks', 'fees', 'noguarantee', 'questions')):
+    if not quick and not all(bool(s('advice', k))
+                             for k in ('risks', 'fees', 'noguarantee', 'questions')):
         bad.append('G-04')
-    if not (real(s('recommend', 'scope')) and real(s('recommend', 'rationale'))):
+    if not quick and not (real(s('recommend', 'scope')) and real(s('recommend', 'rationale'))):
         bad.append('G-05')
-    if s('recommend', 'handling') == 'expedited' and not full(s('recommend', 'expReason')):
+    if not quick and s('recommend', 'handling') == 'expedited' \
+            and not full(s('recommend', 'expReason')):
         bad.append('G-06')
     # The appointment is the EXPECTED step (Jonathan, 8 Sep). A staff order
     # may only skip it when the client would not commit on the call, and then
@@ -496,7 +509,9 @@ def _staff_gate(enq: dict) -> list:
     # requirement is deliberately the same bar as the needs summary — a
     # sentence, not a word.
     declined = bool(s('consult', 'declined'))
-    if declined:
+    if quick:
+        pass                        # no consultation step on a Quick Audit
+    elif declined:
         if not real(s('consult', 'declineReason')):
             bad.append('G-07')
         if not audit_d:
@@ -513,11 +528,23 @@ def _staff_gate(enq: dict) -> list:
     # guard rails. The agreed date just has to exist and not postdate the
     # delivery it funds.
     pay_when = s('billing', 'payWhen')
+    # 'paid' (Quick Audit, 16 Sep): payment already taken outside Stripe --
+    # a date and a reference are the evidence, and both are required.
+    paid_d = d(s('billing', 'paidDate'))
     pay_ok = (pay_when == 'now'
               or (pay_when == 'date' and pay_d
-                  and (not audit_d or pay_d <= audit_d)))
+                  and (not audit_d or pay_d <= audit_d))
+              or (quick and pay_when == 'paid' and paid_d and paid_d <= today
+                  and full(s('billing', 'paidRef'))))
     if not (pay_ok and bool(s('billing', 'agreed'))):
         bad.append('G-09')
+    # G-14 (16 Sep): the Applicant Account. Same as billing, or named. The
+    # Deluge resolves it inside order_complete and its research gate refuses
+    # a Deal with no Deal_Applicant_Accounts row -- this just stops staff
+    # sending an order that will certainly stall there.
+    ap = enq.get('applicant') if isinstance(enq.get('applicant'), dict) else {}
+    if quick and ap.get('sameAsBilling') is False and not full(ap.get('name')):
+        bad.append('G-14')
     # Structured Xero-format address (point 10, 9 Sep): line 1 + postcode are
     # the minimum an invoice needs. Legacy single-line `addr` still counts, so
     # sessions saved before v2.1 are not stranded.
@@ -629,7 +656,8 @@ def _audit_pay(payload: dict) -> dict:
         # discount on by default (£0), removable to charge. Declined
         # consultations carry no line at all.
         consult_block = enq.get('consult') or {}
-        if not consult_block.get('declined'):
+        quick = bool(enq.get('quick'))
+        if not quick and not consult_block.get('declined'):
             waived = consult_block.get('feeWaived', True)
             lines.append({'l': 'Audit Consultation'
                           + (' — discounted to £0' if waived else ''),
@@ -648,7 +676,33 @@ def _audit_pay(payload: dict) -> dict:
         # VAT from the confirmed client location (G-12 guarantees it is set),
         # and consultation from whether an appointment was actually booked.
         vat_exempt = billing.get('location') == 'nonuk'
-        consult = not bool((enq.get('consult') or {}).get('declined'))
+        consult = (not quick) and not bool((enq.get('consult') or {}).get('declined'))
+
+        # Scenario 3 -- Quick Audit, payment ALREADY taken (16 Sep 2026): a
+        # bank transfer, a phone payment, a partner remittance. No Stripe
+        # session. The stored payment date + reference are the evidence
+        # (G-09 in quick mode requires both). The journey raises the Xero
+        # invoice and marks it paid on that date with that reference, then
+        # drives the Deal through the same order_complete kind=paid the
+        # Stripe webhook uses -- so the Deal, the gate and the research
+        # tasks behave identically whichever way the money arrived.
+        if quick and billing.get('payWhen') == 'paid':
+            net_p = sum(x['p'] for x in lines)
+            tot_p = net_p if vat_exempt else int(round(net_p * 1.20))
+            _journey_event(session_id, 'audit_paid', {
+                'source': 'quick_audit_recorded',
+                'marks': qty, 'lines': lines, 'discount_pence': 0,
+                'net_pence': net_p, 'total_pence': tot_p,
+                'vat_exempt': vat_exempt,
+                'paid_date': str(billing.get('paidDate') or '')[:10],
+                'payment_ref': str(billing.get('paidRef') or '')[:60],
+                'billing_entity': str(billing.get('entity') or '')[:200],
+                'billing_email': email, 'invoice_ref': ref,
+                'staff_email': staff_email,
+            })
+            _xero_process(session_id, 'paid')
+            return {'ok': True, 'paid': 'recorded', 'marks': qty,
+                    'total_pence': tot_p, 'status': 200}
 
         # Scenario 2 — invoice with an agreed payment date. No money moves
         # now, so no Stripe session: the request is recorded (having already
