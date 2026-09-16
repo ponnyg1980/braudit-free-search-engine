@@ -1939,6 +1939,8 @@ async function loadDeal(){
   banner.classList.toggle('bad',state.deal.frozen);
 }
 function finishLoad(){
+  /* Null-safe: Quick Audit removes the sections it does not own. */
+  const tog=(id,cls,f)=>{const el=document.getElementById(id);if(el)el.classList.toggle(cls,!!f);};
   const set=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=v;};
   const chk=(id,v)=>{const el=document.getElementById(id);if(el)el.checked=!!v;};
   const c=state.contact,d=state.discovery,r=state.recommend,cn=state.consult,
@@ -1995,29 +1997,27 @@ function finishLoad(){
   set('f-consultdate',cn.date);set('f-consulttime',cn.time);set('f-adviser',cn.adviser);
   set('f-consultmethod',cn.method);chk('c-agreed',cn.agreed);
   chk('c-declined',cn.declined);set('f-declinereason',cn.declineReason);
-  document.getElementById('f-declinewrap').classList.toggle('hidden',!cn.declined);
-  document.getElementById('f-consultfields').classList.toggle('hidden',!!cn.declined);
+  tog('f-declinewrap','hidden',!cn.declined);
+  tog('f-consultfields','hidden',!!cn.declined);
   if(b.addr&&!b.addr1){b.addr1=b.addr;}
   set('f-billentity',b.entity);set('f-billemail',b.email);
   set('f-addr1',b.addr1);set('f-addr2',b.addr2);set('f-addrcity',b.city);
   set('f-addrregion',b.region);set('f-addrpost',b.postcode);
   set('f-addrcountry',b.country||'United Kingdom');
   set('f-billkind',b.kind||'company');
-  document.getElementById('f-chwrap').classList
-    .toggle('hidden',(b.kind||'company')!=='company');
-  if(b.company_number) document.getElementById('f-chnum').textContent=
+  tog('f-chwrap','hidden',(b.kind||'company')!=='company');
+  if(b.company_number) (document.getElementById('f-chnum')||{}).textContent=
     'Company number '+b.company_number;
   set('f-vatloc',b.location);
   set('f-billtype',b.accountType||'new');
-  document.getElementById('f-acctsearchwrap').classList
-    .toggle('hidden',(b.accountType||'new')!=='existing');
+  tog('f-acctsearchwrap','hidden',(b.accountType||'new')!=='existing');
   if(b.account_id){
-    document.getElementById('f-acctname').textContent=b.account_name||b.account_id;
-    document.getElementById('f-acctlinked').classList.remove('hidden');
-    document.getElementById('f-acctsearch').classList.add('hidden');
+    (document.getElementById('f-acctname')||{}).textContent=b.account_name||b.account_id;
+    tog('f-acctlinked','hidden',false);
+    tog('f-acctsearch','hidden',true);
   }
   chk('b-icdiff',b.icDiff);
-  document.getElementById('f-icwrap').classList.toggle('hidden',!b.icDiff);
+  tog('f-icwrap','hidden',!b.icDiff);
   set('f-icfirst',b.icFirst);set('f-iclast',b.icLast);
   set('f-icemail',b.icEmail);set('f-icphone',b.icPhone);
   renderLinkUI();
@@ -2027,16 +2027,16 @@ function finishLoad(){
   if(!CONFIG.QUICK&&b.payWhen==='paid') b.payWhen='';
   set('f-paywhen',b.payWhen);set('f-paydate',b.payDate);chk('p-agreed',b.agreed);
   set('f-paiddate',b.paidDate||'');set('f-paidref',b.paidRef||'');
-  document.getElementById('f-paidwrap').classList.toggle('hidden',b.payWhen!=='paid');
+  tog('f-paidwrap','hidden',b.payWhen!=='paid');
   if(!state.applicant||typeof state.applicant!=='object')
     state.applicant={sameAsBilling:true,name:'',companyNumber:''};
   chk('ap-same',state.applicant.sameAsBilling!==false);
   set('f-apname',state.applicant.name||'');set('f-apnum',state.applicant.companyNumber||'');
-  document.getElementById('f-apwrap').classList.toggle('hidden',state.applicant.sameAsBilling!==false);
+  tog('f-apwrap','hidden',state.applicant.sameAsBilling!==false);
   chk('r-confirmed',state.readback.confirmed);
 
-  document.getElementById('f-expwrap').classList.toggle('hidden',r.handling!=='expedited');
-  document.getElementById('f-paydatewrap').classList.toggle('hidden',b.payWhen!=='date');
+  tog('f-expwrap','hidden',r.handling!=='expedited');
+  tog('f-paydatewrap','hidden',b.payWhen!=='date');
   if(!r.auditDate){
     /* Sensible default: the earliest date we could actually deliver. */
     r.auditDate=iso(addWorkingDays(new Date(),CONFIG.LEAD_DAYS));
