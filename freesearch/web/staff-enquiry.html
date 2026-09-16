@@ -1171,7 +1171,9 @@ function vatExempt(){return state.billing.location==='nonuk';}
 /* Point 13: the consultation is ALWAYS a £149 line with a £149 discount on
    by default — visible value, zero charge — removable to charge it. */
 function consultLine(){
-  if(state.consult.declined) return null;
+  /* Quick Audit has no consultation step -- no line, no RRP for it. Mirrors
+     _audit_pay(quick) server-side. */
+  if(CONFIG.QUICK||state.consult.declined) return null;
   return {label:'Audit Consultation',price:state.consult.feeWaived?0:149};
 }
 function net(){
