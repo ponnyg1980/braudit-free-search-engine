@@ -192,6 +192,7 @@
        onerror="this.style.display='none'">
   <span class="ref" id="sf-ref">—</span>
   <span class="who" id="sf-who">New enquiry</span>
+  <span class="sf-save hidden" id="sf-dealbanner"></span>
   <span class="sf-save" id="sf-savestate">Not saved</span>
   <a class="exit" href="#" id="sf-exit" onclick="newEnquiry();return false;">New enquiry</a>
 </div>
@@ -713,15 +714,50 @@
     <div class="sf-hint">Ask, don't assume — the address above may be a UK agent for an
       overseas client. VAT is charged unless the client is outside the UK.</div>
 
+    <!-- Applicant Account (16 Sep). The Deal's Account is the BILLER; on a
+         reseller / representative / white-label order that is the partner,
+         not the mark's owner. Exclusions and the trademark scope to the
+         APPLICANT, so it must be named when it differs. -->
+    <label class="fld" style="margin-top:14px">Who owns the mark? <span class="req">*</span></label>
+    <label class="sf-check"><input type="checkbox" id="ap-same" checked>
+      <span>The <b>applicant is the billing entity</b> above.</span></label>
+    <div id="f-apwrap" class="hidden">
+      <div class="sf-hint" style="margin-bottom:8px">Reseller, representative or white-label
+        order: the biller is the partner. Name the client who owns the mark. A company
+        number links the Applicant Account automatically; a name alone is queued for
+        support to confirm before research.</div>
+      <div class="sf-row">
+        <div><label class="fld">Applicant name <span class="req">*</span></label>
+          <input type="text" id="f-apname" placeholder="Company or person who owns the mark"></div>
+        <div><label class="fld">Company number <span class="opt">(if a company)</span></label>
+          <input type="text" id="f-apnum" placeholder="e.g. 01234567" autocomplete="off"></div>
+      </div>
+      <label class="fld">Find on Companies House <span class="opt">(fills both)</span></label>
+      <input type="text" id="f-apchq" placeholder="Company name or number" autocomplete="off">
+      <div id="f-apchresults"></div>
+    </div>
+
     <div class="sf-row">
       <div><label class="fld">Payment <span class="req">*</span></label>
         <select id="f-paywhen">
           <option value="">Choose…</option>
           <option value="now">Paying now — send the link</option>
           <option value="date">Paying on an agreed date</option>
+          <option value="paid" id="f-paywhen-paid" class="hidden">Payment already taken — record it</option>
         </select></div>
       <div id="f-paydatewrap" class="hidden"><label class="fld">Agreed payment date <span class="req">*</span></label>
         <input type="date" id="f-paydate"></div>
+    </div>
+    <div id="f-paidwrap" class="hidden">
+      <div class="sf-hint" style="margin:6px 0 8px">Bank transfer, phone payment or partner
+        remittance already received. The Xero invoice is raised and marked paid on this
+        date with this reference; the order proceeds as paid.</div>
+      <div class="sf-row">
+        <div><label class="fld">Date payment received <span class="req">*</span></label>
+          <input type="date" id="f-paiddate"></div>
+        <div><label class="fld">Payment / invoice reference <span class="req">*</span></label>
+          <input type="text" id="f-paidref" placeholder="Bank ref, receipt or invoice number"></div>
+      </div>
     </div>
     <label class="sf-check"><input type="checkbox" id="p-agreed">
       <span>The client agreed to this payment arrangement.</span></label>
@@ -794,6 +830,16 @@ const CONFIG=(function(){
     ACCOUNT_NAME:q.get('account_name')||'',
     STAFF:q.get('u')||localStorage.getItem('tmh_staff')||'',
     TOKEN:q.get('k')||localStorage.getItem('tmh_staff_token')||'',
+    /* QUICK AUDIT (Jonathan, 15 Sep). Same page, audit schema only: contact,
+       marks, platforms, billing, read-back. No fact-find, no advice, no
+       consultation. Decided by the route (/quick-audit) or ?quick=1; the
+       flag is stored on the enquiry so the server gate applies the same
+       reduced rule set to the STORED form, never to a browser claim. */
+    QUICK:/\/quick-audit\b/.test(location.pathname)||q.get('quick')==='1',
+    /* EDIT MODE (15 Sep): open an existing audit Deal. Shared by both staff
+       forms. Reads back through /staff-deal; never creates a Lead, Contact
+       or Account; refuses to edit once the scope is frozen. */
+    DEAL:(q.get('deal')||'').replace(/\D/g,''),
     PRICE:149,           /* RRP per line item (Jonathan, 9 Sep) */
     MIN_TOTAL:99,        /* net order floor -- the total can never go below */
     VAT:0.20,
@@ -810,7 +856,7 @@ const SOCIALS=[['facebook','Facebook'],['instagram','Instagram'],['youtube','You
 const SHOPS=[['amazon','Amazon'],['etsy','Etsy'],['temu','Temu'],['tiktokshop','TikTok Shop'],
   ['ebay','eBay'],['alibaba','Alibaba']];
 
-const SECTIONS=[
+const ALL_SECTIONS=[
   ['contact',   'Contact'],
   ['discovery', 'Discovery'],
   ['marks',     'Marks & scope'],
@@ -821,6 +867,11 @@ const SECTIONS=[
   ['billing',   'Billing'],
   ['readback',  'Read-back']
 ];
+/* Quick Audit: the audit schema only (spec: temmy-access/Quick Audit -
+   audit schema.md §12). Everything else is Fact Find only. */
+const QUICK_SECS=['contact','marks','platforms','billing','readback'];
+const SECTIONS=CONFIG.QUICK?ALL_SECTIONS.filter(s=>QUICK_SECS.includes(s[0])):ALL_SECTIONS;
+const inForm=sec=>SECTIONS.some(s=>s[0]===sec);
 
 /* =====================================================================
    STATE
@@ -830,6 +881,16 @@ const state={
   ref:'',
   staff:CONFIG.STAFF||'',
   section:'contact',
+  /* Stored, so the server gate reads the SAME mode the page ran in. */
+  quick:!!CONFIG.QUICK,
+  /* Edit mode: the Deal this form is editing. Empty = creating. */
+  deal:{id:CONFIG.DEAL||'',name:'',frozen:false,stage:'',nextAction:'',
+        trigger:'',applicants:[],matchStatus:''},
+  /* Applicant Account (16 Sep): who OWNS the mark. Usually the biller; on a
+     reseller / representative / white-label order it is NOT -- the biller
+     is the partner. The Deluge resolves the name/company number to an
+     Account (company number first; a name alone queues for Laura). */
+  applicant:{sameAsBilling:true,name:'',companyNumber:''},
   leadSource:'',          /* Zoho Lead_Source_Group, asked not guessed */
   contact:{first:'',last:'',email:'',phone:'',position:'',org:'',clientType:''},
   /* searchIn (11 Sep): which module the typed lookup hits. Account is offered
@@ -859,6 +920,8 @@ const state={
   consult:{date:'',time:'',adviser:'',method:'phone',agreed:false,
            declined:false,declineReason:'',feeWaived:true},
   billing:{entity:'',email:'',addr:'',location:'',payWhen:'',payDate:'',agreed:false,
+           /* payWhen 'paid' (Quick Audit): payment already taken -- date + ref */
+           paidDate:'',paidRef:'',
            accountType:'new',account_id:'',account_name:'',
            kind:'company',company_number:'',
            addr1:'',addr2:'',city:'',region:'',postcode:'',country:'United Kingdom',
@@ -899,8 +962,10 @@ function gateRules(){
   const marks=state.marks.filter(m=>nonEmpty(m.text));
   const rules=[
     {id:'G-00',sec:'contact',label:'Contact details taken',
-     ok:nonEmpty(c.first)&&nonEmpty(c.last)&&validEmail(c.email)&&nonEmpty(c.phone)&&nonEmpty(c.position),
-     why:'First name, last name, email, phone and position are all needed before anything else.'},
+     ok:nonEmpty(c.first)&&nonEmpty(c.last)&&validEmail(c.email)&&nonEmpty(c.phone)
+        &&(CONFIG.QUICK||nonEmpty(c.position)),
+     why:CONFIG.QUICK?'First name, last name, email and phone are needed before anything else.'
+        :'First name, last name, email, phone and position are all needed before anything else.'},
     {id:'G-00b',sec:'contact',label:'Lead source recorded',
      ok:nonEmpty(state.leadSource),
      why:'Say how this enquiry reached us. It is mandatory on the Deal and it is what the '
@@ -938,8 +1003,16 @@ function gateRules(){
         ?'With no appointment, the delivery date is the promise — it must be set.'
         :'Delivery on or before the appointment day — same day is fine.'},
     {id:'G-09',sec:'billing',label:'Payment agreed',
-     ok:(b.payWhen==='now'||(b.payWhen==='date'&&nonEmpty(b.payDate)&&payDateWorks()))&&b.agreed,
-     why:'Either they are paying now, or there is an exact agreed date, no later than delivery.'},
+     ok:(b.payWhen==='now'||(b.payWhen==='date'&&nonEmpty(b.payDate)&&payDateWorks())
+         ||(CONFIG.QUICK&&b.payWhen==='paid'&&nonEmpty(b.paidDate)&&b.paidDate<=todayIso()
+            &&nonEmpty(b.paidRef)))&&b.agreed,
+     why:CONFIG.QUICK
+        ?'Paying now, an exact agreed date, or a payment already taken with its date and reference.'
+        :'Either they are paying now, or there is an exact agreed date, no later than delivery.'},
+    {id:'G-14',sec:'billing',label:'Applicant identified',
+     ok:state.applicant.sameAsBilling!==false||nonEmpty(state.applicant.name),
+     why:'Who owns the mark? Same as the billing entity, or name the applicant '
+         +'(company number if it has one) so the right Applicant Account is linked.'},
     {id:'G-10',sec:'billing',label:'Billing details complete',
      ok:nonEmpty(b.entity)&&validEmail(b.email)&&nonEmpty(b.addr1)&&nonEmpty(b.postcode),
      why:'Entity, invoice email, address line 1 and postcode — the invoice cannot exist without them.'},
@@ -953,7 +1026,12 @@ function gateRules(){
      ok:state.readback.confirmed,
      why:'Read the summary back, then tick.'}
   ];
-  return rules;
+  if(!CONFIG.QUICK) return rules;
+  /* Quick Audit: only the rules whose section is on this form. The price
+     bounds rule lives on Recommendation in Fact Find; here it belongs with
+     the marks, where the prices are typed. Mirrors _staff_gate(quick). */
+  return rules.map(r=>r.id==='G-13'?Object.assign({},r,{sec:'marks'}):r)
+              .filter(r=>inForm(r.sec));
 }
 function validEmail(e){return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e||'').trim());}
 function parseClasses(s){
@@ -1026,11 +1104,20 @@ function renderGate(){
   }else if(outstanding.length===0){
     msg.innerHTML='<b>Ready.</b> '+markCount()+' line'+(markCount()===1?'':'s')+
       ' = £'+total().toFixed(2)+(vatExempt()?' (no VAT — outside the UK).':' inc VAT.');
-    pay.textContent=state.billing.payWhen==='date'?'Request invoice':'Take payment now';
+    pay.textContent=state.billing.payWhen==='date'?'Request invoice'
+      :(state.billing.payWhen==='paid'?'Record payment & create order':'Take payment now');
   }else{
     msg.innerHTML='<b>'+outstanding.length+' outstanding.</b> Next: '+esc(outstanding[0].why);
   }
   pay.disabled=outstanding.length>0;
+  /* Edit mode, frozen scope: the criteria are immutable once the search
+     contract is stamped (Braudit_Frozen_At). A change would need a new
+     search context, so this form refuses rather than editing silently. */
+  if(state.deal.frozen){
+    pay.disabled=true;
+    msg.innerHTML='<b>Frozen.</b> This audit\'s scope was frozen for search on the Deal. '
+      +'Nothing here can be changed or re-submitted.';
+  }
 
   document.getElementById('g-meta').innerHTML=[
     state.ref?('Reference <b>'+esc(state.ref)+'</b>'):'',
@@ -1252,11 +1339,18 @@ function renderReadback(){
   const marks=state.marks.filter(m=>nonEmpty(m.text)).map(m=>m.text);
   const row=(k,v)=>`<div class="sf-readrow"><span class="k">${esc(k)}</span>
     <span class="v ${v?'':'miss'}">${esc(v||'not recorded')}</span></div>`;
+  const ap=state.applicant||{};
+  const full=!CONFIG.QUICK;
   document.getElementById('f-readback').innerHTML=
+    (state.deal.id?row('Editing Deal',(state.deal.name||state.deal.id)
+      +(state.deal.frozen?' — FROZEN':'')):'')+
     row('Client',[c.first,c.last].filter(Boolean).join(' ')+(c.org?(', '+c.org):''))+
     row('Marks being audited',marks.join(', '))+
     row('Classes',parseClasses(state.classes).join(', '))+
-    row('Territories',
+    row('Applicant (owns the mark)',ap.sameAsBilling===false
+      ?((ap.name||'')+(ap.companyNumber?(' ('+ap.companyNumber+')'):''))
+      :'Same as the billing entity')+
+    (full?row('Territories',
       ((state.discovery.terrNow||[]).map(jLabel).join(', ')||'—')
       +((state.discovery.terrPlan||[]).length
         ?(' · planned: '+(state.discovery.terrPlan||[]).map(jLabel).join(', ')):''))+
@@ -1266,7 +1360,7 @@ function renderReadback(){
       :(state.consult.feeWaived?'£149, discounted to £0':'£149 charged'))+
     row('Consultation',cn.declined
       ?('Declined — '+(cn.declineReason||'no reason recorded'))
-      :(cn.date?(pretty(cn.date)+' at '+(cn.time||'—')+' with '+(cn.adviser||'—')):''))+
+      :(cn.date?(pretty(cn.date)+' at '+(cn.time||'—')+' with '+(cn.adviser||'—')):'')):'')+
     row('Invoice to',b.entity?(b.entity
       +(state.billing.company_number?(' ('+state.billing.company_number+')'):'')
       +' · '+b.email):'')+
@@ -1274,7 +1368,10 @@ function renderReadback(){
       b.country].filter(Boolean).join(', '))+
     row('VAT treatment',b.location==='uk'?'UK — VAT at 20%'
       :(b.location==='nonuk'?'Outside the UK — no VAT':''))+
-    row('Payment',b.payWhen==='now'?'Paying now':(b.payDate?('Invoice — payment agreed for '+pretty(b.payDate)):''))+
+    row('Payment',b.payWhen==='now'?'Paying now'
+      :(b.payWhen==='paid'?('Already paid'+(b.paidDate?(' on '+pretty(b.paidDate)):'')
+          +(b.paidRef?(' — ref '+b.paidRef):''))
+      :(b.payDate?('Invoice — payment agreed for '+pretty(b.payDate)):'')))+
     row('Total',markCount()+' line'+(markCount()===1?'':'s')+' — £'+total().toFixed(2)+
       (vatExempt()?' (no VAT)':' inc VAT')+
       (net()<rrp()?' (RRP £'+rrp().toFixed(2)+' net)':''));
@@ -1287,10 +1384,12 @@ function renderWarnings(){
   if(state.consult.date&&!futureAppt()) msgs.push('That appointment is not in the future.');
   if(state.recommend.auditDate&&state.consult.date&&!deliveryBeforeConsult())
     msgs.push('The audit must be delivered before the consultation. Move one of the two dates.');
-  w.innerHTML=msgs.length?'<div class="sf-guide sf-never" style="margin:14px 0 0"><div class="gh">Check</div><ul>'
+  /* Quick Audit has no consultation section, so no box to write into. */
+  if(w) w.innerHTML=msgs.length?'<div class="sf-guide sf-never" style="margin:14px 0 0"><div class="gh">Check</div><ul>'
     +msgs.map(m=>'<li>'+esc(m)+'</li>').join('')+'</ul></div>':'';
 
   const p=document.getElementById('f-paywarn');
+  if(!p) return;
   const pm=[];
   if(state.billing.payWhen==='date'&&state.billing.payDate&&state.recommend.auditDate&&!payDateWorks())
     pm.push('Paying on that date leaves less than '+CONFIG.LEAD_DAYS+
@@ -1651,6 +1750,13 @@ async function saveNow(explicit){
        excluded — the journey just forwards it to the Zoho 'scope' stage. */
     lr.staff_enquiry=Object.assign({},state,
       {platform_scope:platformScope(),savedAt:new Date().toISOString()});
+    /* Edit mode: every Zoho stage is idempotent on zoho_deal_id, and the
+       journey reads it from last_result.zoho.deal_id -- so stamping it here
+       is what turns the whole order path into an UPDATE of this Deal. */
+    if(state.deal.id){
+      lr.zoho=Object.assign({},lr.zoho||{},{deal_id:String(state.deal.id)});
+      if(state.link.contact_id&&!lr.zoho.contact_id) lr.zoho.contact_id=String(state.link.contact_id);
+    }
 
     const c=state.contact;
     const snapshot={
@@ -1733,7 +1839,104 @@ async function load(){
       }
     }
   }catch(e){}
+  if(CONFIG.DEAL) await loadDeal();
   finishLoad();
+}
+/* EDIT MODE (shared by both staff forms, 15-16 Sep). Read the Deal back
+   through /staff-deal (staff token -> journey -> Deluge stg=load) and lay it
+   over the form. Two guards, per CLAUDE.md "THE TWO STAFF AUDIT FORMS":
+     1. never create a Lead, Contact or Account here -- the records exist,
+        so the contact/account are LINKED, never typed as new;
+     2. refuse to edit past Braudit_Frozen_At (freezeForm()).
+   Fails closed: if the Deal cannot be read, the form says so and stays
+   empty rather than creating a second order for the same client. */
+async function loadDeal(){
+  const banner=document.getElementById('sf-dealbanner');
+  banner.classList.remove('hidden');banner.textContent='Loading Deal '+CONFIG.DEAL+'…';
+  let d=null;
+  try{
+    const r=await fetch('/staff-deal',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({k:CONFIG.TOKEN,deal_id:CONFIG.DEAL})});
+    d=await r.json();
+  }catch(e){d=null;}
+  if(!d||!d.ok||!d.deal){
+    banner.textContent='Could not load Deal '+CONFIG.DEAL+' — '+esc((d&&d.error)||'no response')
+      +'. Nothing loaded; do not re-enter it as new.';
+    banner.classList.add('bad');
+    state.deal.frozen=true;   /* fail closed: no edits, no submit */
+    return;
+  }
+  const z=d.deal;
+  state.deal.id=CONFIG.DEAL;
+  state.deal.name=z.Deal_Name||'';
+  state.deal.frozen=z.frozen===true;
+  state.deal.stage=z.Stage||'';state.deal.nextAction=z.Next_Action||'';
+  state.deal.trigger=z.Braudit_Trigger_Status||'';
+  state.deal.matchStatus=z.Applicant_Match_Status||'';
+  state.deal.applicants=d.applicants||[];
+  /* Contact: linked, never new. */
+  if(z.contact_id){
+    state.contact.clientType='existing';
+    state.link.contact_id=String(z.contact_id);
+    state.link.contact_name=z.contact_name||'the linked client record';
+    state.link.searchIn='Contacts';
+    if(z.contact_first) state.contact.first=z.contact_first;
+    if(z.contact_last) state.contact.last=z.contact_last;
+    if(z.contact_email) state.contact.email=z.contact_email;
+    if(z.contact_phone) state.contact.phone=z.contact_phone;
+    if(z.contact_title) state.contact.position=z.contact_title;
+  }
+  if(z.Lead_Source_Group) state.leadSource=z.Lead_Source_Group;
+  /* Marks: the five word slots, plus a logo line if the Deal carries an
+     image context. Operators are read for the read-back; staff set them on
+     the Deal (Jonathan: staff always get the last word, before freeze). */
+  const marks=[];
+  for(let i=1;i<=5;i++){
+    const w=z['Search_Word_'+i];
+    if(w&&String(w).trim()) marks.push({text:String(w).trim(),kind:'word',price:149,
+      operator:z['Search_Operator_'+i]||''});
+  }
+  const types=String(z.Braudit_Search_Types||'').toLowerCase();
+  if((d.images&&d.images.length)||/image/.test(types)||z.Logo_Awaited===true){
+    const nick=(d.images&&d.images[0]&&d.images[0].nickname)||(marks[0]&&marks[0].text)||'';
+    marks.push({text:nick||'Logo',kind:'logo',price:149});
+  }
+  if(marks.length) state.marks=marks;
+  /* Classes from the frozen/draft scope rows. */
+  const cls=[];
+  (d.scope||[]).forEach(s=>(s.terms||[]).forEach(t=>{
+    const n=parseInt(t.class_no,10); if(n>=1&&n<=45&&cls.indexOf(n)<0) cls.push(n);}));
+  if(cls.length) state.classes=cls.sort((a,b)=>a-b).join(', ');
+  /* Billing: the Deal's Account, linked -- never a new one. */
+  if(z.account_id){
+    state.billing.accountType='existing';
+    state.billing.account_id=String(z.account_id);
+    state.billing.account_name=z.account_name||'';
+    if(!state.billing.entity) state.billing.entity=z.account_name||'';
+    state.link.account_id=state.link.account_id||String(z.account_id);
+    state.link.account_name=state.link.account_name||z.account_name||'';
+  }
+  /* Applicant: the junction rows are the truth. Same-as-billing when the
+     only applicant IS the biller (or there is none yet); otherwise name the
+     first applicant so the read-back shows who owns the mark. */
+  const aps=(d.applicants||[]).filter(a=>a&&a.account_id);
+  if(aps.length&&!(aps.length===1&&String(aps[0].account_id)===String(z.account_id||''))){
+    state.applicant.sameAsBilling=false;
+    state.applicant.name=aps.map(a=>a.account_name).filter(Boolean).join(' / ');
+  }
+  if(z.Audit_Payment_Method||z.Audit_Order_Ref){
+    /* Already ordered: the payment step is a record, not a new charge. */
+    if(z.Stage==='Paid'&&CONFIG.QUICK&&!state.billing.payWhen){
+      state.billing.payWhen='paid';state.billing.paidRef=z.Audit_Order_Ref||'';
+      state.billing.paidDate=state.billing.paidDate||todayIso();state.billing.agreed=true;
+    }
+  }
+  banner.textContent='Editing Deal '+(state.deal.name||CONFIG.DEAL)
+    +(state.deal.stage?(' · '+state.deal.stage):'')
+    +(state.deal.nextAction?(' · '+state.deal.nextAction):'')
+    +(state.deal.frozen?' · FROZEN — read only':'');
+  banner.classList.toggle('bad',state.deal.frozen);
 }
 function finishLoad(){
   const set=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=v;};
@@ -1818,7 +2021,18 @@ function finishLoad(){
   set('f-icfirst',b.icFirst);set('f-iclast',b.icLast);
   set('f-icemail',b.icEmail);set('f-icphone',b.icPhone);
   renderLinkUI();
+  /* 'paid' is a Quick Audit option only -- Fact Find takes payment live. */
+  const paidOpt=document.getElementById('f-paywhen-paid');
+  if(paidOpt){if(CONFIG.QUICK) paidOpt.classList.remove('hidden'); else paidOpt.remove();}
+  if(!CONFIG.QUICK&&b.payWhen==='paid') b.payWhen='';
   set('f-paywhen',b.payWhen);set('f-paydate',b.payDate);chk('p-agreed',b.agreed);
+  set('f-paiddate',b.paidDate||'');set('f-paidref',b.paidRef||'');
+  document.getElementById('f-paidwrap').classList.toggle('hidden',b.payWhen!=='paid');
+  if(!state.applicant||typeof state.applicant!=='object')
+    state.applicant={sameAsBilling:true,name:'',companyNumber:''};
+  chk('ap-same',state.applicant.sameAsBilling!==false);
+  set('f-apname',state.applicant.name||'');set('f-apnum',state.applicant.companyNumber||'');
+  document.getElementById('f-apwrap').classList.toggle('hidden',state.applicant.sameAsBilling!==false);
   chk('r-confirmed',state.readback.confirmed);
 
   document.getElementById('f-expwrap').classList.toggle('hidden',r.handling!=='expedited');
@@ -1829,8 +2043,32 @@ function finishLoad(){
     set('f-auditdate',r.auditDate);
   }
   renderMarks();renderScope();renderAll();
-  showSection(contactDone()?'discovery':'contact');
+  applyQuickChrome();
+  showSection(contactDone()?(CONFIG.QUICK?'marks':'discovery'):'contact');
   if(state.sessionId) setSaveState('Loaded','ok');
+  if(state.deal.frozen) freezeForm();
+}
+/* Quick Audit wording: sections it does not own are hidden by SECTIONS; the
+   remaining copy says "audit", not "enquiry". */
+function applyQuickChrome(){
+  if(!CONFIG.QUICK) return;
+  document.title='Quick Audit — TMH';
+  const ex=document.getElementById('sf-exit'); if(ex) ex.textContent='New audit';
+  const who=document.getElementById('sf-who');
+  if(who&&who.textContent==='New enquiry') who.textContent='New audit';
+  const pos=document.getElementById('f-position');
+  if(pos){const l=pos.previousElementSibling;
+    if(l&&l.classList.contains('fld')) l.innerHTML=l.innerHTML.replace('<span class="req">*</span>','<span class="opt">(optional)</span>');}
+  /* Sections not on this form must never show, whatever the state says. */
+  document.querySelectorAll('[data-sec]').forEach(el=>{
+    if(!inForm(el.getAttribute('data-sec'))) el.remove();});
+}
+/* Frozen Deal (edit mode): read-only. The scope is under contract. */
+function freezeForm(){
+  document.querySelectorAll('main input, main select, main textarea, main button')
+    .forEach(el=>{el.disabled=true;});
+  const b=document.getElementById('sf-dealbanner');
+  if(b) b.classList.add('frozen');
 }
 
 /* =====================================================================
@@ -1952,7 +2190,46 @@ function bindAll(){
   bind('p-agreed',v=>state.billing.agreed=v);
   const pw=document.getElementById('f-paywhen');
   pw.addEventListener('change',()=>{state.billing.payWhen=pw.value;
-    document.getElementById('f-paydatewrap').classList.toggle('hidden',pw.value!=='date');touch();});
+    document.getElementById('f-paydatewrap').classList.toggle('hidden',pw.value!=='date');
+    document.getElementById('f-paidwrap').classList.toggle('hidden',pw.value!=='paid');touch();});
+  bind('f-paiddate',v=>state.billing.paidDate=v);
+  bind('f-paidref',v=>state.billing.paidRef=v);
+
+  /* Applicant Account (16 Sep). */
+  const apSame=document.getElementById('ap-same');
+  apSame.addEventListener('change',()=>{
+    state.applicant.sameAsBilling=apSame.checked;
+    document.getElementById('f-apwrap').classList.toggle('hidden',apSame.checked);
+    touch();});
+  bind('f-apname',v=>state.applicant.name=v);
+  bind('f-apnum',v=>state.applicant.companyNumber=v.replace(/\s+/g,''));
+  let apT=null;
+  document.getElementById('f-apchq').addEventListener('input',function(){
+    clearTimeout(apT);const q=this.value.trim();
+    const out=document.getElementById('f-apchresults');
+    if(q.length<2){out.innerHTML='';return;}
+    apT=setTimeout(async()=>{
+      out.innerHTML='<div class="sf-hint">Searching Companies House…</div>';
+      try{
+        const r=await fetch('/lookup/company?q='+encodeURIComponent(q));
+        const d=await r.json();
+        const items=(d.companies||d.items||[]).slice(0,6);
+        out.innerHTML=items.length?items.map((c,i)=>`<div class="sf-hit" data-i="${i}"
+          style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin:4px 0;cursor:pointer">
+          <b>${esc(c.name||c.title||'')}</b>
+          <span style="color:var(--quiet)">${esc(c.number||c.company_number||'')}</span></div>`).join('')
+          :'<div class="sf-hint">No match on Companies House.</div>';
+        [...out.querySelectorAll('[data-i]')].forEach(el=>{
+          el.onclick=()=>{const c=items[+el.dataset.i];
+            state.applicant.name=c.name||c.title||'';
+            state.applicant.companyNumber=String(c.number||c.company_number||'');
+            document.getElementById('f-apname').value=state.applicant.name;
+            document.getElementById('f-apnum').value=state.applicant.companyNumber;
+            out.innerHTML='';touch();};
+        });
+      }catch(e){out.innerHTML='';}
+    },320);
+  });
 
   const rc=document.getElementById('r-confirmed');
   rc.addEventListener('change',()=>{
@@ -1977,9 +2254,9 @@ async function newEnquiry(){
   if(dirty) await saveNow(true);
   try{
     const u=new URL(location.href);
-    u.searchParams.delete('s');
+    u.searchParams.delete('s');u.searchParams.delete('deal');
     location.href=u.toString();
-  }catch(e){location.href='/staff-enquiry';}
+  }catch(e){location.href=CONFIG.QUICK?'/quick-audit':'/staff-enquiry';}
 }
 function openTools(){
   /* Point 5: keep the opener so the tool can post the scope back. */
@@ -2023,6 +2300,18 @@ async function toPayment(){
               Copy link to send to the client</button></li>
             <li>The receipt comes from Stripe automatically. The Xero invoice follows
               once payment lands.</li>
+          </ul>
+        </div>`;
+    }else if(d&&d.ok&&d.paid){
+      box.innerHTML=`
+        <div class="sf-guide" style="margin-top:16px">
+          <div class="gh">Payment recorded — order created</div>
+          <ul>
+            <li>£${(d.total_pence/100).toFixed(2)} — ${d.marks} audit${d.marks>1?'s':''}, paid
+              ${esc(pretty(state.billing.paidDate))}, reference ${esc(state.billing.paidRef)}.</li>
+            <li>The Xero invoice is raised and marked paid. The Deal is now
+              <b>Awaiting Payment → checked</b>: the staff check before Send for Research
+              happens on the Deal, as always.</li>
           </ul>
         </div>`;
     }else if(d&&d.ok&&d.invoice){
