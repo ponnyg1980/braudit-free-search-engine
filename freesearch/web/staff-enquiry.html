@@ -1801,7 +1801,10 @@ window.addEventListener('beforeunload',e=>{
    LOAD / RESUME
    ===================================================================== */
 async function load(){
-  if(!state.sessionId){finishLoad();return;}
+  if(!state.sessionId){
+    if(CONFIG.DEAL) await loadDeal();   /* edit mode with no session yet */
+    finishLoad();return;
+  }
   setRef();
   try{
     const r=await fetch(jb()+'/session?id='+encodeURIComponent(state.sessionId));
