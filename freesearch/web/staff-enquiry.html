@@ -1922,13 +1922,15 @@ async function loadDeal(){
     state.billing.account_id=String(z.account_id);
     state.billing.account_name=z.account_name||'';
     if(!state.billing.entity) state.billing.entity=z.account_name||'';
+    if(!state.billing.email&&z.contact_email) state.billing.email=z.contact_email;
     state.link.account_id=state.link.account_id||String(z.account_id);
     state.link.account_name=state.link.account_name||z.account_name||'';
   }
   /* Applicant: the junction rows are the truth. Same-as-billing when the
      only applicant IS the biller (or there is none yet); otherwise name the
      first applicant so the read-back shows who owns the mark. */
-  const aps=(d.applicants||[]).filter(a=>a&&a.account_id);
+  const seenAp={};
+  const aps=(d.applicants||[]).filter(a=>a&&a.account_id&&!seenAp[a.account_id]&&(seenAp[a.account_id]=1));
   if(aps.length&&!(aps.length===1&&String(aps[0].account_id)===String(z.account_id||''))){
     state.applicant.sameAsBilling=false;
     state.applicant.name=aps.map(a=>a.account_name).filter(Boolean).join(' / ');
