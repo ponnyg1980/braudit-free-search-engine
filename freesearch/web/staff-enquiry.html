@@ -546,11 +546,13 @@
          scope. Every mark line arrives at RRP £149; the staff member applies
          a discount per line; the consultation is always shown at £149 with
          its £149 discount on by default — remove it to charge. -->
+    <div id="f-priceblock">
     <h3 style="margin:26px 0 4px;font-size:16px;color:var(--navy)">Pricing</h3>
     <p class="sf-hint" style="margin-bottom:12px">RRP £149 a line. Your discounts, on
       the record. The order total can never go below £99 net.</p>
     <div id="f-pricing"></div>
     <div class="sf-price" id="f-pricebox"></div>
+    </div>
   </section>
 
   <!-- ---------- CONSULTATION ---------- -->
@@ -1221,7 +1223,8 @@ function renderPrice(){
     :'<div class="sf-hint">Add the brand lines in Marks &amp; scope first.</div>';
   }
   const under=lines.length&&net()<CONFIG.MIN_TOTAL;
-  document.getElementById('f-pricebox').innerHTML=
+  const pbx=document.getElementById('f-pricebox'); if(!pbx) return;
+  pbx.innerHTML=
     `${under?`<div class="tr" style="color:#b5372a;font-weight:700">
        <span>Below the £${CONFIG.MIN_TOTAL} order minimum</span><span></span></div>`:''}
     <div class="tr"><span>Net total${net()<rrp()?` <span style="color:var(--quiet);font-size:12.5px">(RRP £${rrp().toFixed(2)})</span>`:''}</span><span>£${net().toFixed(2)}</span></div>
@@ -2059,6 +2062,11 @@ function applyQuickChrome(){
   const pos=document.getElementById('f-position');
   if(pos){const l=pos.previousElementSibling;
     if(l&&l.classList.contains('fld')) l.innerHTML=l.innerHTML.replace('<span class="req">*</span>','<span class="opt">(optional)</span>');}
+  /* Pricing is the commercial moment and belongs on BOTH forms (G-13 checks
+     it). Fact Find keeps it with the recommendation; Quick Audit has no
+     recommendation, so it moves under the marks before that section goes. */
+  const pb=document.getElementById('f-priceblock'),ms=document.querySelector('[data-sec="marks"]');
+  if(pb&&ms) ms.appendChild(pb);
   /* Sections not on this form must never show, whatever the state says. */
   document.querySelectorAll('[data-sec]').forEach(el=>{
     if(!inForm(el.getAttribute('data-sec'))) el.remove();});
