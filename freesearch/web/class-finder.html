@@ -98,7 +98,10 @@ h2{font-size:31px;font-weight:800;letter-spacing:-.8px;margin:8px 0 10px;
 @media(max-width:820px){
   .panes{grid-template-columns:1fr}
   .list{height:auto;max-height:360px;border-right:0;border-bottom:1px solid var(--line)}
-  .detail{height:auto;min-height:320px}
+  /* Both panes stay capped and scroll on a phone. Left unbounded, a class with
+     40 terms made the widget 3,000px tall, and embedded in a page that grows
+     the host iframe to match — the classes page reported exactly that. */
+  .detail{height:auto;max-height:460px;min-height:320px;overflow-y:auto}
   h2{font-size:25px}
   .head{padding:24px 20px 20px} .detail{padding:22px 20px 26px} .foot{padding:18px 20px}
 }
