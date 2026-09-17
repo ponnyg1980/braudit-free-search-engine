@@ -75,6 +75,15 @@ _PAGES = {
     # Classes & Terms when opened from Zoho, or emailed as a CSV to a new
     # Class Tools lead from the public site).
     '/class-builder': 'free-search.html',
+    # One URL per class tool (Jonathan, 17 Sep): the Goods and Services
+    # Classes page lists the four tools, and each card should land IN its
+    # tool rather than in the list of four. Same file again — the page reads
+    # the slug, opens that tool on the classes screen and titles itself
+    # "Trademark Class Builder - <tool>". The other three stay one click away.
+    '/class-builder/existing-trademark': 'free-search.html',
+    '/class-builder/my-company': 'free-search.html',
+    '/class-builder/describe-business': 'free-search.html',
+    '/class-builder/my-website': 'free-search.html',
     # Full search report at a unique URL (Jonathan, 21 Aug): the emailed
     # Free/Quick Search reports link here; the page renders the COMPLETE
     # stored result (all flagged marks) in the Sector-Report design and
@@ -85,6 +94,11 @@ _PAGES = {
     # Same file, AI panel switched on by the pathname (Jonathan, 28 Aug) —
     # one page, two routes, so the plain and AI tools cannot drift apart.
     '/class-assistant-ai': 'class-assistant.html',
+    # Keyword class finder (Jonathan, 17 Sep): the public, browse-only layer
+    # for the Goods and Services Classes page. Type what you sell, see the
+    # classes and the wording real businesses filed. No email, nothing saved —
+    # ticking classes hands off to /class-builder?classes= to keep a list.
+    '/class-finder': 'class-finder.html',
     '/search-bar': 'search-bar.html',
     '/search-box': 'search-box.html',          # compact drop-anywhere entry point
     # free-search.html's CONFIG.BRAND_AUDIT_URL points at '/brand-audit/', so
@@ -1281,6 +1295,22 @@ class _Handler(BaseHTTPRequestHandler):
         if path == '/nuggets':
             from .nuggets import payload as _nug
             self._send({'ok': True, 'nuggets': _nug()})
+            return
+        if path == '/class-search':
+            # Keyword -> classes for the public finder on the Goods and
+            # Services Classes page (Jonathan, 17 Sep). GET, because it is a
+            # lookup: no email, no session, nothing written. Keeping a list is
+            # the Class Builder's job — the finder hands off to it by URL.
+            try:
+                try:
+                    from . import class_finder      # package context (Render)
+                except ImportError:
+                    import class_finder             # bare-script context
+                out = class_finder.handle(params)
+            except Exception as e:                  # degrade loudly, JSON-shaped
+                out = {'ok': False, 'error': f'class-search failed: {e}',
+                       'status': 500}
+            self._send(out, out.get('status', 200))
             return
         if path == '/jurisdictions':
             out = handle_jurisdictions()
