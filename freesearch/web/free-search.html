@@ -2184,10 +2184,17 @@ function go(id){
     document.getElementById('tick-name').classList.add('on');
     // The first real decision — this is what mints the session (see
     // ensureSession()). Everything before this point was a blank visit.
-    logEvent('name_submitted',QUICK?'classes':'marks',{name:state.name},true);
+    logEvent('name_submitted',(QUICK||BUILDER)?'classes':'marks',{name:state.name},true);
     // Quick mode: the name IS the word mark and jurisdictions keep their
     // defaults (UK now, no plans) — straight to classes.
     if(QUICK){ pushScreen('classes'); return; }
+    // Builder mode, same reason and one more (Jonathan, 17 Sep): the builder
+    // runs no register search, so the Searches screen has nothing to collect —
+    // no logo, no tagline, no jurisdictions. Its STEP_ORDER has said
+    // Name -> Classes -> Review since 21 Aug and its progress bar shows that,
+    // but this button was still sending it to 'marks', so the builder opened
+    // on a screen that is not in its own flow. Straight to classes.
+    if(BUILDER){ pushScreen('classes'); return; }
   } else {
     logEvent('screen_enter',id,{},false);
   }
