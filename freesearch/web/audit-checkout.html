@@ -875,9 +875,23 @@ function renderClasses(){
   rows.innerHTML=state.scope.map((r,i)=>`
     <div class="ac-clsrow"><div class="h"><span class="n">Class ${r.n}</span> &mdash; ${NICE[r.n]||''}</div>
       ${r.heading?`<div class="sub" style="margin-top:2px">${r.heading}</div>`:''}
-      <textarea id="cls-t-${i}" placeholder="Goods &amp; services wording for class ${r.n}">${(r.terms||[]).join('\n')}</textarea>
+      <textarea id="cls-t-${i}" placeholder="Goods &amp; services wording for class ${r.n} &mdash; terms separated by &quot;; &quot;">${fmtTerms(r.terms)}</textarea>
     </div>`).join('');
 }
+/* TERM FORMAT (Jonathan, 17 Sep 2026) -- the ONE rule, identical to the
+   journey's fmtTerms and to Zoho Specific_Terms: Capitalised, de-duplicated,
+   "; "-joined, ONE line per class. Shown = stored. */
+function parseTerms(s){
+  const seen={},out=[];
+  String(s||'').split(/[;\n]+/).forEach(x=>{
+    let v=x.replace(/\s+/g,' ').trim().replace(/[;.\s]+$/,'');
+    if(!v) return;
+    v=v.charAt(0).toUpperCase()+v.slice(1);
+    const k=v.toLowerCase(); if(seen[k]) return; seen[k]=1; out.push(v);
+  });
+  return out;
+}
+function fmtTerms(list){return parseTerms(Array.isArray(list)?list.join('\n'):list).join('; ');}
 let TOOLS_TOKEN='';
 function openClassTools(){
   TOOLS_TOKEN='t'+Math.random().toString(36).slice(2);
@@ -912,8 +926,8 @@ function collectTermEdits(){
   state.scope.forEach((r,i)=>{
     const ta=document.getElementById('cls-t-'+i);
     if(!ta)return;
-    const edited=ta.value.split('\n').map(s=>s.trim()).filter(Boolean);
-    if(edited.join('\n')!==(r.terms||[]).join('\n'))r.terms_source='Custom Edited';
+    const edited=parseTerms(ta.value);
+    if(edited.join('; ')!==fmtTerms(r.terms))r.terms_source='Custom Edited';
     r.terms=edited;
   });
 }
@@ -1063,8 +1077,8 @@ function pushScope(){
     const rec=state.platforms[g][k];
     if(rec&&rec.on&&rec.url)exclusions.push({type:'URL',value:rec.url,match_mode:'Exact'});
   });
-  const scope=state.scope.map(r=>({n:r.n,heading:r.heading||'',
-    terms_source:r.terms_source||'Approved',terms_text:(r.terms||[]).join('\n')}));
+  const scope=state.scope.map((r,idx)=>({n:r.n,heading:r.heading||'',
+    terms_source:r.terms_source||'Approved',terms_text:fmtTerms(r.terms),display_order:idx+1}));
   const desc=['Brand Audit in progress — captured from the website form.',
     'Mark: '+state.name,
     state.tagline?'Tagline: '+state.tagline:'',
