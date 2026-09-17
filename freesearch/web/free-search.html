@@ -2262,7 +2262,9 @@ function removeClass(n){n=+n;state.classes=state.classes.filter(x=>x!==n);render
 function renderBasket(){const b=document.getElementById('cls-basket');
   b.innerHTML=state.classes.length?state.classes.map(n=>
     `<span class="chip">Class ${n} \u00b7 ${NICE[n]} <span class="x" onclick="removeClass(${n})">\u00d7</span></span>`).join('')
-    :'<span class="sub">Nothing picked yet. Search on the left, or try one of the four tools below.</span>';
+    :'<span class="sub">Nothing picked yet. Search on the left, or '+
+      (ONLY_TOOL?('use '+ONLY_TOOL.name.charAt(0).toLowerCase()+ONLY_TOOL.name.slice(1)+' below.')
+               :'try one of the four tools below.')+'</span>';
   const n=state.classes.length;
   const label=n?(n+(n===1?' class picked':' classes picked')):'';
   ['cls-count','cls-count-top'].forEach(function(id){
