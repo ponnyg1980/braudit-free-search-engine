@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Goods and services classes &mdash; The Trademark Helpline</title>
+<meta name="description" content="Your trademark protects your name only for the goods and services you claimed. Four free ways to work out your classes and terms, using wording from real UK registrations.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* MOCKUP of the WordPress page that will live at
+   /trademark-goods-and-services-classifications/ (Jonathan, 17 Sep 2026).
+   Served from the engine so the real tools are embedded rather than drawn:
+   the class finder below is the live /class-finder widget in an iframe, and
+   the four route cards link to the four live class-builder tool URLs. The
+   design source stays "Goods and Services Classes.dc.html". */
+:root{
+  --navy:#2D455A; --navy-d:#1c2d3b; --pink:#E51652; --pink-h:#c9134a;
+  --tint:#FDE7EE; --pink-on-navy:#FFB3C7; --ink:#1D1D1B; --slate:#3f4c58;
+  --muted:#617383; --faint:#96A2AC; --bg:#F7F8FA; --line:#E6E9ED;
+  --ui:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:var(--ink);font-family:var(--ui);-webkit-font-smoothing:antialiased}
+a{color:var(--pink)} a:hover{color:var(--pink-h)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+.narrow{max-width:760px;margin:0 auto;padding:0 28px}
+.eyebrow{font-family:'Public Sans',var(--ui);font-size:12px;font-weight:800;
+  letter-spacing:1.4px;text-transform:uppercase;color:var(--pink)}
+h1{font-size:clamp(32px,3.6vw,42px);line-height:1.06;font-weight:800;letter-spacing:-1.1px;
+  margin:10px 0 14px;text-wrap:balance}
+h2{font-size:31px;font-weight:800;letter-spacing:-.8px;margin:0 0 20px;text-wrap:balance}
+h3{font-size:22px;font-weight:800;letter-spacing:-.4px;margin:0 0 12px}
+p{text-wrap:pretty}
+.lead{font-size:17.5px;line-height:1.55;color:var(--slate);margin:0 0 22px;max-width:580px}
+.body{font-size:18px;line-height:1.7;color:var(--slate);margin:0 0 18px}
+.btn{display:inline-block;background:var(--pink);color:#fff;border-radius:10px;padding:15px 22px;
+  font-size:16px;font-weight:700;text-decoration:none;transition:background .15s ease}
+.btn:hover{background:var(--pink-h);color:#fff}
+.btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--navy);
+  transition:background .15s ease,color .15s ease}
+.btn.ghost:hover{background:var(--navy);color:#fff}
+.card{border:1px solid var(--line);border-radius:16px;padding:28px 30px;background:#fff}
+.hero{background:var(--bg);border-bottom:1px solid var(--line)}
+.hero-in{max-width:1180px;margin:0 auto;padding:40px 28px 44px;display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px;align-items:center}
+.grid45{display:grid;grid-template-columns:repeat(7,34px);gap:6px}
+.cell{height:34px;border-radius:8px;background:#fff;border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Public Sans',var(--ui);font-size:12.5px;font-weight:700;color:#8b99a5}
+.cell.on{background:var(--pink);border-color:var(--pink);color:#fff}
+.navyband{background:var(--navy);margin-top:64px;padding:66px 0 70px}
+.stat{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+  border-radius:18px;padding:30px 28px}
+.statn{font-family:'Public Sans',var(--ui);font-weight:800;color:#fff;line-height:1}
+.routes{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;
+  max-width:900px;margin:0 auto}
+.route{border:1px solid var(--line);border-radius:16px;padding:26px 26px 28px;
+  display:flex;flex-direction:column;transition:transform .18s ease,box-shadow .18s ease}
+.route:hover{transform:scale(1.035);box-shadow:0 14px 34px rgba(45,69,90,.13)}
+.badge{font-family:'Public Sans',var(--ui);font-size:10.5px;font-weight:800;letter-spacing:1px;
+  text-transform:uppercase;color:#fff;background:var(--navy);border-radius:99px;padding:5px 11px}
+.badge.acc{background:var(--pink)}
+.routecta{margin-top:auto;align-self:flex-start;background:#fff;color:var(--pink);
+  border:1.5px solid var(--pink);border-radius:10px;padding:11px 18px;font-size:15px;
+  font-weight:700;text-decoration:none;transition:background .15s ease,color .15s ease}
+.routecta:hover{background:var(--pink);color:#fff}
+.faq{border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.faq button{width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);
+  padding:20px 24px;font-family:inherit;font-size:17px;font-weight:700;color:var(--ink);
+  cursor:pointer;display:flex;gap:16px;align-items:center;transition:background .12s ease}
+.faq button:first-child{border-top:0}
+.faq button:hover{background:#FBFCFD}
+.faq .q{flex:1}
+.faq .pm{color:var(--pink);font-size:22px;font-weight:800;line-height:1}
+.faq .a{padding:0 24px 20px;display:none}
+.faq .a.open{display:block}
+.faq .a p{font-size:16.5px;line-height:1.68;color:var(--slate);margin:0 0 12px}
+.finder{width:100%;border:0;display:block;border-radius:20px}
+.note{font-size:13.5px;line-height:1.6;color:var(--faint);margin:14px 2px 0}
+@media(max-width:700px){
+  h1{font-size:30px} h2{font-size:25px}
+  .hero-in{padding:30px 20px 34px} .wrap,.narrow{padding:0 20px}
+}
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-in">
+    <div>
+      <div class="eyebrow">Goods and services classes</div>
+      <h1>The part of your trademark most people get wrong</h1>
+      <p class="lead">Your trademark does not protect your name. It protects your name for the
+        specific goods and services you claimed when you filed. Get those wrong and you own a
+        right that does not cover what you actually sell. Four free ways to work out yours,
+        none longer than a few minutes.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn" href="/class-builder">Build my classes</a>
+        <a class="btn ghost" href="https://link.cerebrumai.io/widget/booking/ETUyDA6n6q2ppSYZGVQD">Talk it through with us</a>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:center">
+      <div style="position:relative;width:440px;max-width:100%;height:296px">
+        <div class="grid45" id="grid45"></div>
+        <img src="/brand/temmy/clean/flashlight-beam.png" alt=""
+             style="position:absolute;left:272px;top:125px;width:158px;height:auto;display:block">
+        <div style="position:absolute;left:50px;top:110px;width:176px;background:#fff;
+             border:1.5px solid #6B7A86;border-radius:13px;box-shadow:0 14px 34px rgba(45,69,90,.2);
+             padding:15px 17px 16px">
+          <span style="position:absolute;right:-7px;top:50%;width:12px;height:12px;background:#fff;
+                border-top:1.5px solid #6B7A86;border-right:1.5px solid #6B7A86;
+                transform:translateY(-50%) rotate(45deg);display:block"></span>
+          <div style="font-family:'Public Sans',sans-serif;font-size:11px;font-weight:800;
+               letter-spacing:1.3px;text-transform:uppercase;color:#E51652;margin-bottom:9px">Class 35</div>
+          <div style="display:flex;flex-direction:column;gap:7px">
+            <span style="font-size:15px;font-weight:600">Retail</span>
+            <span style="font-size:15px;font-weight:600">Advertising</span>
+            <span style="font-size:15px;font-weight:600">Marketing</span>
+            <span style="font-size:15px;font-weight:600">Business services</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WHY IT MATTERS -->
+<div class="narrow" style="padding-top:68px">
+  <h2>Why this matters more than the name</h2>
+  <p class="body">Most people choose a name carefully and then pick classes in the last two
+    minutes before paying.</p>
+  <p class="body">It is the wrong way round. The name is what you are protecting. The classes and
+    terms are <em>the protection itself</em>. A registration is not a fence around your brand, it
+    is a fence around your brand in the categories you named, and nowhere else.</p>
+  <p class="body">There are 45 classes in total: 34 for goods, 11 for services. Within each class
+    you choose specific terms, and those terms are what you would actually rely on in a dispute.
+    Classes are broad. Terms are the detail. Both carry weight.</p>
+  <p style="font-size:19px;line-height:1.65;color:var(--ink);font-weight:800;margin:26px 0 14px;
+     letter-spacing:-.3px">And the mistake that costs the most: you cannot add to a filed application.</p>
+  <p class="body">You can remove classes and terms before or after registration. You cannot add
+    them. If you file in Class 25 and later realise you needed Class 35 as well, the only route is
+    an entirely new application, with a new fee and a new waiting period, while the gap sits open
+    in the meantime.</p>
+  <p class="body" style="margin-bottom:0">That is why this page exists, and why we would rather you
+    spent ten minutes here than ten minutes guessing.</p>
+</div>
+
+<!-- THE LIVE FINDER -->
+<div class="wrap" style="padding-top:58px">
+  <iframe class="finder" id="finder" src="/class-finder" title="Find your trademark class"
+          style="height:1250px" loading="lazy"></iframe>
+  <p class="note">Counts come from marks registered at the UK IPO in the last five years, rebuilt
+    quarterly. Browsing is free and takes no sign up.</p>
+</div>
+
+<!-- FOUR ROUTES -->
+<div class="wrap" style="padding-top:62px">
+  <div style="display:flex;align-items:flex-start;gap:22px;flex-wrap:wrap;margin-bottom:26px">
+    <img src="/brand/temmy/clean/smiling.png" alt="" style="width:96px;height:auto;display:block">
+    <div style="flex:1;min-width:300px">
+      <h2 style="margin-bottom:8px">Four <span style="text-decoration:underline;
+        text-decoration-color:#E51652;text-decoration-thickness:3px;
+        text-underline-offset:4px">FREE</span> ways to build your Goods &amp; Services, Classes and Terms</h2>
+      <p style="font-size:17px;line-height:1.62;color:var(--slate);margin:0;max-width:680px">All four
+        are free, and they all live in the same place. Start with whichever you already have.</p>
+    </div>
+  </div>
+  <div class="routes" id="routes"></div>
+  <div style="margin-top:20px;display:flex;justify-content:center">
+    <a class="btn" href="/class-builder" style="padding:17px 32px;font-size:16.5px">Open the class builder</a>
+  </div>
+</div>
+
+<!-- WHY OUR TOOLS DO NOT INVENT TERMS -->
+<div class="navyband">
+  <div class="wrap">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:44px;align-items:start">
+      <div>
+        <div class="eyebrow" style="color:var(--pink-on-navy)">Why our tools do not invent terms</div>
+        <h2 style="font-size:35px;line-height:1.16;margin:12px 0 22px;color:#fff">Every term we
+          suggest has already been accepted by the UK IPO</h2>
+        <p style="font-size:17.5px;line-height:1.68;color:#dce3e9;margin:0 0 18px">If you ask a
+          general AI tool to write your goods and services, it will produce something plausible.
+          That is what those tools do. The problem is that plausible is not the same as acceptable,
+          and an examiner will tell you the difference several weeks later, after you have paid.</p>
+        <p style="font-size:17.5px;line-height:1.68;color:#dce3e9;margin:0 0 18px">Our tools cannot
+          do that, and not because we have asked them nicely.</p>
+        <p style="font-size:17.5px;line-height:1.68;color:#dce3e9;margin:0 0 18px">They do not write
+          terms at all. They select from a list of terms taken from real UK trademark registrations,
+          every mark registered at the UK IPO in the last five years, and growing. The tool can only
+          hand you something that a real business has already filed and the IPO has already accepted.</p>
+        <p style="font-size:17.5px;line-height:1.68;color:#dce3e9;margin:0 0 18px">One deliberate
+          choice sits behind that. We count only marks that reached
+          <strong style="color:#fff">registration</strong>, because a refused application is not
+          evidence of anything. A term that appears here survived examination on somebody else's
+          application.</p>
+        <p style="font-size:17.5px;line-height:1.68;color:#dce3e9;margin:0 0 24px">We look back five
+          years rather than further because examination practice moves. A term accepted a decade ago
+          is weak evidence about what will be accepted now, and the set is rebuilt quarterly so it
+          keeps pace.</p>
+        <div style="border-left:3px solid var(--pink);padding:4px 0 4px 20px">
+          <p style="font-size:17.5px;line-height:1.66;color:#fff;margin:0"><strong>One thing it means
+            in practice:</strong> when the tool shows you a term, it can tell you how many marks in
+            your sector use it. That is not a machine's opinion. It is a count.</p>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="stat">
+          <div class="statn" style="font-size:52px;letter-spacing:-2px">over 680,000</div>
+          <div style="font-size:16px;line-height:1.55;color:#c7d2dc;margin-top:10px">registered UK
+            marks behind the suggestions, from the last five years and growing</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="stat" style="padding:24px 22px">
+            <div class="statn" style="font-size:36px;letter-spacing:-1.2px">45</div>
+            <div style="font-size:15px;line-height:1.5;color:#c7d2dc;margin-top:8px">classes, 34 goods and 11 services</div>
+          </div>
+          <div class="stat" style="padding:24px 22px">
+            <div class="statn" style="font-size:36px;letter-spacing:-1.2px">13,007</div>
+            <div style="font-size:15px;line-height:1.5;color:#c7d2dc;margin-top:8px">verified terms you can choose from</div>
+          </div>
+        </div>
+        <div class="stat" style="padding:26px 28px">
+          <div style="font-family:'Public Sans',sans-serif;font-size:11px;font-weight:800;
+               letter-spacing:1.3px;text-transform:uppercase;color:var(--pink-on-navy);
+               margin-bottom:14px">How we label a suggestion</div>
+          <div style="display:flex;flex-direction:column;gap:11px" id="bands"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WHAT THEY ARE NOT -->
+<div class="narrow" style="padding-top:70px">
+  <h2>What these tools are, and what they are not</h2>
+  <p class="body">These are guidance tools and they are free. They will get you a long way, and for
+    a straightforward business they may well get you all the way.</p>
+  <p class="body">What they cannot do is know your plans.</p>
+  <p class="body">They cannot see that you are launching a second product line next spring, that you
+    licence your name to a distributor in Ireland, or that the thing you most need to protect is a
+    service you have not started selling yet. Those decisions change the answer, and they come from
+    a conversation rather than a dataset.</p>
+  <p class="body">So the tools do the heavy lifting and narrow the field. Before you commit money to
+    an application, we would always recommend a
+    <a href="https://www.thetrademarkhelpline.com/trademark-consultation-and-audit/"
+       style="font-weight:700">trademark consultation and audit</a>, where somebody looks at your
+    business and signs off the classes and terms with you.</p>
+  <p class="body" style="margin-bottom:0">You are welcome to use the tools and file elsewhere. They
+    are free either way.</p>
+</div>
+
+<!-- OVERSEAS -->
+<div class="wrap" style="padding-top:70px">
+  <div style="display:flex;align-items:flex-start;gap:22px;flex-wrap:wrap;margin-bottom:28px">
+    <div style="flex:1;min-width:300px">
+      <h2 style="margin-bottom:10px">Classes and terms in other countries</h2>
+      <p style="font-size:17.5px;line-height:1.62;color:var(--slate);margin:0;max-width:680px">Two
+        routes exist for filing abroad, and classes and terms do not travel cleanly down either of them.</p>
+    </div>
+    <img src="/brand/temmy/clean/flying.png" alt="" style="width:146px;height:auto;display:block">
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin-bottom:22px">
+    <div class="card">
+      <div class="eyebrow" style="font-size:11px;letter-spacing:1.3px;margin-bottom:10px">Route one</div>
+      <h3>The Madrid Protocol</h3>
+      <p style="font-size:16.5px;line-height:1.65;color:var(--slate);margin:0">Through WIPO, one
+        international application that designates the countries you want. We have written about the
+        trade-off in more detail in our piece on
+        <a href="https://www.thetrademarkhelpline.com/news/jersey-uk-international-trademark-registration/"
+           style="font-weight:700">the Madrid Protocol</a>.</p>
+    </div>
+    <div class="card">
+      <div class="eyebrow" style="font-size:11px;letter-spacing:1.3px;margin-bottom:10px">Route two</div>
+      <h3>Directly to each local office</h3>
+      <p style="font-size:16.5px;line-height:1.65;color:var(--slate);margin:0">Applying country by
+        country, through a trademark attorney or solicitor in each one. More moving parts, and more
+        local knowledge behind each filing.</p>
+    </div>
+  </div>
+  <div style="background:var(--bg);border:1px solid var(--line);border-radius:18px;padding:32px 34px">
+    <p style="font-size:17.5px;line-height:1.68;color:var(--slate);margin:0 0 16px">What both routes
+      share is that every office has its own quirks about what wording it will accept, how specific
+      it expects you to be, and what it charges. A specification that sails through in the UK can
+      attract an objection elsewhere for reasons that have nothing to do with your business.</p>
+    <p style="font-size:17.5px;line-height:1.68;color:var(--ink);margin:0 0 16px;font-weight:700">Our
+      view is that there is no substitute for local expertise.</p>
+    <p style="font-size:17.5px;line-height:1.68;color:var(--slate);margin:0 0 16px">A local
+      representative avoids the small mistakes that cause objections, and if your application is
+      opposed they are already appointed, already familiar with the file, and able to handle it.
+      That generally means a higher success rate, less delay, and less money spent fixing things.</p>
+    <p style="font-size:17.5px;line-height:1.68;color:var(--slate);margin:0 0 16px">The difficulty is
+      that finding, appointing and managing representatives across several countries is a real job in
+      itself, and one most businesses would rather not take on.</p>
+    <p style="font-size:17.5px;line-height:1.68;color:var(--slate);margin:0 0 22px">That is where we
+      come in. We have an established network of trusted representatives around the world. Because we
+      introduce and manage the client and prepare the legal paperwork ourselves, they extend their
+      rates to us at a discount, which means <strong style="color:var(--ink)">using us costs you no
+      more than going to them directly</strong>. You get local expertise in each country, and one
+      point of contact in the UK, without paying extra for the privilege.</p>
+    <a class="btn" href="https://www.thetrademarkhelpline.com/make-an-enquiry/">Talk to us about filing abroad</a>
+  </div>
+</div>
+
+<!-- FAQS -->
+<div style="max-width:880px;margin:0 auto;padding:72px 28px 0">
+  <div style="display:flex;align-items:flex-start;gap:22px;flex-wrap:wrap;margin-bottom:26px">
+    <img src="/brand/temmy/clean/listening.png" alt="" style="width:92px;height:auto;display:block">
+    <div style="flex:1;min-width:280px">
+      <h2 style="margin-bottom:8px">Common questions</h2>
+      <p style="font-size:17px;line-height:1.6;color:var(--muted);margin:0">The eight we get asked
+        most about classes and terms.</p>
+    </div>
+  </div>
+  <div class="faq" id="faq"></div>
+</div>
+
+<!-- CLOSE -->
+<div class="wrap" style="padding-top:72px;padding-bottom:90px">
+  <div style="background:var(--bg);border:1px solid var(--line);border-radius:20px;padding:44px 46px;
+       display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:36px;align-items:center">
+    <div>
+      <h2 style="font-size:32px;margin-bottom:12px">Not sure you have got it right?</h2>
+      <p style="font-size:17.5px;line-height:1.65;color:var(--slate);margin:0 0 26px;max-width:620px">The
+        tools are free and take a few minutes. If you would rather have somebody look at your actual
+        business before you spend anything on an application, a trademark consultation and audit does
+        exactly that.</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+        <a class="btn" href="/class-builder" style="padding:17px 28px;font-size:16.5px">Build my classes, free</a>
+        <a class="btn ghost" href="https://link.cerebrumai.io/widget/booking/ETUyDA6n6q2ppSYZGVQD"
+           style="padding:17px 28px;font-size:16.5px">Book a free 15-minute call</a>
+      </div>
+      <p style="font-size:16px;color:var(--muted);margin:20px 0 0">Or call
+        <strong style="color:var(--navy)">0161 833 5400</strong>.</p>
+    </div>
+    <img src="/brand/temmy/clean/approval.png" alt=""
+         style="width:100%;max-width:140px;height:auto;display:block;justify-self:center">
+  </div>
+</div>
+
+<script>
+/* The 45-class grid: a few lit cells so it reads as "45 classes, you need a
+   handful", with 35 lit because the callout beside it is Class 35. */
+const LIT = [5, 9, 25, 30, 35, 41, 42];
+document.getElementById('grid45').innerHTML =
+  Array.from({length:45}, (_,i)=>i+1)
+    .map(n=>`<div class="cell${LIT.includes(n)?' on':''}">${n}</div>`).join('');
+
+/* Bands, matching the live class_finder.py thresholds exactly. If those move,
+   move these in the same commit. */
+const BANDS=[['always','30%+ of registered marks in that class',1],
+             ['most','12%+',.72],['some','4%+',.48],['a few','under 4%',.28]];
+document.getElementById('bands').innerHTML = BANDS.map(([l,h,op])=>
+  `<div style="display:flex;align-items:baseline;gap:12px">
+     <span style="font-family:'Public Sans',sans-serif;font-size:11px;font-weight:800;
+       letter-spacing:.9px;text-transform:uppercase;color:#fff;opacity:${op};min-width:64px">${l}</span>
+     <span style="font-size:14.5px;color:#c7d2dc;line-height:1.45">${h}</span>
+   </div>`).join('');
+
+/* The four tools, each on its own URL. */
+const CB='/class-builder/';
+const ROUTES=[
+ {n:'1',badge:'Most accurate',acc:true,t:'Copy a trademark that already works',
+  w:'Best if you know a direct competitor, or already own a trademark.',
+  d:'Search the UK register, find the mark, and take its classes and terms as your starting point. If a competitor has traded in your sector for years with a registration that has survived, their specification is a well-tested map of your sector.',
+  href:CB+'existing-trademark',cta:'Start from a trademark'},
+ {n:'2',badge:'Companies House UK',t:'Start from your company',
+  w:'Best if you want to see what your whole industry does.',
+  d:'Find your own company or a competitor’s, and we match it against every UK registration in that sector. You are not being told what to file. You are being shown what businesses like yours actually did.',
+  href:CB+'my-company',cta:'Start from my company'},
+ {n:'3',badge:'Free AI tool',ai:true,t:'Answer a few questions',
+  w:'Best if you are pre-launch, or your site does not tell the whole story.',
+  d:'No URL, no competitor in mind. Answer a short series of plain questions about what you sell and who you sell it to, and the tool builds your classes and terms from the answers.',
+  href:CB+'describe-business',cta:'Answer the questions'},
+ {n:'4',badge:'Free AI tool',ai:true,t:'Let us read your website',
+  w:'Best if your site already describes what you sell.',
+  d:'Give us your URL, or a competitor’s, and the tool reads the site, comes back with a few short questions to fill the gaps, then proposes classes and terms. Most businesses describe themselves better on their own website than from a standing start in a form.',
+  href:CB+'my-website',cta:'Read my website'}];
+document.getElementById('routes').innerHTML = ROUTES.map(r=>`
+  <div class="route">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <span style="font-family:'Public Sans',sans-serif;font-size:12px;font-weight:800;
+        letter-spacing:1.2px;color:#E51652">${r.n}</span>
+      <span class="badge${r.acc?' acc':''}">${r.badge}</span>
+      ${r.ai?'<img src="/brand/temmy-ai-bot.svg" alt="" style="width:30px;height:30px;display:block">':''}
+    </div>
+    <h3 style="font-size:20px;margin:0 0 8px;line-height:1.28">${r.t}</h3>
+    <p style="font-size:15px;line-height:1.5;color:#2D455A;font-weight:700;margin:0 0 12px">${r.w}</p>
+    <p style="font-size:15.5px;line-height:1.6;color:#617383;margin:0 0 18px">${r.d}</p>
+    <a class="routecta" href="${r.href}">${r.cta}</a>
+  </div>`).join('');
+
+const FAQS=[
+ ['What are trademark classes, and which ones do I actually need?',
+  ['There are 45 classes: 34 covering goods, 35 to 45 covering services. Your registration protects your name only in the classes you choose, and only for the specific terms you list inside them.',
+   'The right answer is what you sell now, plus where you are realistically heading in the next few years. That is a commercial judgement more than a legal one, which is why a tool can narrow it down but a conversation settles it. Most businesses need between one and five.']],
+ ['How many classes are there, and how many should I file in?',
+  ['Forty-five. A typical application covers three to five.',
+   'Filing in all 45 is not thoroughness, it is a problem. A registration you have no intention of using across the board can be challenged, and after five years unused classes can be stripped out on a non-use application. Claim what you sell and where you are genuinely heading.']],
+ ['Can I add a class or a term after I have filed?',
+  ['No, and this is the one that costs people money.',
+   'You can remove classes and terms at any point, before or after registration. You cannot add them. If you need a class you did not file for, it is an entirely new application with a new fee and a new timeline, and your protection in that class starts from the new filing date rather than the original one.',
+   'It is the single strongest reason to spend time on this before you pay rather than after.']],
+ ['What is the difference between a class and a term?',
+  ['A class is the broad category. A term is the specific wording inside it.',
+   'Class 25 is clothing. “T-shirts”, “footwear” and “hats” are terms within it. The class gets you into the right area; the terms are what you would actually point at in a dispute. Two businesses can both hold a Class 25 registration and be protecting quite different things.']],
+ ['What is the most common classes mistake you see?',
+  ['People protect what they make and forget where they sell it.',
+   'A coffee shop needs Class 30 for the coffee, and Class 35 for the retail. A clothing brand selling through its own website often needs Class 25 and Class 35. The goods are the obvious part; the selling is the part that gets left out and it is frequently where the copying happens.']],
+ ['Can I just use ChatGPT to pick my classes and terms?',
+  ['You can, and it will give you a confident answer. The difficulty is that general AI tools write terms rather than selecting them, and a term that reads convincingly is not necessarily one the IPO will accept. You find out weeks later, after paying.',
+   'Our tools work the other way round. They select from terms taken from real UK registrations and cannot return anything that has not already been accepted. That is a structural limit, not an instruction the model is asked to follow.']],
+ ['Do the free tools replace a consultation?',
+  ['No, and we would rather say so plainly.',
+   'They will get you most of the way, and for a straightforward business they may get you all the way. What they cannot do is account for plans that are not visible in your website or your company record, a product line launching next year, a licensing arrangement, a service you have not started selling. Before money goes on an application, we would always want a person to look at it.']],
+ ['Are classes the same in other countries?',
+  ['The class numbers are, largely. The 45-class Nice system is used internationally, so Class 25 is clothing in most places you would file.',
+   'What differs is the wording each office will accept inside those classes, how specific it expects you to be, and what it charges. A specification that passes in the UK can draw an objection elsewhere. That is why we use local representatives for overseas filings rather than submitting the same wording everywhere and hoping.']]];
+document.getElementById('faq').innerHTML = FAQS.map(([q,a],i)=>`
+  <button type="button" data-faq="${i}"><span class="q">${q}</span><span class="pm" id="pm-${i}">+</span></button>
+  <div class="a" id="a-${i}">${a.map(p=>`<p>${p}</p>`).join('')}</div>`).join('');
+document.getElementById('faq').addEventListener('click', e=>{
+  const b=e.target.closest('[data-faq]'); if(!b) return;
+  const i=b.dataset.faq, a=document.getElementById('a-'+i), open=a.classList.contains('open');
+  document.querySelectorAll('.faq .a').forEach(x=>x.classList.remove('open'));
+  document.querySelectorAll('.faq .pm').forEach(x=>x.textContent='+');
+  if(!open){ a.classList.add('open'); document.getElementById('pm-'+i).textContent='−'; }
+});
+
+/* The finder is the real widget in an iframe and reports its own height, the
+   same contract embed.js uses on the WordPress site. */
+window.addEventListener('message', e=>{
+  const h = e.data && e.data.brauditHeight;
+  if(h && Number(h) > 300) document.getElementById('finder').style.height = Number(h) + 'px';
+});
+</script>
+</body>
+</html>
