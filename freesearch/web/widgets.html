@@ -89,6 +89,10 @@
     <div class="grp">Register lookup</div>
     <a href="#lookup">8. Trademark / owner lookup</a>
 
+    <div class="grp">Staff order forms</div>
+    <a href="#fact-find">Audit Fact Find</a>
+    <a href="#quick-audit">Quick Audit</a>
+
     <div class="grp">Whole pages</div>
     <a href="#classes-page">Goods and services classes page</a>
     <a href="#report">Results page + emailed report</a>
@@ -377,6 +381,41 @@
       <a href="/class-builder/my-company">my company</a> &middot;
       <a href="/class-builder/describe-business">describe my business</a> &middot;
       <a href="/class-builder/my-website">my website</a></p>
+  </section>
+
+  <hr class="rule">
+  <p class="sechead">Staff order forms
+    <span style="font-weight:400;color:#8a9aa8">&mdash; internal, and deliberately not embeddable</span></p>
+
+  <section class="w" id="fact-find">
+    <h2>Audit Fact Find <span class="tag staff">Internal</span></h2>
+    <p class="what">The sales team's order form: a guided call workspace that takes an audit order
+      end to end, including the fact find, the consultation line, the qualifiers and multiple marks
+      on one order. It both CREATES and EDITS.</p>
+    <p class="use"><b>Who:</b> the sales team, on a call with the customer.
+      <b>Contains:</b> everything, fact find included.</p>
+    <p class="use"><b>Why there is no embed here.</b> These two are staff surfaces, not widgets.
+      They are token-gated (<code>?k=</code>), they carry pricing and a payment gate, and putting
+      one on a partner page would hand a customer the internal order form. Open them directly:</p>
+    <p class="use"><b>Open:</b> <a href="/staff-enquiry">/staff-enquiry</a> &middot;
+      sandboxed <a href="/staff-enquiry?demo=1">/staff-enquiry?demo=1</a><br>
+      <b>Edit an existing Deal:</b> <code>/staff-enquiry?deal=&lt;zoho deal id&gt;</code></p>
+  </section>
+
+  <section class="w" id="quick-audit">
+    <h2>Quick Audit <span class="tag staff">Internal</span></h2>
+    <p class="what">The same order form in its audit-schema-only mode: contact, marks, platforms,
+      billing, read-back. Built for loading audits quickly and in the right format, without the
+      fact find, the consultation line or the qualifiers.</p>
+    <p class="use"><b>Who:</b> Jonathan and admin. <b>Contains:</b> the audit schema only.</p>
+    <p class="use"><b>One file, two modes.</b> It is the same page as the Fact Find above, switched
+      by the path, so a change to the Deal shape changes both and they cannot drift. Quick mode adds
+      a recorded-payment route: payment already taken, with a date and a reference, which raises the
+      Xero invoice and marks it paid on that date. Transfers land on the Business current account,
+      Stripe payments on Stripe GBP.</p>
+    <p class="use"><b>Open:</b> <a href="/quick-audit">/quick-audit</a> &middot;
+      sandboxed <a href="/quick-audit?demo=1">/quick-audit?demo=1</a><br>
+      <b>Edit an existing Deal:</b> <code>/quick-audit?deal=&lt;zoho deal id&gt;</code></p>
   </section>
 
   <hr class="rule">
