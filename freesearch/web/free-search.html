@@ -354,8 +354,8 @@
   <section class="card s1" data-screen="search">
     <div>
       <div class="eyebrow" id="s1-eyebrow">Free trademark search</div>
-      <h1>What&rsquo;s the name you want to protect?</h1>
-      <p class="lead">Pop in your brand name and we&rsquo;ll check it against the UK register
+      <h1 id="s1-h1">What&rsquo;s the name you want to protect?</h1>
+      <p class="lead" id="s1-lead">Pop in your brand name and we&rsquo;ll check it against the UK register
         straight away. No sign up, and nothing to pay.</p>
       <input id="name" class="hero-in" type="text" autocomplete="off"
              placeholder="Type your Trademark Name and click Search">
@@ -1030,10 +1030,59 @@ if(QUICK){
   var _b=document.getElementById('s1-go'); if(_b)_b.textContent='Start quick UK search';
 }
 if(BUILDER){
-  var _n2=document.getElementById('s1-note');
-  if(_n2)_n2.textContent='Enter the brand name these classes and terms are for.';
+  /* Step-1 copy (Jonathan, 17 Sep): the builder is not a register search, so
+     the free-search promise ("we'll check it against the UK register") was
+     wrong here. One instruction, verbatim, and the lead and the note below
+     the field both go — they only repeated it. */
+  var _h2=document.getElementById('s1-h1');
+  if(_h2)_h2.textContent='Start by giving us a name for the brand you want to create classes and terms for.';
+  var _l2=document.getElementById('s1-lead'); if(_l2)_l2.classList.add('hidden');
+  var _n2=document.getElementById('s1-note'); if(_n2)_n2.classList.add('hidden');
   var _b2=document.getElementById('s1-go'); if(_b2)_b2.textContent='Choose my classes';
   var _e2=document.getElementById('s1-eyebrow'); if(_e2)_e2.textContent='Trademark Class Builder';
+}
+/* SINGLE-TOOL ROUTES (Jonathan, 17 Sep) — each class tool also answers on its
+   own URL, so the Goods and Services Classes page can link straight into one
+   rather than into the list of four. Same file, same builder, same step 1:
+   the route only decides which tool opens and what the eyebrow says.
+   The other three are offered back on a quiet line underneath, because "my
+   competitor is not registered" and "my site is a landing page" are both dead
+   ends on a page that shows one tool and nothing else. */
+const TOOLS={'existing-trademark':{opt:'5', name:'Use an existing trademark'},
+             'my-company':        {opt:'3', name:'Your company'},
+             'describe-business': {opt:'1', name:'Describe your business'},
+             'my-website':        {opt:'2', name:'Your website'}};
+const TOOL_SLUG=(location.pathname.match(/class-builder\/([a-z-]+)/)||[])[1]||'';
+const ONLY_TOOL=TOOLS[TOOL_SLUG]||null;
+if(ONLY_TOOL){
+  document.title='Trademark Class Builder — '+ONLY_TOOL.name+' — The Trademark Helpline';
+  var _e3=document.getElementById('s1-eyebrow');
+  if(_e3)_e3.textContent='Trademark Class Builder — '+ONLY_TOOL.name;
+}
+/* Applied once, the first time the classes screen is shown: open the chosen
+   tool, take the other three out of the list, and offer them back as links. */
+let TOOL_APPLIED=false;
+function applyToolMode(){
+  if(!ONLY_TOOL||TOOL_APPLIED) return;
+  const panel=document.getElementById('help-panel'); if(!panel) return;
+  TOOL_APPLIED=true;
+  panel.querySelectorAll('.opt-block.tool').forEach(b=>{
+    if(b.dataset.opt!==ONLY_TOOL.opt) b.classList.add('hidden');
+  });
+  const head=document.querySelector('.help-head h2');
+  if(head) head.textContent=ONLY_TOOL.name;
+  const sub=document.querySelector('.help-head .sub');
+  if(sub) sub.textContent='Use the tool to find your classes, or tick them yourself above. '+
+                          'Either way you can amend everything before you send.';
+  openHelp(ONLY_TOOL.opt);
+  const others=Object.keys(TOOLS).filter(s=>s!==TOOL_SLUG);
+  const foot=document.createElement('p');
+  foot.className='sub'; foot.style.marginTop='18px';
+  foot.innerHTML='Or try another way to find your classes: '+
+    others.map(s=>'<a href="/class-builder/'+s+'">'+TOOLS[s].name+'</a>').join(' &middot; ')+
+    ' &middot; <a href="/class-builder">all four together</a>';
+  foot.querySelectorAll('a').forEach(a=>{a.style.color='var(--pink)';a.style.fontWeight='700';});
+  panel.parentNode.insertBefore(foot,panel.nextSibling);
 }
 /* Embedded on the WordPress site the whole wizard lives in an iframe that
    embed.js resizes from brauditHeight messages (same contract as the compact
@@ -1106,6 +1155,7 @@ function renderScreen(id){
     else { syncResultsStaleness(); }
   }
   screen(id);
+  if(id==='classes') applyToolMode();
 }
 function snapshotInputs(){return JSON.stringify({classes:state.classes,now:state.now,plan:state.plan});}
 function syncResultsStaleness(){
