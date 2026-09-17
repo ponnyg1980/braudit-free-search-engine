@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from urllib.parse import parse_qs, urlparse
@@ -371,6 +372,51 @@ _ASSET_TYPES = {
     '.ico': 'image/x-icon',
     '.woff2': 'font/woff2', '.woff': 'font/woff',
 }
+
+
+_SANDBOX_HEADER = """<header class="top" style="background:#8a1332">
+  <div class="in">
+    <h1>Embeddable widgets &mdash; SANDBOX</h1>
+    <p>The same sheet as the live one, with every widget switched into demo mode.
+      Type anything you like: journey sessions run on the <b>demo</b> tenant, and the
+      server refuses that tenant at every Zoho, Xero and Stripe path, so nothing
+      reaches the CRM, no invoice is raised, no card is charged and no email is sent.
+      Each widget carries the striped DEMO banner so a sandbox can never be mistaken
+      for live. <a href="/widgets" style="color:#fff;font-weight:700">Live version of this sheet &rarr;</a></p>
+  </div>
+</header>"""
+
+
+def _widgets_sandbox() -> str:
+    """widgets.html, every embed switched to the demo tenant.
+
+    The ONE transform that matters is the tenant swap; if it does not fire the
+    caller must not serve the page (see the route). Everything else is chrome.
+    """
+    with open(os.path.join(_WEB, 'widgets.html'), encoding='utf-8') as f:
+        html = f.read()
+
+    # Both the live <script> tags and the escaped snippets carry this literally,
+    # so one replace updates what the page RUNS and what it tells you to COPY.
+    marker = 'data-tenant="tmh"'
+    swapped = html.replace(marker, 'data-tenant="demo" data-demo="1"')
+    if swapped == html:
+        raise RuntimeError('no embed tags found to sandbox — widgets.html changed shape')
+    html = swapped
+
+    head = re.search(r'<header class="top">.*?</header>', html, re.S)
+    if head:
+        html = html.replace(head.group(0), _SANDBOX_HEADER)
+    html = html.replace('<title>TMH embeddable widgets &amp; report — review page</title>',
+                        '<title>TMH embeddable widgets — SANDBOX</title>')
+    # The report pairing at the bottom frames stored sessions by id; those are
+    # real records, so say so rather than implying the whole sheet is sandboxed.
+    html = html.replace('<p class="sechead">What the client receives</p>',
+                        '<p class="sechead">What the client receives '
+                        '<span style="font-weight:400;color:#8a9aa8">'
+                        '&mdash; these two frames show stored real sessions, not demo ones'
+                        '</span></p>')
+    return html
 
 
 def _static(path: str):
@@ -1268,6 +1314,19 @@ class _Handler(BaseHTTPRequestHandler):
                     self._send_raw(f.read(), 'text/html; charset=utf-8')
             except OSError:
                 self._send({'ok': False, 'error': 'widget not found'}, 404)
+            return
+        if path == '/widgets-sandbox':
+            # The sandbox twin of /widgets (Jonathan, 17 Sep). GENERATED from
+            # widgets.html at request time rather than kept as a second file:
+            # one source, two documents, so a widget added to the live sheet
+            # appears in the sandbox sheet in the same commit and the two can
+            # never disagree about what exists.
+            try:
+                self._send_raw(_widgets_sandbox().encode(), 'text/html; charset=utf-8')
+            except Exception as exc:
+                # Fail CLOSED. A page that says "sandbox" while embedding live
+                # widgets would invite somebody to type a real enquiry into it.
+                self._send({'ok': False, 'error': f'sandbox sheet unavailable: {exc}'}, 500)
             return
         if path == '/embed.js':
             self._send_raw(_EMBED_JS.encode(), 'application/javascript')
