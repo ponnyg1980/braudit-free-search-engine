@@ -617,7 +617,18 @@ window.addEventListener('message',function(e){
   renderBrandClassBasket(); renderTermBasket(); onBrandFieldChange();
   setTimeout(closeClassTools,900);
 });
-function removeTerm(i){state.brandForm.terms.splice(i,1);renderTermBasket();onBrandFieldChange();}
+function removeTerm(i){
+  const gone=state.brandForm.terms[i];
+  state.brandForm.terms.splice(i,1);
+  /* The FINAL scope must not carry a term the visitor deleted (17 Sep): the
+     per-class rows from the builder are what Zoho writes, so prune them too. */
+  if(Array.isArray(state.brandForm.scope)&&gone!=null){
+    const g=String(gone).trim().toLowerCase();
+    state.brandForm.scope=state.brandForm.scope.map(r=>Object.assign({},r,
+      {terms:(r.terms||[]).filter(t=>String(t).trim().toLowerCase()!==g),
+       terms_source:'Custom Edited'}));
+  }
+  renderTermBasket();onBrandFieldChange();}
 function toggleBrandTick(k){const el=document.getElementById(k==='logo'?'bf-tick-logo':'bf-tick-tag');el.classList.toggle('on');
   if(k==='logo')state.brandForm.logo=el.classList.contains('on');
   if(k==='tag'&&!el.classList.contains('on'))document.getElementById('bf-tagline').value='';
