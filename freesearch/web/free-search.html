@@ -861,6 +861,10 @@ const CONFIG = (function(){
   // Embedded via /embed.js the tenant rides on the URL; standalone defaults tmh.
   var q=new URLSearchParams(location.search);
   return { API_BASE:'', TENANT_ID:(q.get('tenant')||'tmh'), EMBED:q.get('embed')==='1',
+    // Campaign tracking (Jonathan, 10 Sep): UTMs forwarded from the host
+    // page through embed.js ride into the session and onto the Zoho lead.
+    UTM:{source:q.get('utm_source')||'',medium:q.get('utm_medium')||'',
+         campaign:q.get('utm_campaign')||''},
     // 'full' keeps our logo and Book a Free Call inside an embed — for an
     // affiliate page that has no TMH header of its own (Jonathan, 2 Sep).
     CHROME:(q.get('chrome')||''),
@@ -1139,7 +1143,9 @@ function ensureSession(){
   state._sessionStarting=fetch(journeyBase()+'/session/start',{method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({tenant_id:CONFIG.TENANT_ID,
-      source:BUILDER?'class_tools':(QUICK?'quick_search':'free_search'),name:state.name})})
+      source:BUILDER?'class_tools':(QUICK?'quick_search':'free_search'),name:state.name,
+      utm_source:CONFIG.UTM.source||undefined,utm_medium:CONFIG.UTM.medium||undefined,
+      utm_campaign:CONFIG.UTM.campaign||undefined})})
     .then(r=>r.json()).then(d=>{
       if(d&&d.ok&&d.session_id){ state.sessionId=d.session_id; }
       return state.sessionId;
@@ -2375,7 +2381,7 @@ async function beginSearch(){
     fetch(journeyBase()+'/session/event',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({session_id:id,event_type:'search_result',screen:'results',
         payload:CONFIG.DEAL?{zoho_deal_id:CONFIG.DEAL}:{},
-        snapshot:{last_result:out.result,status:'search_completed'}}),
+        snapshot:{last_result:Object.assign({},out.result,{utm:CONFIG.UTM}),status:'search_completed'}}),
       keepalive:true}).catch(()=>{});
   });
   pushScreen('results');
@@ -2450,22 +2456,38 @@ function additionalTerms(){
   const t=document.getElementById('rv-extra');
   return t ? (t.value||'').trim() : '';
 }
+/* TERM FORMAT (Jonathan, 17 Sep 2026) -- the ONE rule, identical to the
+   journey's fmtTerms and to what Zoho stores in Specific_Terms: each term
+   Capitalised (first letter upper, rest as entered), de-duplicated, joined
+   with "; " on ONE line per class. What is shown here IS what is written.
+   parseTerms accepts either "; " or one-per-line (legacy sessions). */
+function parseTerms(s){
+  const seen={},out=[];
+  String(s||'').split(/[;\n]+/).forEach(x=>{
+    let v=x.replace(/\s+/g,' ').trim().replace(/[;.\s]+$/,'');
+    if(!v) return;
+    v=v.charAt(0).toUpperCase()+v.slice(1);
+    const k=v.toLowerCase(); if(seen[k]) return; seen[k]=1; out.push(v);
+  });
+  return out;
+}
+function fmtTerms(list){return parseTerms(Array.isArray(list)?list.join('\n'):list).join('; ');}
 function renderReview(){
   const host=document.getElementById('rv-list');
   const esc=s=>String(s||'').replace(/</g,'&lt;');
-  const ta=(id,list,minR)=>`<textarea id="${id}" rows="${Math.min(14,Math.max(minR,(list||[]).length))}">${esc((list||[]).join('\n'))}</textarea>`;
+  const ta=(id,list,minR)=>`<textarea id="${id}" rows="${Math.min(8,Math.max(2,Math.ceil(fmtTerms(list).length/90)))}">${esc(fmtTerms(list))}</textarea>`;
   host.innerHTML=(state.review||[]).map((r,i)=>{
     const tt=r.term_tiers;
     /* Tiered view (Jonathan, 22 Aug): everything included, grouped so the
        obvious cuts are easy. Delete a line to drop a term. */
     const termsHtml = tt
-      ? `<label>Definitely needed &mdash; core terms for this business</label>
+      ? `<label>Definitely needed &mdash; core terms for this business (terms separated by "; ")</label>
          ${ta('rv-t-'+r.n+'-def',tt.definite,3)}
          <label>Possibly needed &mdash; delete any that don't apply</label>
          ${ta('rv-t-'+r.n+'-pos',tt.possible,3)}
          <label>Unlikely needed &mdash; keep only if they genuinely apply</label>
          ${ta('rv-t-'+r.n+'-unl',tt.unlikely,2)}`
-      : `<label>Specific terms (one per line)</label>
+      : `<label>Specific terms &mdash; separated by "; " &mdash; delete any that don't apply</label>
          ${ta('rv-t-'+r.n,r.terms,4)}`;
     return `
     <div class="rv-block" data-rv="${r.n}">
@@ -2503,14 +2525,14 @@ function collectReview(){
   return (state.review||[]).map(r=>{
     const h=document.getElementById('rv-h-'+r.n);
     const grab=id=>{const el=document.getElementById(id);
-      return el?el.value.split('\n').map(s=>s.trim()).filter(Boolean):null;};
+      return el?parseTerms(el.value):null;};
     let terms=grab('rv-t-'+r.n);
     if(terms===null){ /* tiered layout: merge the three groups in order */
       terms=[].concat(grab('rv-t-'+r.n+'-def')||[],
                       grab('rv-t-'+r.n+'-pos')||[],
                       grab('rv-t-'+r.n+'-unl')||[]);
     }
-    const orig=(r.terms||[]).map(s=>String(s).trim()).filter(Boolean);
+    const orig=parseTerms((r.terms||[]).join('\n'));
     const same=terms.length===orig.length&&terms.every((x,i)=>x===orig[i]);
     const src=(r.terms_source==='Custom Edited'||!same)?'Custom Edited':'Approved';
     return {n:r.n, heading:(h?h.value.trim():r.heading)||'', terms:terms, terms_source:src};
