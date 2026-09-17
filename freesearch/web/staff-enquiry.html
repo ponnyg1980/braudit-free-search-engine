@@ -904,6 +904,7 @@ const state={
   marks:[{text:'',kind:'word',price:149}],
   classes:'',
   scope:{},
+  scopeSource:{},        /* per class: 'tool' (approved) | 'staff' (edited) */
   /* Their brand online (10 Sep). The client wizard captures the client's OWN
      domain, socials and marketplaces; the staff form captured none of it, so
      a staff-placed audit reached the analyst with no search layers and NO
@@ -1241,12 +1242,37 @@ function setLineDiscount(i,v){
 }
 
 /* ---------- shared class scope ---------- */
+/* TERM FORMAT (Jonathan, 17 Sep 2026) -- the ONE rule, identical to the
+   journey's fmtTerms and to Zoho Specific_Terms: Capitalised, de-duplicated,
+   "; "-joined, ONE line per class. Shown = stored. Typing is free-form;
+   the box re-formats when it loses focus and on save. */
+function parseTerms(s){
+  const seen={},out=[];
+  String(s||'').split(/[;\n]+/).forEach(x=>{
+    let v=x.replace(/\s+/g,' ').trim().replace(/[;.\s]+$/,'');
+    if(!v) return;
+    v=v.charAt(0).toUpperCase()+v.slice(1);
+    const k=v.toLowerCase(); if(seen[k]) return; seen[k]=1; out.push(v);
+  });
+  return out;
+}
+function fmtTerms(list){return parseTerms(Array.isArray(list)?list.join('\n'):list).join('; ');}
+function scopeEdited(c,el){
+  const v=fmtTerms(el.value);
+  if(v!==(state.scope[c]||'')){
+    /* Staff changed the wording -> no longer the tool's approved terms. */
+    if(!state.scopeSource) state.scopeSource={};
+    state.scopeSource[c]='staff';
+  }
+  state.scope[c]=v; el.value=v; touch();
+}
 function renderScope(){
   const cls=parseClasses(state.classes);
   document.getElementById('f-scope').innerHTML=cls.length?cls.map(c=>`
     <div class="sf-cls"><div class="ch">Class <span class="n">${c}</span></div>
-      <textarea placeholder="Goods and services for class ${c} — applies to every mark above"
-        oninput="state.scope[${c}]=this.value;touch()">${esc(state.scope[c]||'')}</textarea></div>`
+      <textarea placeholder="Goods and services for class ${c} — terms separated by &quot;; &quot; — applies to every mark above"
+        oninput="state.scope[${c}]=this.value;touch()"
+        onblur="scopeEdited(${c},this)">${esc(fmtTerms(state.scope[c]||''))}</textarea></div>`
     ).join(''):'<div class="sf-hint">Enter classes above and the terms boxes appear here.</div>';
 }
 
@@ -1682,8 +1708,11 @@ window.addEventListener('message',e=>{
   if(!sc||!Array.isArray(sc.classes)) return;
   state.classes=sc.classes.join(', ');
   const el=document.getElementById('f-classes'); if(el) el.value=state.classes;
+  if(!state.scopeSource) state.scopeSource={};
   if(sc.terms){Object.keys(sc.terms).forEach(n=>{
-    state.scope[n]=(sc.terms[n]||[]).join('\n');});}
+    state.scope[n]=fmtTerms(sc.terms[n]||[]);
+    state.scopeSource[n]='tool';   /* register-approved wording -> Terms_Source Approved */
+  });}
   renderScope();renderAll();touch();
   showSection('marks');
 });
@@ -1753,6 +1782,7 @@ async function saveNow(explicit){
     /* platform_scope is DERIVED here, not in the journey, so the staff form
        stays the single source of truth for what the audit covers and what is
        excluded — the journey just forwards it to the Zoho 'scope' stage. */
+    Object.keys(state.scope||{}).forEach(k=>{state.scope[k]=fmtTerms(state.scope[k]||'');});
     lr.staff_enquiry=Object.assign({},state,
       {platform_scope:platformScope(),savedAt:new Date().toISOString()});
     /* Edit mode: every Zoho stage is idempotent on zoho_deal_id, and the
@@ -1913,8 +1943,13 @@ async function loadDeal(){
   if(marks.length) state.marks=marks;
   /* Classes from the frozen/draft scope rows. */
   const cls=[];
+  if(!state.scopeSource) state.scopeSource={};
   (d.scope||[]).forEach(s=>(s.terms||[]).forEach(t=>{
-    const n=parseInt(t.class_no,10); if(n>=1&&n<=45&&cls.indexOf(n)<0) cls.push(n);}));
+    const n=parseInt(t.class_no,10); if(!(n>=1&&n<=45)) return;
+    if(cls.indexOf(n)<0) cls.push(n);
+    /* The stored terms come back in the same "; " form they were written in. */
+    if(t.terms&&!state.scope[n]){ state.scope[n]=fmtTerms(t.terms);
+      state.scopeSource[n]=(t.source==='Approved')?'tool':'staff'; }}));
   if(cls.length) state.classes=cls.sort((a,b)=>a-b).join(', ');
   /* Billing: the Deal's Account, linked -- never a new one. */
   if(z.account_id){
