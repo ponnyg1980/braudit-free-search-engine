@@ -99,6 +99,12 @@ _PAGES = {
     # classes and the wording real businesses filed. No email, nothing saved —
     # ticking classes hands off to /class-builder?classes= to keep a list.
     '/class-finder': 'class-finder.html',
+    # Mockup of the WordPress page (Jonathan, 17 Sep). Same path as the real
+    # one so it can be judged as it will read, and served from here so the
+    # class finder in it is the LIVE widget and the four route cards link to
+    # the four live tool URLs. Design source: "Goods and Services Classes.dc.html".
+    '/trademark-goods-and-services-classifications': 'classes-page.html',
+    '/classes-page': 'classes-page.html',          # short alias for sharing
     '/search-bar': 'search-bar.html',
     '/search-box': 'search-box.html',          # compact drop-anywhere entry point
     # free-search.html's CONFIG.BRAND_AUDIT_URL points at '/brand-audit/', so
