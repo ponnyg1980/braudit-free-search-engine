@@ -866,9 +866,14 @@ txInit();
    an empty API_BASE as "not connected" rather than "same origin" — the same
    wrong assumption that silently disabled the register routes. It now reports
    the sandbox when the page really is sandboxed, and the origin otherwise. */
+/* Read the flag off the URL rather than window.IS_DEMO: demo-banner.js is
+   loaded `defer`, so it has not run yet when this line does, and the check
+   silently took the LIVE branch on a sandboxed page. Same two conditions the
+   banner itself uses. */
 document.getElementById('flag').textContent =
-  (window.IS_DEMO && window.IS_DEMO()) ? '● SANDBOX — demo tenant'
-  : '● LIVE: ' + (CONFIG.API_BASE || location.origin);
+  (P_QS.get('demo') === '1' || P_QS.get('tenant') === 'demo')
+    ? '● SANDBOX — demo tenant'
+    : '● LIVE: ' + (CONFIG.API_BASE || location.origin);
 </script>
 <script>
 /* Embed reporter (added 28 Aug). Every widget must tell the host page two
