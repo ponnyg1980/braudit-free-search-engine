@@ -271,6 +271,17 @@ class Store:
                  _scoring_version())).fetchone()
             run_id = str(run["id"])
 
+            # What this run refused to search on (18 Sep 2026). Recorded, not
+            # enforced: the filtering already happened in criteria.build().
+            ignored = list(getattr(result.criteria, "ignored_words", None) or [])
+            if ignored:
+                c.cursor().executemany(
+                    """insert into audit.ignored_words
+                           (run_id, word, kind, source, where_applied)
+                       values (%s, %s, %s, %s, %s)""",
+                    [(run_id, e.get("word"), e.get("kind"), e.get("source"),
+                      e.get("where")) for e in ignored])
+
             if result.plan:
                 c.cursor().executemany("""
                     insert into audit.search_plan (run_id, seq, channel, platform, kind, query, provider,
