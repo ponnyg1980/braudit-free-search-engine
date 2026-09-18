@@ -427,9 +427,19 @@ function LOCAL(action,p){
 
 async function api(action,params){
   const l=LOCAL(action,params); if(l) return l;
-  if(!CONFIG.API_BASE) return {ok:false, unavailable:true,
-    error:'This option reads live data from the Temmy register, so it needs the engine connected. Set CONFIG.API_BASE to switch it on.'};
-  const u=new URL(CONFIG.API_BASE.replace(/\/$/,'')+'/lookup/'+action);
+  /* SAME-ORIGIN BY DEFAULT (18 Sep 2026). API_BASE shipped as '' with a note
+     to "set it to go live", and it never was set — so every register-backed
+     route returned `unavailable` WITHOUT making a request: competitor mark,
+     competitor portfolio, your company, SIC. Only the four taxonomy actions
+     LOCAL() answers appeared to work, which is why the page looked half alive.
+     This was true on the LIVE URL as well as the sandbox; the sandbox is just
+     where it got noticed.
+     The page is SERVED BY the engine, so the engine is right here: '' gives
+     '/lookup/<action>', same origin, which is exactly what aiApi() has always
+     done for the AI panel two functions below. API_BASE stays honoured as an
+     override for a cross-origin embed. */
+  const u=new URL((CONFIG.API_BASE||'').replace(/\/$/,'')+'/lookup/'+action,
+                  location.origin);
   Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
   try{ const r=await fetch(u); if(!r.ok) return {ok:false,error:'The engine returned '+r.status+'.'};
        return await r.json(); }
@@ -852,7 +862,13 @@ function txResolveLocal(bt, activitiesCsv, expand){
    generated from the same code the server runs. */
 document.getElementById('sic-q')&&document.getElementById('sic-q').addEventListener('keydown',e=>{if(e.key==='Enter')sicGo();});
 txInit();
-document.getElementById('flag').textContent=CONFIG.API_BASE?'● LIVE: '+CONFIG.API_BASE:'● DEMO MODE (built-in mock)';
+/* The flag said "DEMO MODE (built-in mock)" on the live page, because it read
+   an empty API_BASE as "not connected" rather than "same origin" — the same
+   wrong assumption that silently disabled the register routes. It now reports
+   the sandbox when the page really is sandboxed, and the origin otherwise. */
+document.getElementById('flag').textContent =
+  (window.IS_DEMO && window.IS_DEMO()) ? '● SANDBOX — demo tenant'
+  : '● LIVE: ' + (CONFIG.API_BASE || location.origin);
 </script>
 <script>
 /* Embed reporter (added 28 Aug). Every widget must tell the host page two
