@@ -46,19 +46,14 @@ TMH_TO_SIGNA = {
     "Related Words": "similar",
 }
 
-# Tokens too common to search alone — a stem search on these returns noise.
-_WEAK_TOKENS = {
-    "the", "and", "for", "ltd", "limited", "plc", "llp", "uk", "group",
-    "holdings", "company", "co", "services", "solutions", "international",
-    "global", "systems", "technologies", "digital", "online", "direct",
-}
-
-# Legal forms. Named here for now; step 3 of the Search & Score Settings
-# build moves this and _WEAK_TOKENS into tmh_scoring, replacing the two
-# duplicate regexes in audit_engine/companies.py and uk_monitor/companies.py.
-_STRUCTURAL_RE = re.compile(
-    r"(LIMITED|LTD|PLC|LLP|LP|L\.?L\.?C|COMPANY|CO|HOLDINGS|GROUP|"
-    r"INCORPORATED|INC|UK)\.?", re.I)
+# Tokens too common to search alone, and the legal forms that are never part
+# of a mark. Both now live in the scoring package (18 Sep 2026) so Watch and
+# the audit engine cannot drift apart again — which they had already done on
+# the legal forms; see tmh_scoring/ignore_words.py.
+from tmh_scoring.ignore_words import (                    # noqa: E402
+    WEAK_TOKENS as _WEAK_TOKENS,
+    LEGAL_FORMS_AUDIT as _STRUCTURAL_RE,
+)
 
 MIN_STEM = 4
 MAX_CRITERIA = 5          # the contract's per-order limit
