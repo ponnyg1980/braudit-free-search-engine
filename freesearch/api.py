@@ -563,7 +563,13 @@ def _staff_gate(enq: dict) -> list:
         bad.append('G-01')
     if not marks:
         bad.append('G-02')
-    if not classes:
+    # G-03 -- classes. Jonathan, 19 Sep 2026: "On the staff facing versions
+    # they can pick classes and terms later and take money there and then."
+    # So an explicit "we are picking them" answer satisfies the gate, and
+    # nothing else does. Read from the STORED enquiry, like every other rule
+    # here, so a browser cannot claim it.
+    scope_resp = str(enq.get('scopeResp') or 'client')
+    if not classes and scope_resp != 'tmh_all':
         bad.append('G-03')
     if not quick and not all(bool(s('advice', k))
                              for k in ('risks', 'fees', 'noguarantee', 'questions')):
