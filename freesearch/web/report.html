@@ -256,16 +256,14 @@
       <div class="nexts" id="rpt-nexts"></div>
       <!-- Third way out. The report is a standalone page and a PDF: no site
            header, so nothing else here offers a human (Jonathan, 31 Aug). -->
-      <div class="speak">
-        <div>
-          <h3>Prefer to speak to one of our trademark experts?</h3>
-          <p>A free call, no obligation. We go through what the search found, what it means for
-            your application, and what your options are.</p>
-        </div>
-        <a class="btn primary" href="https://bookings.thetrademarkhelpline.com/"
-           target="_blank" rel="noopener">Book a Free Call</a>
-      </div>
-      <div class="owlrow"><img src="/brand/owl-branch.png" alt=""></div>
+      <!-- Shared help line (help-line.js). Was a hand-written block offering
+           only a call, at the bare bookings root, with no phone number — on a
+           page that is also printed to PDF, where a phone number is the only
+           thing that still works. One Temmy per block, so the owl-branch row
+           that used to sit under it has gone with it. -->
+      <div data-tmh-help="card" data-temmy="phone"
+           data-help-title="Prefer to speak to one of our trademark experts?"
+           data-help-note="A free call, no obligation: what the search found, what it means for your application, and your options."></div>
     </div></section>
 
   </div>
@@ -511,5 +509,6 @@
   }
 })();
 </script>
+<script src="/help-line.js" defer></script>
 </body>
 </html>
