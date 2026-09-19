@@ -142,8 +142,14 @@
       html =
         '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;' +
         'background:#FDE7EE;border-radius:14px;padding:16px 20px">' +
-        (owlSrc ? '<img src="' + owlSrc + '" alt="" style="width:54px;height:auto;' +
-          'flex:0 0 auto;display:block;filter:drop-shadow(0 4px 10px rgba(45,69,90,.16))">' : '') +
+        /* Temmy sits on a white plate. He is drawn white-and-pink, so on the
+           pink-tint band he loses his outline entirely — checked in the
+           browser, not assumed. */
+        (owlSrc ? '<div style="flex:0 0 auto;width:68px;height:68px;border-radius:50%;' +
+          'background:#fff;display:flex;align-items:center;justify-content:center;' +
+          'box-shadow:0 4px 12px rgba(45,69,90,.10)">' +
+          '<img src="' + owlSrc + '" alt="" style="width:50px;height:auto;display:block">' +
+          '</div>' : '') +
         '<div style="flex:1;min-width:210px">' +
           '<div style="font-size:16px;font-weight:800;letter-spacing:-.2px;color:' + INK + '">' +
             esc(title) + '</div>' +
@@ -159,8 +165,12 @@
         '<div style="border:1px solid #E6E9ED;border-radius:16px;background:#fff;' +
         'padding:22px 24px;box-shadow:0 6px 22px rgba(45,69,90,.07);' +
         'display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">' +
-        (owlSrc ? '<img src="' + owlSrc + '" alt="" style="width:76px;height:auto;' +
-          'flex:0 0 auto;display:block;filter:drop-shadow(0 6px 14px rgba(45,69,90,.16))">' : '') +
+        /* The card is white already, so here the plate is the pink tint —
+           same trick, inverted, so Temmy has an edge either way. */
+        (owlSrc ? '<div style="flex:0 0 auto;width:92px;height:92px;border-radius:50%;' +
+          'background:#FDE7EE;display:flex;align-items:center;justify-content:center">' +
+          '<img src="' + owlSrc + '" alt="" style="width:68px;height:auto;display:block">' +
+          '</div>' : '') +
         '<div style="flex:1;min-width:230px' + (centre ? ';text-align:center' : '') + '">' +
           '<div style="font-size:17px;font-weight:800;letter-spacing:-.3px;color:' + INK + ';' +
             'margin-bottom:6px">' + esc(title) + '</div>' +
