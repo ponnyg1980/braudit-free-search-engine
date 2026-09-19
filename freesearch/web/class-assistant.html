@@ -119,9 +119,25 @@ button.route small{display:block;font-weight:400;color:#64748b;margin-top:3px}
   <div class="card">
     <div class="tabs">
       <div class="t on" data-tab="ind" onclick="tab('ind')">By industry</div>
+      <div class="t" data-tab="prod" onclick="tab('prod')">By product or service</div>
       <div class="t" data-tab="co" onclick="tab('co')">By your company</div>
       <div class="t" data-tab="tm" onclick="tab('tm')">By competitor mark</div>
       <div class="t" data-tab="owner" onclick="tab('owner')">By competitor portfolio</div>
+    </div>
+
+    <!-- BY PRODUCT OR SERVICE (Jonathan, 19 Sep) — the keyword finder from the
+         goods-and-services page, as a fifth route. The other four start from
+         WHO you are (your industry, your company, a competitor) and answer
+         "what do businesses like me file?". This one starts from the THING and
+         answers "which class contains this wording, and how many used it?".
+         The hint has to carry that difference, because "By industry" also
+         invites you to type — see the basis line under the results. -->
+    <div id="pane-prod" style="display:none">
+      <div class="bar"><input id="pd-q" placeholder="The thing you sell, e.g. coffee, t-shirts, software as a service"
+        oninput="d(pdFind)" autocomplete="off"><button class="btn" onclick="pdFind()">Find</button></div>
+      <div class="hint">Searches the actual wording on granted UK registrations, not business
+        types. Use it when you know what the thing is called and want the class it sits in.</div>
+      <div class="loading" id="pd-load"><span class="tmh-loader" role="status" aria-live="polite" aria-label="Loading"><i></i><i></i><i></i></span>Searching the register vocabulary…</div>
     </div>
 
     <div id="pane-ind">
@@ -163,6 +179,12 @@ button.route small{display:block;font-weight:400;color:#64748b;margin-top:3px}
 
   <div class="card out" id="out" style="display:none">
     <h3><span id="out-title">Suggested classes</span> <button class="btn ghost" onclick="copyClasses()">Copy class numbers</button></h3>
+    <!-- What the percentages on these rows are OF. The routes measure against
+         different denominators — a sector for the industry/company routes, a
+         whole class for the product route — so the same term can legitimately
+         read "Most use this" on one tab and "SOME" on another. Stating the
+         basis is what keeps both true instead of looking contradictory. -->
+    <div class="hint" id="out-basis" style="margin:-4px 0 12px"></div>
     <div class="copybar" id="copybar" style="display:none"><code id="copytext"></code></div>
     <div id="out-body"></div>
   </div>
@@ -319,7 +341,7 @@ function bindList(id,onPick){
   return el;
 }
 function setRows(id,rows){_lists[id]=rows;}
-function tab(t){['ind','co','tm','owner'].forEach(x=>{document.getElementById('pane-'+x).style.display=x===t?'':'none';
+function tab(t){['ind','prod','co','tm','owner'].forEach(x=>{document.getElementById('pane-'+x).style.display=x===t?'':'none';
   document.querySelector(`.t[data-tab="${x}"]`).classList.toggle('on',x===t);});}
 
 /* ONE global search: sectors + business types. Destination is always a
@@ -399,7 +421,7 @@ function renderTaxonomy(title,r){
         <span class="band ${c.tier||''}">${c.band}</span></div>
       <div class="heading" style="color:${rec==='core'?'var(--navy)':'var(--muted)'};font-weight:${rec==='core'?600:400}">${c.recommendation_label}</div>
       ${c.heading?`<details class="heading"><summary style="cursor:pointer">What this class covers</summary><div style="margin-top:4px">${c.heading}</div></details>`:''}
-      ${(c.terms&&c.terms.length)?`<div class="terms">${c.terms.slice(0,8).map(t=>`<span class="term">${t.text} <b>${(t.label||'')[0]||''}</b></span>`).join('')}</div>`:''}
+      ${(c.terms&&c.terms.length)?`<div class="terms">${c.terms.slice(0,8).map(t=>`<span class="term" data-term="${t.text}">${t.text} <b>${(t.label||'')[0]||''}</b></span>`).join('')}</div>`:''}
     </div>`;}).join('');
 }
 
@@ -478,14 +500,14 @@ async function sicGo(){const q=(document.getElementById('sic-q').value||'').trim
 
 /* renderers */
 function renderBasket(title,b){last.classes=b.classes||[];
-  outHead(title);document.getElementById('out-body').innerHTML=(b.entries||[]).map(e=>
+  outHead(title,BASIS.mark);document.getElementById('out-body').innerHTML=(b.entries||[]).map(e=>
     `<div class="cls"><div class="h"><span>Class ${e.nice_class}</span></div><div class="heading">${e.heading||''}</div>
-     <div class="terms">${(e.terms||[]).slice(0,12).map(t=>`<span class="term">${t.text}</span>`).join('')}</div></div>`).join('');}
+     <div class="terms">${(e.terms||[]).slice(0,12).map(t=>`<span class="term" data-term="${t.text}">${t.text}</span>`).join('')}</div></div>`).join('');}
 function renderBanding(title,r){last.classes=(r.classes||[]).filter(c=>c.band==='a'||c.band==='b').map(c=>c.nice_class);
-  outHead(title);document.getElementById('out-body').innerHTML=(r.classes||[]).map(c=>
+  outHead(title,BASIS.portfolio(r.n_marks));document.getElementById('out-body').innerHTML=(r.classes||[]).map(c=>
     `<div class="cls"><div class="h"><span>Class ${c.nice_class} <span style="color:var(--muted);font-weight:400">· ${c.count}/${r.n_marks}</span></span><span class="band ${c.band}">${c.label}</span></div>
      <div class="heading">${c.heading||''}</div>
-     <div class="terms">${(c.terms||[]).slice(0,6).map(t=>`<span class="term">${t.text} <b>${t.label[0]}</b></span>`).join('')}</div></div>`).join('');}
+     <div class="terms">${(c.terms||[]).slice(0,6).map(t=>`<span class="term" data-term="${t.text}">${t.text} <b>${t.label[0]}</b></span>`).join('')}</div></div>`).join('');}
 function renderSic(title,r){
   // Inconclusive SIC (point 8): the code doesn't describe the goods/services,
   // so we don't guess classes — we explain why and route to a tool that reads
@@ -508,9 +530,66 @@ function renderSic(title,r){
   document.getElementById('out-body').innerHTML=(r.classes||[]).map(c=>
     `<div class="cls"><div class="h"><span>Class ${c.nice_class}${c.class_label?' · '+c.class_label:''}</span><span class="band ${c.tier||''}">${c.band}${c.frequency?' · '+c.frequency:''}</span></div>
      ${c.heading?`<details class="heading"><summary style="cursor:pointer">What this class covers</summary><div style="margin-top:4px">${c.heading}</div></details>`:''}
-     ${(c.terms&&c.terms.length)?`<div class="terms">${c.terms.slice(0,10).map(t=>`<span class="term">${t.text} <b>${(t.label||'')[0]||''}</b></span>`).join('')}</div>`:''}</div>`).join('');}
-function outHead(title){document.getElementById('out').style.display='';document.getElementById('out-title').textContent=title;
+     ${(c.terms&&c.terms.length)?`<div class="terms">${c.terms.slice(0,10).map(t=>`<span class="term" data-term="${t.text}">${t.text} <b>${(t.label||'')[0]||''}</b></span>`).join('')}</div>`:''}</div>`).join('');}
+function outHead(title,basis){document.getElementById('out').style.display='';document.getElementById('out-title').textContent=title;
+  const b=document.getElementById('out-basis');
+  if(b){ b.textContent=basis||BASIS.sector; b.style.display=''; }
   show('copybar',false);}
+
+/* The two denominators, said plainly. Every renderer picks one. */
+const BASIS={
+  sector:'Percentages are of the marks filed by businesses in this sector, from '
+        +'362,130 UK registrations by companies and organisations.',
+  klass:'Percentages are of every mark registered in that class, from 683,327 UK '
+        +'registrations in the last five years. A term can look common here and '
+        +'uncommon in your sector, or the other way round — both are counts, '
+        +'measured against different groups.',
+  mark:'Taken verbatim from that registration’s own specification. No percentages — '
+      +'this is one mark, not a count across many.',
+  ai:'Proposed by the AI routes from what you described, then checked against the '
+    +'registered vocabulary. Not a count — treat it as a shortlist to review.',
+  portfolio:function(n){
+    return 'Percentages are of this owner’s own portfolio'
+      + (n ? ' — ' + Number(n).toLocaleString('en-GB') + ' marks' : '')
+      + ', so they say what THIS business files, not what the sector does.';
+  }
+};
+
+/* ======================================================================
+   BY PRODUCT OR SERVICE (19 Sep) — the keyword finder as a fifth route.
+   Renders into #out-body in the SAME shape as the other routes, so the
+   MutationObserver on decorateRows gives it "+ Add", the basket, the copy
+   bar and "Send to order form" with no extra wiring.
+   ====================================================================== */
+async function pdFind(){
+  const q=(document.getElementById('pd-q').value||'').trim();
+  if(q.length<2){ return; }
+  load('pd-load',true);
+  let r;
+  try{ r=await (await fetch('/class-search?q='+encodeURIComponent(q))).json(); }
+  catch(e){ r={ok:false}; }
+  load('pd-load',false);
+  if(!r||!r.ok||!r.classes||!r.classes.length){
+    outHead('No class uses that wording', '');
+    document.getElementById('out-body').innerHTML=
+      '<div class="inconclusive"><p>Nothing on the register matches &ldquo;'+
+      q.replace(/[&<>"]/g,'')+'&rdquo;.</p><p class="muted">Try a plainer word for the thing '+
+      'itself — <b>coffee</b> rather than <i>artisan coffee experience</i> — or use '+
+      '<b>By industry</b> if you would rather start from what your business is.</p></div>';
+    return;
+  }
+  last.classes=r.classes.map(c=>c.n);
+  outHead('Classes using “'+q+'”'+(r.exact===false?' (on part of what you typed)':''),
+          BASIS.klass);
+  document.getElementById('out-body').innerHTML=r.classes.map(c=>
+    `<div class="cls"><div class="h"><span>Class ${c.n} · ${esc(c.label)}</span>` +
+    `<span style="color:var(--muted);font-weight:400;font-size:12.5px">${c.matched} matching term${c.matched===1?'':'s'}</span></div>
+     <div class="terms">${(c.terms||[]).slice(0,10).map(t=>
+       `<span class="term" data-term="${esc(t.term)}">${esc(t.term)}
+          <b style="font-weight:600;color:var(--muted)">${Number(t.marks).toLocaleString('en-GB')} marks</b></span>`).join('')}</div></div>`).join('');
+}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 /* ======================================================================
    SELECTION, RESET AND EMAIL  (added 28 Aug)
@@ -539,7 +618,18 @@ function decorateRows(){
     b.className='pick'+(picked.has(n)?' on':'');
     b.textContent=picked.has(n)?'✓ Added':'+ Add';
     b.onclick=()=>{
-        const t=[...row.querySelectorAll('.term')].map(e=>e.textContent.trim()).filter(Boolean);
+        /* PREFER data-term (19 Sep). These captured strings travel through
+           sendToOrder -> the staff form -> Zoho Specific_Terms, which must be
+           the registered wording VERBATIM because it is a scoring input.
+           Every route renders a band letter or a count INSIDE the .term span
+           (`<span class="term">coffee <b>M</b></span>`), so textContent was
+           capturing "coffee M" and "coffee beans S" and writing those to the
+           CRM. Verified in the browser, 19 Sep. data-term carries the clean
+           term; the textContent path stays as a fallback for any row that
+           predates the attribute, with the trailing marker stripped. */
+        const t=[...row.querySelectorAll('.term')].map(e=>
+          (e.dataset.term || e.textContent.replace(/\s+(?:[A-Z]|[\d,]+\s*marks?)\s*$/,'')).trim()
+        ).filter(Boolean);
         togglePick(n,label,t);
       };
     const h=row.querySelector('.h');
@@ -775,11 +865,11 @@ async function aiSuggest(){
    buttons, the basket and the email form all work unchanged. */
 function renderAi(title,d){
   last.classes=(d.classes||[]).map(c=>c.nice_class||c.class||c.n).filter(Boolean);
-  outHead(title);
+  outHead(title,BASIS.ai);
   document.getElementById('out-body').innerHTML=(d.classes||[]).map(c=>{
     const n=c.nice_class||c.class||c.n;
     const terms=(c.terms||[]).slice(0,8).map(t=>
-      `<span class="term">${(t.text||t)}</span>`).join('');
+      `<span class="term" data-term="${(t.text||t)}">${(t.text||t)}</span>`).join('');
     return `<div class="cls"><div class="h"><span>Class ${n}${c.class_label?' \u00b7 '+c.class_label:''}</span>
       ${c.confidence?`<span class="band">${c.confidence}</span>`:''}</div>
       ${c.reason?`<div class="heading">${c.reason}</div>`:''}
