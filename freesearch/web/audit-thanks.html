@@ -81,15 +81,13 @@
     </div></div>
   </div>
 
-  <div class="speak">
-    <img src="/brand/owl-magnifier.png" alt="" onerror="this.style.display='none'">
-    <div class="t">
-      <b>Need us sooner?</b>
-      Call <a href="tel:01618335400">0161 833 5400</a> — we're a helpline, it's
-      in the name — or <a href="https://bookings.thetrademarkhelpline.com/"
-      target="_blank" rel="noopener">book a call</a> at a time that suits you.
-    </div>
-  </div>
+  <!-- Shared help line (help-line.js). This page HAD its own version of this
+       block: same intent, but no "Make an enquiry" and the bare bookings root
+       rather than the free-consultation link. That is the drift the shared
+       component exists to stop. -->
+  <div data-tmh-help="strip" data-temmy="phone" style="margin-top:24px"
+       data-help-title="Need us sooner?"
+       data-help-note="We're a helpline, it's in the name"></div>
 </div>
 
 <script>
@@ -152,5 +150,6 @@
     }).catch(function(){});
 })();
 </script>
+<script src="/help-line.js" defer></script>
 </body>
 </html>
