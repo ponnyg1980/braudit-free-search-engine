@@ -80,6 +80,7 @@ def _office_platform(code: str) -> str:
 
 def _tm_row(r) -> dict:
     return dict(
+        components=getattr(r, "components", None),
         channel="trademark", platform=_office_platform(r.office), kind="word",
         external_ref=r.app_number, dedupe_key=f"tm:{r.office}:{(r.app_number or '').upper()}",
         title=r.mark_text, url=None, status=r.status, owner=r.owner, classes=r.classes,
@@ -117,6 +118,7 @@ def _image_candidate_row(r) -> dict:
 
 def _company_row(r) -> dict:
     return dict(
+        components=getattr(r, "components", None),
         channel="company", platform="Companies House (UK)", kind="word",
         external_ref=r.number, dedupe_key=f"co:gb:{(r.number or '').upper()}",
         title=r.name, url=r.url, status=r.status, owner=None, classes=None, goods=None,
@@ -132,6 +134,7 @@ def _company_row(r) -> dict:
 
 def _domain_row(r) -> dict:
     return dict(
+        components=getattr(r, "components", None),
         channel="domain", platform="Registrars (RDAP)", kind="word",
         external_ref=r.domain, dedupe_key=f"dom:{r.domain.lower()}",
         title=r.page_title or r.domain, url=r.final_url or (f"http://{r.domain}/" if r.resolves else None),
@@ -149,6 +152,7 @@ def _domain_row(r) -> dict:
 def _serp_row(r) -> dict:
     ch = _CHANNEL.get(r.channel, "web")
     return dict(
+        components=getattr(r, "components", None),
         channel=ch, platform=r.platform, kind=r.kind,
         external_ref=r.url, dedupe_key=f"{ch}:{r.platform}:{r.dedupe_key}",
         title=r.title, url=r.url, status=None, owner=r.seller or None, classes=None, goods=None,
@@ -295,15 +299,16 @@ class Store:
             c.cursor().executemany("""
                 insert into audit.results (run_id, client_id, channel, platform, kind, external_ref, dedupe_key,
                                            title, url, status, owner, classes, goods, dates, detail, image_url,
-                                           source, found_by, score, band, explanation,
+                                           source, found_by, score, band, explanation, components,
                                            review_status, review_reason, review_note, reviewed_by, reviewed_at,
                                            auto_excluded)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                         %s, %s, %s, %s, case when %s then now() end, %s)""",
                 [(run_id, client_id, d["channel"], d["platform"], d["kind"], d["external_ref"], d["dedupe_key"],
                   d["title"], d["url"], d["status"], d["owner"], d["classes"], d["goods"],
                   Jsonb(_jsonable(d["dates"])), Jsonb(_jsonable(d["detail"])), d["image_url"],
                   d["source"], d["found_by"], d["score"], d["band"], d["explanation"],
+                  Jsonb(_jsonable(d.get("components"))) if d.get("components") else None,
                   "excluded" if d["excluded"] else ("held" if d.get("hold") else "new"),
                   "own_asset" if d["excluded"] else None,
                   "declared exclusion on the request" if d["excluded"] else
@@ -330,13 +335,15 @@ class Store:
                 cur = c.execute("""
                     insert into audit.results (run_id, client_id, channel, platform, kind, external_ref, dedupe_key,
                                                title, url, status, owner, classes, goods, dates, detail, image_url,
-                                               source, found_by, score, band, explanation, review_status, review_note)
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'new', %s)
+                                               source, found_by, score, band, explanation, components, review_status, review_note)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'new', %s)
                     on conflict (run_id, dedupe_key) do nothing""",
                     (run_id, client_id, d["channel"], d["platform"], d["kind"], d["external_ref"], d["dedupe_key"],
                      d["title"], d["url"], d["status"], d["owner"], d["classes"], d["goods"],
                      Jsonb(_jsonable(d["dates"])), Jsonb(_jsonable(d["detail"])), d["image_url"], d["source"],
-                     d["found_by"], d["score"], d["band"], d["explanation"], f"imported by {by}" if by else "imported"))
+                     d["found_by"], d["score"], d["band"], d["explanation"],
+                     Jsonb(_jsonable(d.get("components"))) if d.get("components") else None,
+                     f"imported by {by}" if by else "imported"))
                 inserted += cur.rowcount
             auto = c.execute("select audit.apply_learned(%s) as n", (run_id,)).fetchone()["n"]
             c.execute("update audit.results set change = 'new', first_seen_run_id = run_id where run_id = %s and change is null", (run_id,))
@@ -470,9 +477,23 @@ class Store:
             return c.execute("""
                 select id, channel, platform, kind, external_ref, title, url, status, owner, classes, goods,
                        dates, detail, image_url, """ + ("image_path, " if self.has_image_path() else "") + """source, found_by, score, band, explanation,
-                       review_status, review_reason, review_note, reviewed_by, reviewed_at, auto_excluded, change
+                       review_status, review_reason, review_note, reviewed_by, reviewed_at, auto_excluded, change,
+                       components
                   from audit.results where run_id = %s
                  order by channel, score desc nulls last, title""", (run_id,)).fetchall()
+
+    def ignored_words(self, run_id: str) -> list[dict]:
+        """What this run refused to search on. Empty for runs from before
+        18 Sep 2026 — the filter was silent then, so there is nothing to show
+        and the panel says so rather than implying nothing was ignored."""
+        with self._conn() as c:
+            return c.execute(
+                """select word, kind, source, where_applied, rows_removed,
+                          restored_by, restored_at
+                     from audit.ignored_words where run_id = %s
+                    order by case kind when 'weak' then 0 when 'industry' then 1
+                                       when 'client' then 2 else 3 end, lower(word)""",
+                (run_id,)).fetchall()
 
     def report_meta(self, token: str) -> dict:
         """Who made the report and when — audit.report_view() does not return
