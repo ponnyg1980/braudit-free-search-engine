@@ -96,6 +96,7 @@ class AuditRow:
     exclusion_reason: str = ""
     goods_similarity: dict | None = None   # Layer 2 evidence: band, shared terms, why
     assessment: dict | None = None         # two_layer.Assessment.as_row() — conflict, rights, tiers
+    components: dict | None = None         # WHY it scored what it did, per compartment (18 Sep 2026)
     international_ref: str = ""            # the WIPO IR number, where the mark is also a Madrid designation
 
     @property
@@ -401,6 +402,28 @@ def _score(rows: list, crit_set, client_goods: str = "", client_filing_date=None
             "; ".join(a.rights_reasons or []),
         ) if x)
         r.assessment = a.as_row()
+        # The same numbers, kept apart instead of flattened into one sentence,
+        # so Triage can show which compartment did the work (18 Sep 2026).
+        r.components = {
+            "kind": "register",
+            "mark": {
+                "tier": a.mark.tier if a.mark else 0,
+                "orthographic": round(float(a.mark.orthographic), 4) if a.mark else 0.0,
+                "phonetic": bool(a.mark.phonetic) if a.mark else False,
+                "shared_words": list(a.mark.shared_words or []) if a.mark else [],
+                "visual": (a.mark.visual if a.mark else None),
+                "reason": a.mark.reason if a.mark else "",
+            },
+            "trade": {
+                "tier": a.trade.tier if a.trade else 0,
+                "goods_band": a.trade.goods_band if a.trade else "unknown",
+                "shared_classes": list(a.trade.shared_classes or []) if a.trade else [],
+                "shared_terms": list(a.trade.shared_terms or []) if a.trade else [],
+                "evidence": a.trade.evidence if a.trade else "",
+                "reason": a.trade.reason if a.trade else "",
+            },
+            "rights_reasons": list(a.rights_reasons or []),
+        }
         if a.trade:
             r.goods_similarity = {"band": a.trade.goods_band,
                                   "shared_terms": list(a.trade.shared_terms or []),
@@ -699,6 +722,12 @@ def _serp_score(rows, req) -> None:
                                  "mark_type": "", "classes": ""},
                                 {"word_searches": ws, "client_classes": []})
         sim = (out.get("components") or {}).get("similarity", 0)
+        from tmh_scoring.word_scoring import mark_similarity_components
+        r.components = {
+            "kind": "word",
+            "points": dict(out.get("components") or {}),
+            "comparisons": mark_similarity_components(text[:200].upper(), ws),
+        }
         if named and sim < 3:
             sim = 3
         r.score = sim
