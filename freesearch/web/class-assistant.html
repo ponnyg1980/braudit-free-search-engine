@@ -282,6 +282,13 @@ button.route small{display:block;font-weight:400;color:#64748b;margin-top:3px}
     <div id="lf-done" style="display:none;margin-top:10px;color:#2f6b23;font-weight:600">
       Sent &mdash; check your inbox. One of our advisers may follow up to talk the classes through.</div>
   </div>
+
+  <!-- Shared help line (help-line.js). Five routes and three denominators on
+       one page: the tab that suits you is not always obvious, and neither is
+       the answer when two tabs disagree. -->
+  <div data-tmh-help="strip" data-temmy="question" style="margin-top:24px"
+       data-help-title="Want someone to look at this with you?"
+       data-help-note="No charge, no obligation"></div>
 </div>
 <div class="flag" id="flag"></div>
 
@@ -1000,5 +1007,6 @@ document.getElementById('flag').textContent =
   try{ window.parent.postMessage({brauditReady:true},'*'); }catch(e){}
 })();
 </script>
+<script src="/help-line.js" defer></script>
 </body>
 </html>
