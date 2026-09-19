@@ -753,6 +753,16 @@ async function sendClasses(){
           payload:{tool:'class_assistant',classes:classes},
           snapshot:{first_name:first,last_name:lastN,email:email,phone:phone,
                     classes:classes,consent_marketing:true,
+                    /* SEND THE TERMS WE ALREADY HOLD (19 Sep). This posted class
+                       NUMBERS only, so zohoScopeBlock() found nothing in
+                       application_scope, agent_terms or term_basket and built the
+                       scope asset with terms:[] — every class row landing EMPTY in
+                       Zoho, indistinguishable from a terms capture that failed.
+                       pickedTerms has carried the real wording all along (and has
+                       been clean since the data-term fix), so hand it over in the
+                       term_basket shape zohoScopeBlock already reads. */
+                    class_source:{term_basket:{entries:classes.map(n=>(
+                      {nice_class:n, terms:(pickedTerms.get(n)||[])}))}},
                     email_source:'class_tools',current_screen:'class_assistant'}})});
     }
     document.getElementById('lf-done').style.display='';
