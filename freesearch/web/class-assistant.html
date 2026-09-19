@@ -43,6 +43,10 @@
   .band.primary{background:var(--a)}.band.common{background:var(--c)}.band.sometimes{background:var(--d)}
   .cls .heading{color:var(--muted);font-size:12px;margin-top:2px}
   .terms{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px}
+  /* The per-class terms toggle, added by decorateRows (19 Sep 2026). */
+  .terms-toggle{margin-top:7px;background:none;border:0;padding:0;font:inherit;font-size:12.5px;
+    font-weight:700;color:var(--muted,#617383);cursor:pointer;letter-spacing:.1px}
+  .terms-toggle:hover{color:var(--pink,#E51652)}
   .term{font-size:11px;padding:3px 8px;border:1px solid var(--line);border-radius:999px;background:#fbfcfd;color:var(--navy)}
   .copybar{display:flex;gap:8px;align-items:center;margin-top:10px}
   .copybar code{background:#f3f5f6;border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:13px;flex:1}
@@ -641,6 +645,31 @@ function decorateRows(){
       };
     const h=row.querySelector('.h');
     if(h) h.appendChild(b);
+
+    /* TERMS COLLAPSE BEHIND A TOGGLE (Jonathan, 19 Sep 2026: "the class tool
+       by industry is a bit overwhelming"). Six renderers on this page each
+       emit their own `.terms` block; collapsing them HERE, in the one place
+       that already walks every row, means the behaviour cannot drift between
+       routes the way six copies of it would.
+
+       The terms stay in the DOM — the Add button harvests them from exactly
+       these spans, so hiding is the only safe move. Adding a class still
+       captures every term whether or not the visitor ever opened the list. */
+    const terms=row.querySelector('.terms');
+    if(terms){
+      const n_t=terms.querySelectorAll('.term').length;
+      if(n_t){
+        terms.style.display='none';
+        const t=document.createElement('button');
+        t.type='button'; t.className='terms-toggle';
+        const setLabel=()=>{ t.textContent=(terms.style.display==='none'?'▸ ':'▾ ')+
+          n_t+' registered term'+(n_t===1?'':'s'); };
+        setLabel();
+        t.onclick=()=>{ terms.style.display=(terms.style.display==='none'?'':'none');
+                        setLabel(); };
+        terms.parentNode.insertBefore(t,terms);
+      }
+    }
   });
 }
 function togglePick(n,label,terms){
