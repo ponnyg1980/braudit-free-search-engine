@@ -87,6 +87,16 @@
   /* Class Builder review screen */
   .txt{width:100%;padding:11px 13px;border:1.5px solid var(--line,#d9dee4);border-radius:9px;
        font:inherit;font-size:15px;box-sizing:border-box}
+  /* Advanced-terms switch (Jonathan, 19 Sep 2026). */
+  .rv-adv{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 16px;
+    padding:13px 16px;background:#F7F8FA;border:1px solid var(--line,#d9dee4);border-radius:12px}
+  .rv-adv-btn{background:#fff;border:1.5px solid var(--navy,#2D455A);color:var(--navy,#2D455A);
+    border-radius:9px;padding:9px 15px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;
+    transition:background .15s ease,color .15s ease}
+  .rv-adv-btn:hover{background:var(--navy,#2D455A);color:#fff}
+  .rv-adv-note{font-size:13.5px;line-height:1.55;color:#617383;flex:1;min-width:200px}
+  .rv-terms-sum{font-size:13.5px;color:#617383;margin-top:10px}
+  .rv-terms-sum b{color:var(--navy,#2D455A)}
   .rv-block{border:1.5px solid var(--line,#d9dee4);border-radius:12px;padding:16px 18px;margin:0 0 14px}
   .rv-block h3{margin:0 0 2px;font-size:17px}
   .rv-block .rv-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
@@ -580,10 +590,14 @@
        amend anything, then Send — to the Deal's Classes & Terms when opened
        from Zoho, or emailed as a CSV with a Class Tools lead created. -->
   <section class="card hidden" data-screen="review">
-    <h1>Review your classes &amp; terms</h1>
-    <p class="lead">These are the official class descriptions and the specific terms drawn from
-      marks already registered at the UKIPO. Edit anything &mdash; remove classes, delete or
-      reword terms &mdash; then send. What you send is exactly what we file against.</p>
+    <h1>Review your classes</h1>
+    <!-- Copy rewritten 19 Sep 2026. It used to open by describing the term
+         editors, which is the advanced path now: the promise on arrival is
+         "check your classes", and terms are offered, not imposed. -->
+    <p class="lead">Check the classes and their official descriptions. The specific terms are
+      drawn from marks already registered at the UKIPO and are included automatically &mdash;
+      open them below if you want to read or change them. What you send is exactly what we
+      search and file against.</p>
     <!-- Shown when the classes were self-picked with nothing to tailor the
          terms to (Jonathan, 28 Aug). Rather than presenting the class's most
          popular terms as if they were advice, we ask for one line about the
@@ -600,6 +614,10 @@
         <button class="link" onclick="rvSkipContext()">No thanks &mdash; the class wording is enough</button>
       </div>
     </div>
+
+    <!-- The advanced switch. One control, above the list, so the page has a
+         single answer to "where are the terms?" (Jonathan, 19 Sep). -->
+    <div id="rv-adv" class="rv-adv"></div>
 
     <div id="rv-list"></div>
     <p style="margin:14px 0 20px"><button class="btn ghost" onclick="history.back()">+ Add or change classes</button></p>
@@ -2550,9 +2568,27 @@ function parseTerms(s){
   return out;
 }
 function fmtTerms(list){return parseTerms(Array.isArray(list)?list.join('\n'):list).join('; ');}
+/* TERMS ARE AN ADVANCED OPTION (Jonathan, 19 Sep 2026).
+   Terms are ALWAYS derived and ALWAYS sent. What changed is that editing them
+   is now opt-in: most visitors want to confirm their classes and go, and a
+   wall of fifty registered phrases is the thing that stops them.
+
+   The editors are RENDERED either way and only HIDDEN, because collectRows()
+   reads their values — remove them from the DOM and a visitor who never opens
+   the panel sends no terms at all. Hidden, not absent. */
+function rvTermCount(r){
+  const tt=r.term_tiers;
+  const list=tt?[].concat(tt.definite||[],tt.possible||[],tt.unlikely||[]):(r.terms||[]);
+  return parseTerms(list.join('\n')).length;
+}
+function rvToggleAdvanced(){
+  state.rvAdvanced=!state.rvAdvanced;
+  renderReview();
+}
 function renderReview(){
   const host=document.getElementById('rv-list');
   const esc=s=>String(s||'').replace(/</g,'&lt;');
+  const adv=!!state.rvAdvanced;
   const ta=(id,list,minR)=>`<textarea id="${id}" rows="${Math.min(8,Math.max(2,Math.ceil(fmtTerms(list).length/90)))}">${esc(fmtTerms(list))}</textarea>`;
   host.innerHTML=(state.review||[]).map((r,i)=>{
     const tt=r.term_tiers;
@@ -2567,14 +2603,30 @@ function renderReview(){
          ${ta('rv-t-'+r.n+'-unl',tt.unlikely,2)}`
       : `<label>Specific terms &mdash; separated by "; " &mdash; delete any that don't apply</label>
          ${ta('rv-t-'+r.n,r.terms,4)}`;
+    const n=rvTermCount(r);
+    const summary = adv ? '' :
+      `<div class="rv-terms-sum">${n?`<b>${n}</b> specific term${n===1?'':'s'} included`
+        :'No specific terms for this class yet'}</div>`;
     return `
     <div class="rv-block" data-rv="${r.n}">
       <div class="rv-head"><h3>Class ${r.n} &middot; ${classLabel(r.n)}</h3>
         <button class="rv-x" onclick="rvRemove(${r.n})">Remove class</button></div>
       <label>Class description</label>
       <textarea id="rv-h-${r.n}" rows="2">${esc(r.heading)}</textarea>
-      ${termsHtml}
+      ${summary}
+      <div class="rv-terms"${adv?'':' style="display:none"'}>${termsHtml}</div>
     </div>`;}).join('');
+
+  const total=(state.review||[]).reduce((a,r)=>a+rvTermCount(r),0);
+  const sw=document.getElementById('rv-adv');
+  if(sw){
+    sw.innerHTML=
+      `<button type="button" class="rv-adv-btn" onclick="rvToggleAdvanced()">`+
+        `${adv?'&minus;':'+'} ${adv?'Hide':'Show and edit'} the specific terms</button>`+
+      `<span class="rv-adv-note">${total} term${total===1?'':'s'} `+
+        `${adv?'shown':'are included automatically'} &mdash; `+
+        `every one is wording already accepted by the UK IPO.</span>`;
+  }
   /* Three exits from Review, mutually exclusive:
      RETURN -> hand the selection back to the host page (Brand Audit)
      DEAL   -> write it onto a Zoho Deal
