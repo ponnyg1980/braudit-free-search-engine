@@ -45,7 +45,8 @@
   .terms{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px}
   /* The per-class terms toggle, added by decorateRows (19 Sep 2026). */
   .terms-toggle{margin-top:7px;background:none;border:0;padding:0;font:inherit;font-size:12.5px;
-    font-weight:700;color:var(--muted,#617383);cursor:pointer;letter-spacing:.1px}
+    font-weight:700;color:var(--muted,#617383);cursor:pointer;letter-spacing:.1px;
+    text-decoration:underline;text-underline-offset:3px}
   .terms-toggle:hover{color:var(--pink,#E51652)}
   .term{font-size:11px;padding:3px 8px;border:1px solid var(--line);border-radius:999px;background:#fbfcfd;color:var(--navy)}
   .copybar{display:flex;gap:8px;align-items:center;margin-top:10px}
@@ -662,7 +663,9 @@ function decorateRows(){
         terms.style.display='none';
         const t=document.createElement('button');
         t.type='button'; t.className='terms-toggle';
-        const setLabel=()=>{ t.textContent=(terms.style.display==='none'?'▸ ':'▾ ')+
+        /* Words, not a glyph. The ▸ rendered at this size reads as a bullet,
+           so a collapsed row looked like a statement rather than a control. */
+        const setLabel=()=>{ t.textContent=(terms.style.display==='none'?'Show ':'Hide ')+
           n_t+' registered term'+(n_t===1?'':'s'); };
         setLabel();
         t.onclick=()=>{ terms.style.display=(terms.style.display==='none'?'':'none');
