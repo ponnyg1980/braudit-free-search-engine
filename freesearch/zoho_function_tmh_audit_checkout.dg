@@ -276,7 +276,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			}
 			dM.put("Lead_Source","Request Brand Audit Website Form");
 			dM.put("Closing_Date",zoho.currentdate.addDay(30));
-			dM.put("Braudit_Trigger_Status","not_ready");
+			dM.put("Braudit_Trigger_Status","Not Ready");
 			// Layout-mandatory fields (13 Sep 2026): without these the Deal cannot be
 			// saved from the UI until staff fill them. Type is refined at the scope stage.
 			dM.put("Lead_Source_Group","Website Forms");
@@ -344,7 +344,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		if(p.get("has_logo") != null)
 		{
 			types = List();
-			types.add("word");
+			types.add("Word");
 			hasLogo = p.get("has_logo").toString().equalsIgnoreCase("true");
 			logoLater = false;
 			if(p.get("logo_later") != null)
@@ -353,7 +353,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			}
 			if(hasLogo)
 			{
-				types.add("image");
+				types.add("Image");
 			}
 			dM.put("Braudit_Search_Types",types);
 			dM.put("Logo_Awaited",logoLater);
@@ -405,35 +405,21 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				dM.put("Audit_Search_Layers",layers);
 			}
 		}
-		// Classes on the deal itself (the subform mirror follows below).
-		clsPick = {1:"1 - Chemicals",2:"2 - Paints",3:"3 - Cosmetics & Cleaning",4:"4 - Lubricants & Fuels",5:"5 - Pharmaceuticals",6:"6 - Metal Goods",7:"7 - Machinery",8:"8 - Hand Tools",9:"9 - Scientific Devices",10:"10 - Medical Apparatus",11:"11 - Environmental Control",12:"12 - Vehicles",13:"13 - Firearms",14:"14 - Jewellery",15:"15 - Musical Instruments",16:"16 - Paper Goods",17:"17 - Rubber Goods",18:"18 - Leather Goods",19:"19 - Building Materials",20:"20 - Furniture",21:"21 - Household Utensils",22:"22 - Ropes & Textiles",23:"23 - Yarns & Threads",24:"24 - Fabrics",25:"25 - Clothing",26:"26 - Lace & Embroidery",27:"27 - Floor Coverings",28:"28 - Toys & Sports",29:"29 - Meat & Processed Foods",30:"30 - Staple Foods",31:"31 - Natural Agricultural",32:"32 - Light Beverages",33:"33 - Wines & Spirits",34:"34 - Smokers Articles",35:"35 - Advertising & Business",36:"36 - Insurance & Finance",37:"37 - Construction & Repair",38:"38 - Telecommunications",39:"39 - Transportation",40:"40 - Treatment of Materials",41:"41 - Education & Entertainment",42:"42 - Computer & Scientific",43:"43 - Hotels & Restaurants",44:"44 - Medical & Beauty",45:"45 - Legal & Security"};
-		ourCls = Map();
-		if(p.get("scope") != null)
+		// Classes live ONLY on the G S Scope Asset (Jonathan, 17 Sep 2026):
+		// the Deals `Classes` multiselect is labelled "DO NOT USE" and the
+		// `Classes_Terms` sub-form is retired. Neither is written any more.
+		// SCOPE RESPONSIBILITY (Jonathan, 19 Sep 2026). An ORDER-LEVEL
+		// instruction, so it belongs on the Deal, never on the scope asset:
+		// a "TMH to pick" order has NO class rows, so an instruction stored
+		// on the asset would disappear exactly when it is needed. The three
+		// values are the picklist's stored strings, sent verbatim by the
+		// checkout page.
+		if(p.get("scope_responsibility") != null)
 		{
-			clsList = List();
-			lst_row = p.get("scope").toList();
-			for each row in lst_row
+			sResp = p.get("scope_responsibility").toString().trim();
+			if(sResp != "")
 			{
-				rm = row.toMap();
-				n = rm.get("n").toLong();
-				lbl = clsPick.get(n);
-				if(lbl != null)
-				{
-					clsList.add(lbl);
-				}
-				tmpRw = Map();
-				tx = "";
-				if(rm.get("terms_text") != null)
-				{
-					tx = rm.get("terms_text").toString();
-				}
-				tmpRw.put("Classes",{lbl});
-				tmpRw.put("Terms1",tx);
-				ourCls.put(n,tmpRw);
-			}
-			if(clsList.size() > 0)
-			{
-				dM.put("Classes",clsList);
+				dM.put("Scope_Responsibility",sResp);
 			}
 		}
 		// Consultation + deadline.
@@ -453,84 +439,180 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			zoho.crm.updateRecord("Deals",dealId.toLong(),dM);
 		}
-		// Classes & Terms subform -- merge, never replace: rows omitted from
-		// an update are DELETED by Zoho, so existing rows are re-sent by id.
-		if(ourCls.size() > 0)
-		{
-			dealRec = zoho.crm.getRecordById("Deals",dealId.toLong());
-			merged = List();
-			existing = dealRec.get("Classes_Terms");
-			if(existing != null)
-			{
-				lst_r = existing.toList();
-				for each r in lst_r
-				{
-					keep = Map();
-					keep.put("id",r.get("id"));
-					merged.add(keep);
-				}
-			}
-			lst_k = ourCls.keys();
-			for each k in lst_k
-			{
-				merged.add(ourCls.get(k));
-			}
-			sfMap = Map();
-			sfMap.put("Classes_Terms",merged);
-			zoho.crm.updateRecord("Deals",dealId.toLong(),sfMap);
-		}
-		// G S Scope Asset + class rows (the frozen-scope source of record).
+		// ===== SCOPE WRITE (Jonathan, 17 Sep 2026) -- shared by 'scope' + 'order_complete' =====
+		// The reusable asset: ONE G_S_Scope_Assets per Deal (Asset_Type "Deal Search")
+		// linked to BOTH the Account and the Deal, ONE G_S_Scope_Classes_Terms child
+		// per class (Nice_Class_Reference, Nice_Class_Number_Snapshot,
+		// Class_Description_Snapshot, Specific_Terms "; "-joined, Terms_Source,
+		// Display_Order). Re-sending REPLACES: class rows are updated in place and
+		// rows for classes the user removed are deleted, so the asset is always the
+		// FINAL edited scope. The Deals Classes_Terms sub-form is RETIRED (17 Sep)
+		// and the "DO NOT USE" Classes multiselect is not written: this asset is
+		// the one source of truth. All lookups by related list -- search lags.
 		if(p.get("scope") != null)
 		{
-			aNm = "Brand Audit - " + mark;
-			if(aNm.length() > 100)
+			scMark = "";
+			if(p.get("mark") != null)
 			{
-				aNm = aNm.subString(0,100);
+				scMark = p.get("mark").toString().trim();
 			}
-			amD = Map();
-			amD.put("Name",aNm);
-			amD.put("Deal",dealId.toLong());
-			amD.put("Asset_Type","Deal Search");
-			amD.put("Asset_Status","Active");
-			amD.put("Register","UKIPO");
-			if(accountId != "")
+			clsPick = {1:"1 - Chemicals",2:"2 - Paints",3:"3 - Cosmetics & Cleaning",4:"4 - Lubricants & Fuels",5:"5 - Pharmaceuticals",6:"6 - Metal Goods",7:"7 - Machinery",8:"8 - Hand Tools",9:"9 - Scientific Devices",10:"10 - Medical Apparatus",11:"11 - Environmental Control",12:"12 - Vehicles",13:"13 - Firearms",14:"14 - Jewellery",15:"15 - Musical Instruments",16:"16 - Paper Goods",17:"17 - Rubber Goods",18:"18 - Leather Goods",19:"19 - Building Materials",20:"20 - Furniture",21:"21 - Household Utensils",22:"22 - Ropes & Textiles",23:"23 - Yarns & Threads",24:"24 - Fabrics",25:"25 - Clothing",26:"26 - Lace & Embroidery",27:"27 - Floor Coverings",28:"28 - Toys & Sports",29:"29 - Meat & Processed Foods",30:"30 - Staple Foods",31:"31 - Natural Agricultural",32:"32 - Light Beverages",33:"33 - Wines & Spirits",34:"34 - Smokers Articles",35:"35 - Advertising & Business",36:"36 - Insurance & Finance",37:"37 - Construction & Repair",38:"38 - Telecommunications",39:"39 - Transportation",40:"40 - Treatment of Materials",41:"41 - Education & Entertainment",42:"42 - Computer & Scientific",43:"43 - Hotels & Restaurants",44:"44 - Medical & Beauty",45:"45 - Legal & Security"};
+			scRows = p.get("scope").toList();
+			// ---- 1. (retired 17 Sep) the Deals Classes_Terms sub-form and the
+			//      "DO NOT USE" Classes multiselect are no longer written. The
+			//      asset below is the ONE source of truth.
+			// ---- 2. The asset: Account + Deal
+			scAcc = accountId;
+			if(scAcc == "")
 			{
-				amD.put("Account",accountId.toLong());
-			}
-			caD = zoho.crm.createRecord("G_S_Scope_Assets",amD);
-			if(caD.get("id") != null)
-			{
-				assetId = caD.get("id").toString();
-				lst_row = p.get("scope").toList();
-				for each row in lst_row
+				scDR2 = zoho.crm.getRecordById("Deals",dealId.toLong());
+				if(scDR2.get("Account_Name") != null)
 				{
-					rm = row.toMap();
-					cn = rm.get("n").toLong();
-					nnD = cn.toString();
-					if(cn < 10)
+					scAcc = ifnull(scDR2.get("Account_Name").get("id"),"").toString();
+				}
+			}
+			scANm = "Brand Audit - " + scMark;
+			if(scANm.length() > 100)
+			{
+				scANm = scANm.subString(0,100);
+			}
+			assetId = "";
+			scFirst = "";
+			scRelA = zoho.crm.getRelatedRecords("G_S_Scope_Assets","Deals",dealId.toLong());
+			if(scRelA != null)
+			{
+				for each  scra in scRelA
+				{
+					if(ifnull(scra.get("Asset_Type"),"") == "Deal Search")
 					{
-						nnD = "0" + nnD;
+						// prefer OUR asset by name; a Class Builder asset may share the Deal
+						if(ifnull(scra.get("Name"),"") == scANm)
+						{
+							assetId = scra.get("id").toString();
+						}
+						else if(scFirst == "")
+						{
+							scFirst = scra.get("id").toString();
+						}
 					}
-					rM = Map();
-					rM.put("Name","Class " + nnD + " - " + mark);
-					rM.put("Scope_Asset",assetId.toLong());
-					rM.put("Nice_Class_Number_Snapshot",cn);
-					// The Nice class reference records are consecutive ids
-					// seeded 1..45 -- same arithmetic the brand-audit intake
-					// uses (proven in production).
-					rM.put("Nice_Class_Reference",1964745000114603017 + cn);
-					rM.put("Register_Snapshot","UKIPO");
-					src = "Approved";
-					if(rm.get("terms_source") != null)
+				}
+			}
+			if((assetId == "") && (scFirst != ""))
+			{
+				assetId = scFirst;
+			}
+			scAM = Map();
+			scAM.put("Name",scANm);
+			scAM.put("Deal",dealId.toLong());
+			scAM.put("Asset_Type","Deal Search");
+			scAM.put("Asset_Status","Active");
+			scAM.put("Register","UKIPO");
+			if(scAcc != "")
+			{
+				scAM.put("Account",scAcc.toLong());
+			}
+			if(assetId == "")
+			{
+				scCA = zoho.crm.createRecord("G_S_Scope_Assets",scAM);
+				if(scCA.get("id") != null)
+				{
+					assetId = scCA.get("id").toString();
+				}
+			}
+			else
+			{
+				zoho.crm.updateRecord("G_S_Scope_Assets",assetId.toLong(),scAM);
+			}
+			// ---- 3. One child row per class; replace, don't append
+			if(assetId != "")
+			{
+				scOld = Map();
+				scRelR = zoho.crm.getRelatedRecords("G_S_Scope_Classes_Terms","G_S_Scope_Assets",assetId.toLong());
+				if(scRelR != null)
+				{
+					for each  scrr in scRelR
 					{
-						src = rm.get("terms_source").toString();
+						if(scrr.get("Nice_Class_Number_Snapshot") != null)
+						{
+							scOld.put(scrr.get("Nice_Class_Number_Snapshot").toString(),scrr.get("id").toString());
+						}
 					}
-					rM.put("Terms_Source",src);
-					if(rm.get("terms_text") != null)
+				}
+				scKept = List();
+				scOrd = 0;
+				for each  scr2 in scRows
+				{
+					scm2 = scr2.toMap();
+					scn2 = scm2.get("n").toLong();
+					scOrd = scOrd + 1;
+					scnn = scn2.toString();
+					if(scn2 < 10)
 					{
-						rM.put("Specific_Terms",rm.get("terms_text").toString());
+						scnn = "0" + scnn;
 					}
-					zoho.crm.createRecord("G_S_Scope_Classes_Terms",rM);
+					scRM = Map();
+					scRM.put("Nice_Class_Number_Snapshot",scn2);
+					scRM.put("Nice_Class_Reference",1964745000114603017 + scn2);
+					scRM.put("Register_Snapshot","UKIPO");
+					scRM.put("Display_Order",scOrd);
+					if(scm2.get("display_order") != null)
+					{
+						scRM.put("Display_Order",scm2.get("display_order").toLong());
+					}
+					scSrc = "Approved";
+					if(scm2.get("terms_source") != null)
+					{
+						scSrc = scm2.get("terms_source").toString();
+					}
+					scRM.put("Terms_Source",scSrc);
+					scDesc = "";
+					if(scm2.get("heading") != null)
+					{
+						scDesc = scm2.get("heading").toString();
+					}
+					if((scDesc == "") && (scm2.get("label") != null))
+					{
+						scDesc = scm2.get("label").toString();
+					}
+					if(scDesc == "")
+					{
+						scDesc = ifnull(clsPick.get(scn2),"Class " + scn2);
+					}
+					scRM.put("Class_Description_Snapshot",scDesc);
+					scTx = "";
+					if(scm2.get("terms_text") != null)
+					{
+						scTx = scm2.get("terms_text").toString();
+					}
+					scRM.put("Specific_Terms",scTx);
+					scKept.add(scn2.toString());
+					if(scOld.get(scn2.toString()) != null)
+					{
+						zoho.crm.updateRecord("G_S_Scope_Classes_Terms",scOld.get(scn2.toString()).toLong(),scRM);
+					}
+					else
+					{
+						scRNm = "Class " + scnn + " - " + scMark;
+						if(scRNm.length() > 100)
+						{
+							scRNm = scRNm.subString(0,100);
+						}
+						scRM.put("Name",scRNm);
+						scRM.put("Scope_Asset",assetId.toLong());
+						zoho.crm.createRecord("G_S_Scope_Classes_Terms",scRM);
+					}
+				}
+				// Classes the user removed before sending: gone from the asset.
+				lst_scOld = scOld.keys();
+				for each  scok in lst_scOld
+				{
+					if(scKept.contains(scok) == false)
+					{
+						scDel = Map();
+						scDel.put("module","G_S_Scope_Classes_Terms");
+						scDel.put("id",scOld.get(scok));
+						zoho.crm.invokeConnector("crm.delete",scDel);
+					}
 				}
 				res.put("scope_asset_id",assetId);
 			}
@@ -693,7 +775,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		// stage quoted.'
 		dM = Map();
 		dM.put("Stage","Quoted");
-		dM.put("Braudit_Trigger_Status","awaiting_payment");
+		dM.put("Braudit_Trigger_Status","Awaiting Payment");
 		if(p.get("order_ref") != null)
 		{
 			dM.put("Audit_Order_Ref",p.get("order_ref").toString());
@@ -1011,6 +1093,188 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		if(dealId != "")
 		{
+			// Staff orders arrive with their classes & terms HERE (17 Sep):
+			// the client wizard wrote them at the 'scope' stage, the staff
+			// forms had nowhere to -- so the gate below failed every staff
+			// order on "Nice classes and terms". Same shared block.
+			// ===== SCOPE WRITE (Jonathan, 17 Sep 2026) -- shared by 'scope' + 'order_complete' =====
+			// The reusable asset: ONE G_S_Scope_Assets per Deal (Asset_Type "Deal Search")
+			// linked to BOTH the Account and the Deal, ONE G_S_Scope_Classes_Terms child
+			// per class (Nice_Class_Reference, Nice_Class_Number_Snapshot,
+			// Class_Description_Snapshot, Specific_Terms "; "-joined, Terms_Source,
+			// Display_Order). Re-sending REPLACES: class rows are updated in place and
+			// rows for classes the user removed are deleted, so the asset is always the
+			// FINAL edited scope. The Deals Classes_Terms sub-form is RETIRED (17 Sep)
+			// and the "DO NOT USE" Classes multiselect is not written: this asset is
+			// the one source of truth. All lookups by related list -- search lags.
+			if(p.get("scope") != null)
+			{
+				scMark = "";
+				if(p.get("mark") != null)
+				{
+					scMark = p.get("mark").toString().trim();
+				}
+				clsPick = {1:"1 - Chemicals",2:"2 - Paints",3:"3 - Cosmetics & Cleaning",4:"4 - Lubricants & Fuels",5:"5 - Pharmaceuticals",6:"6 - Metal Goods",7:"7 - Machinery",8:"8 - Hand Tools",9:"9 - Scientific Devices",10:"10 - Medical Apparatus",11:"11 - Environmental Control",12:"12 - Vehicles",13:"13 - Firearms",14:"14 - Jewellery",15:"15 - Musical Instruments",16:"16 - Paper Goods",17:"17 - Rubber Goods",18:"18 - Leather Goods",19:"19 - Building Materials",20:"20 - Furniture",21:"21 - Household Utensils",22:"22 - Ropes & Textiles",23:"23 - Yarns & Threads",24:"24 - Fabrics",25:"25 - Clothing",26:"26 - Lace & Embroidery",27:"27 - Floor Coverings",28:"28 - Toys & Sports",29:"29 - Meat & Processed Foods",30:"30 - Staple Foods",31:"31 - Natural Agricultural",32:"32 - Light Beverages",33:"33 - Wines & Spirits",34:"34 - Smokers Articles",35:"35 - Advertising & Business",36:"36 - Insurance & Finance",37:"37 - Construction & Repair",38:"38 - Telecommunications",39:"39 - Transportation",40:"40 - Treatment of Materials",41:"41 - Education & Entertainment",42:"42 - Computer & Scientific",43:"43 - Hotels & Restaurants",44:"44 - Medical & Beauty",45:"45 - Legal & Security"};
+				scRows = p.get("scope").toList();
+				// ---- 1. (retired 17 Sep) the Deals Classes_Terms sub-form and the
+				//      "DO NOT USE" Classes multiselect are no longer written. The
+				//      asset below is the ONE source of truth.
+				// ---- 2. The asset: Account + Deal
+				scAcc = accountId;
+				if(scAcc == "")
+				{
+					scDR2 = zoho.crm.getRecordById("Deals",dealId.toLong());
+					if(scDR2.get("Account_Name") != null)
+					{
+						scAcc = ifnull(scDR2.get("Account_Name").get("id"),"").toString();
+					}
+				}
+				scANm = "Brand Audit - " + scMark;
+				if(scANm.length() > 100)
+				{
+					scANm = scANm.subString(0,100);
+				}
+				assetId = "";
+				scFirst = "";
+				scRelA = zoho.crm.getRelatedRecords("G_S_Scope_Assets","Deals",dealId.toLong());
+				if(scRelA != null)
+				{
+					for each  scra in scRelA
+					{
+						if(ifnull(scra.get("Asset_Type"),"") == "Deal Search")
+						{
+							// prefer OUR asset by name; a Class Builder asset may share the Deal
+							if(ifnull(scra.get("Name"),"") == scANm)
+							{
+								assetId = scra.get("id").toString();
+							}
+							else if(scFirst == "")
+							{
+								scFirst = scra.get("id").toString();
+							}
+						}
+					}
+				}
+				if((assetId == "") && (scFirst != ""))
+				{
+					assetId = scFirst;
+				}
+				scAM = Map();
+				scAM.put("Name",scANm);
+				scAM.put("Deal",dealId.toLong());
+				scAM.put("Asset_Type","Deal Search");
+				scAM.put("Asset_Status","Active");
+				scAM.put("Register","UKIPO");
+				if(scAcc != "")
+				{
+					scAM.put("Account",scAcc.toLong());
+				}
+				if(assetId == "")
+				{
+					scCA = zoho.crm.createRecord("G_S_Scope_Assets",scAM);
+					if(scCA.get("id") != null)
+					{
+						assetId = scCA.get("id").toString();
+					}
+				}
+				else
+				{
+					zoho.crm.updateRecord("G_S_Scope_Assets",assetId.toLong(),scAM);
+				}
+				// ---- 3. One child row per class; replace, don't append
+				if(assetId != "")
+				{
+					scOld = Map();
+					scRelR = zoho.crm.getRelatedRecords("G_S_Scope_Classes_Terms","G_S_Scope_Assets",assetId.toLong());
+					if(scRelR != null)
+					{
+						for each  scrr in scRelR
+						{
+							if(scrr.get("Nice_Class_Number_Snapshot") != null)
+							{
+								scOld.put(scrr.get("Nice_Class_Number_Snapshot").toString(),scrr.get("id").toString());
+							}
+						}
+					}
+					scKept = List();
+					scOrd = 0;
+					for each  scr2 in scRows
+					{
+						scm2 = scr2.toMap();
+						scn2 = scm2.get("n").toLong();
+						scOrd = scOrd + 1;
+						scnn = scn2.toString();
+						if(scn2 < 10)
+						{
+							scnn = "0" + scnn;
+						}
+						scRM = Map();
+						scRM.put("Nice_Class_Number_Snapshot",scn2);
+						scRM.put("Nice_Class_Reference",1964745000114603017 + scn2);
+						scRM.put("Register_Snapshot","UKIPO");
+						scRM.put("Display_Order",scOrd);
+						if(scm2.get("display_order") != null)
+						{
+							scRM.put("Display_Order",scm2.get("display_order").toLong());
+						}
+						scSrc = "Approved";
+						if(scm2.get("terms_source") != null)
+						{
+							scSrc = scm2.get("terms_source").toString();
+						}
+						scRM.put("Terms_Source",scSrc);
+						scDesc = "";
+						if(scm2.get("heading") != null)
+						{
+							scDesc = scm2.get("heading").toString();
+						}
+						if((scDesc == "") && (scm2.get("label") != null))
+						{
+							scDesc = scm2.get("label").toString();
+						}
+						if(scDesc == "")
+						{
+							scDesc = ifnull(clsPick.get(scn2),"Class " + scn2);
+						}
+						scRM.put("Class_Description_Snapshot",scDesc);
+						scTx = "";
+						if(scm2.get("terms_text") != null)
+						{
+							scTx = scm2.get("terms_text").toString();
+						}
+						scRM.put("Specific_Terms",scTx);
+						scKept.add(scn2.toString());
+						if(scOld.get(scn2.toString()) != null)
+						{
+							zoho.crm.updateRecord("G_S_Scope_Classes_Terms",scOld.get(scn2.toString()).toLong(),scRM);
+						}
+						else
+						{
+							scRNm = "Class " + scnn + " - " + scMark;
+							if(scRNm.length() > 100)
+							{
+								scRNm = scRNm.subString(0,100);
+							}
+							scRM.put("Name",scRNm);
+							scRM.put("Scope_Asset",assetId.toLong());
+							zoho.crm.createRecord("G_S_Scope_Classes_Terms",scRM);
+						}
+					}
+					// Classes the user removed before sending: gone from the asset.
+					lst_scOld = scOld.keys();
+					for each  scok in lst_scOld
+					{
+						if(scKept.contains(scok) == false)
+						{
+							scDel = Map();
+							scDel.put("module","G_S_Scope_Classes_Terms");
+							scDel.put("id",scOld.get(scok));
+							zoho.crm.invokeConnector("crm.delete",scDel);
+						}
+					}
+					res.put("scope_asset_id",assetId);
+				}
+			}
 			dealRec = zoho.crm.getRecordById("Deals",dealId.toLong());
 			dM = Map();
 			dM.put("Owner",ownerId);
@@ -1045,7 +1309,21 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				stparts = p.get("search_types").toString().toList(";");
 				for each  stv in stparts
 				{
-					stl.add(stv);
+					// Governed values are Title Case ('Word' / 'Image'). The form
+					// sends lowercase; Zoho would store it as-is, ungoverned.
+					stvN = stv.toString().trim();
+					if(stvN.equalsIgnoreCase("word"))
+					{
+						stvN = "Word";
+					}
+					else if(stvN.equalsIgnoreCase("image"))
+					{
+						stvN = "Image";
+					}
+					if(stvN != "")
+					{
+						stl.add(stvN);
+					}
 				}
 				dM.put("Braudit_Search_Types",stl);
 			}
@@ -1083,14 +1361,254 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				{
 					missing.add("search word (Search Word 1)");
 				}
-				ctRows = dealRec.get("Classes_Terms");
-				if((ctRows == null) || (ctRows.size() == 0))
+				// Classes & terms now live on the G S Scope Asset (17 Sep 2026),
+				// not the retired sub-form: at least one Deal Search asset with
+				// at least one class row.
+				gtRows = 0;
+				gtA = zoho.crm.getRelatedRecords("G_S_Scope_Assets","Deals",dealId.toLong());
+				if(gtA != null)
 				{
-					missing.add("Nice classes and terms (Classes Terms)");
+					for each  gta in gtA
+					{
+						if((gtRows == 0) && (ifnull(gta.get("Asset_Type"),"") == "Deal Search"))
+						{
+							gtR = zoho.crm.getRelatedRecords("G_S_Scope_Classes_Terms","G_S_Scope_Assets",gta.get("id").toString().toLong());
+							if(gtR != null)
+							{
+								gtRows = gtR.size();
+							}
+						}
+					}
+				}
+				if(gtRows == 0)
+				{
+					// The gate still HOLDS the order -- an audit cannot run
+					// without a scope either way. What changes (Jonathan,
+					// 19 Sep 2026) is what it SAYS. A client who asked us to
+					// pick is not a client who forgot, and the line used to
+					// read identically for both, so the worklist could not
+					// tell "chase the client" from "do the work we promised".
+					// PAYLOAD FIRST, then the record. On a STAFF order this
+					// same call is what writes Scope_Responsibility, so the
+					// Deal still holds the old value while the gate runs --
+					// read the record only and a staff "we will pick them"
+					// would be reported as a plain omission on the first
+					// pass. Same reasoning as the applicant resolution above:
+					// the stage is fire-and-forget, so nothing can run
+					// "after" it and still be seen.
+					sR = "";
+					if(p.get("scope_responsibility") != null)
+					{
+						sR = p.get("scope_responsibility").toString().trim();
+					}
+					if(sR == "")
+					{
+						sR = ifnull(dealRec.get("Scope_Responsibility"),"").toString();
+					}
+					if(sR == "TMH to pick classes and terms")
+					{
+						missing.add("Nice classes and terms -- CLIENT ASKED US TO PICK THEM");
+					}
+					else if(sR == "TMH to pick terms")
+					{
+						missing.add("Nice classes and terms -- CLIENT ASKED US TO PICK THE TERMS");
+					}
+					else
+					{
+						missing.add("Nice classes and terms (G S Scope Asset)");
+					}
 				}
 				if(dealRec.get("Account_Name") == null)
 				{
 					missing.add("Account");
+				}
+				// APPLICANT RESOLUTION (16 Sep 2026) -- runs HERE, before the gate,
+				// because this stage is fire-and-forget from the journey: nothing
+				// can run applicant_link "after" it and still be seen by the gate.
+				// Compact form of stage applicant_link; that stage remains for
+				// re-linking from edit mode. Same rules: biller-as-applicant only
+				// if the biller is not a partner; company number is the only key
+				// safe to act on alone here; name-only queues for Laura.
+				apSame = true;
+				if(p.get("applicant_same_as_billing") != null)
+				{
+					apSame = p.get("applicant_same_as_billing").toString().equalsIgnoreCase("true");
+				}
+				apName2 = "";
+				if(p.get("applicant_name") != null)
+				{
+					apName2 = p.get("applicant_name").toString().trim();
+				}
+				apNum2 = "";
+				if(p.get("applicant_company_number") != null)
+				{
+					apNum2 = p.get("applicant_company_number").toString().trim();
+				}
+				apId = "";
+				apNm = "";
+				apStatus = "";
+				apCands = List();
+				if(apSame)
+				{
+					bl2 = dealRec.get("Account_Name");
+					if(bl2 != null)
+					{
+						bId2 = ifnull(bl2.get("id"),"").toString();
+						if(bId2 != "")
+						{
+							bR2 = zoho.crm.getRecordById("Accounts",bId2.toLong());
+							pt2 = "";
+							if(bR2.get("Partner_Type") != null)
+							{
+								pt2 = bR2.get("Partner_Type").toString();
+							}
+							if(pt2 != "")
+							{
+								apStatus = "Needs review";
+								apCands.add(ifnull(bl2.get("name"),"") + " (" + bId2 + ") is the biller but is a " + pt2 + " partner, so cannot be the applicant");
+							}
+							else
+							{
+								apId = bId2;
+								apNm = ifnull(bl2.get("name"),"");
+								apStatus = "Matched";
+							}
+						}
+					}
+				}
+				if((apId == "") && (apStatus == "") && (apNum2 != ""))
+				{
+					fa3 = zoho.crm.searchRecords("Accounts","(Company_URN:equals:" + apNum2 + ")");
+					if((fa3 != null) && (fa3.size() > 0))
+					{
+						fa30 = fa3.get(0);
+						apId = fa30.get("id").toString();
+						apNm = ifnull(fa30.get("Account_Name"),"");
+						apStatus = "Matched";
+					}
+					else
+					{
+						nA2 = Map();
+						nA2.put("Account_Name",apName2);
+						nA2.put("Applicant_name",apName2);
+						nA2.put("Company_URN",apNum2);
+						nA2.put("Applicant_company_number",apNum2);
+						at3 = List();
+						at3.add("Trademark Applicant");
+						nA2.put("Account_Type_2",at3);
+						nr2 = zoho.crm.createRecord("Accounts",nA2);
+						if(nr2.get("id") != null)
+						{
+							apId = nr2.get("id").toString();
+							apNm = apName2;
+							apStatus = "Created";
+						}
+					}
+				}
+				if((apId == "") && (apStatus == ""))
+				{
+					if(apName2 != "")
+					{
+						apStatus = "Needs review";
+						apCands.add(apName2 + " - name only; no company number, nothing safe to match on");
+					}
+					else
+					{
+						apStatus = "No applicant supplied";
+					}
+				}
+				if(apId != "")
+				{
+					aR3 = zoho.crm.getRecordById("Accounts",apId.toLong());
+					typs3 = List();
+					if(aR3.get("Account_Type_2") != null)
+					{
+						lst_t3 = aR3.get("Account_Type_2").toList();
+						for each  t3 in lst_t3
+						{
+							typs3.add(t3.toString());
+						}
+					}
+					if(typs3.contains("Trademark Applicant") == false)
+					{
+						typs3.add("Trademark Applicant");
+						aU3 = Map();
+						aU3.put("Account_Type_2",typs3);
+						zoho.crm.updateRecord("Accounts",apId.toLong(),aU3);
+					}
+					already2 = false;
+					relJ2 = zoho.crm.getRelatedRecords("Deal_Applicant_Accounts","Deals",dealId.toLong());
+					if(relJ2 != null)
+					{
+						for each  jr2 in relJ2
+						{
+							jA2 = jr2.get("Applicant_Account");
+							if(jA2 != null)
+							{
+								if(ifnull(jA2.get("id"),"").toString() == apId)
+								{
+									already2 = true;
+								}
+							}
+						}
+					}
+					if(already2 == false)
+					{
+						jN2 = ifnull(dealRec.get("Deal_Name"),"") + " - " + apNm;
+						if(jN2.length() > 120)
+						{
+							jN2 = jN2.subString(0,120);
+						}
+						jM2 = Map();
+						jM2.put("Name",jN2);
+						jM2.put("Deal",dealId.toLong());
+						jM2.put("Applicant_Account",apId.toLong());
+						jM2.put("Role","Applicant");
+						jM2.put("Source_Type",ifnull(p.get("applicant_source_type"),"Staff").toString());
+						zoho.crm.createRecord("Deal_Applicant_Accounts",jM2);
+					}
+				}
+				dM.put("Applicant_Match_Status",apStatus);
+				if(apCands.size() > 0)
+				{
+					dM.put("Applicant_Candidates",apCands.toString(nl));
+				}
+				if((apStatus == "Needs review") || (apStatus == "No applicant supplied"))
+				{
+					tQ2 = Map();
+					tQ2.put("Subject","Confirm applicant account -- " + ifnull(dealRec.get("Deal_Name"),""));
+					tQ2.put("Description","Applicant Match Status: " + apStatus + nl + "Candidates:" + nl + apCands.toString(nl) + nl + nl + "Open the Deal, add the correct Account under Deal Applicant Accounts, then set Next Action Sub Status to 'Send for Research'.");
+					tQ2.put("Status","Not Started");
+					tQ2.put("Priority","High");
+					tQ2.put("Due_Date",zoho.currentdate);
+					tQ2.put("What_Id",dealId);
+					tQ2.put("$se_module","Deals");
+					tQ2.put("Owner","1964745000036444001");
+					zoho.crm.createRecord("Tasks",tQ2);
+				}
+				// APPLICANT GATE (16 Sep 2026, Jonathan): no audit goes for research
+				// without at least one Applicant Account linked. The link is the
+				// Deal_Applicant_Accounts junction, NOT Applicant_1 (retired). A
+				// validation rule cannot count a related list, so this is the
+				// enforcement point; the Setup rule is the belt to these braces.
+				// Account_Name is the BILLER and on a reseller deal is the partner,
+				// so its presence says nothing about who the applicant is.
+				// Related-list read, NOT searchRecords (search lags on fresh rows).
+				appRows = zoho.crm.getRelatedRecords("Deal_Applicant_Accounts","Deals",dealId.toLong());
+				appCount = 0;
+				if(appRows != null)
+				{
+					appCount = appRows.size();
+				}
+				// A row written a moment ago in this same execution counts even if
+				// the related list has not caught up yet.
+				if((appCount == 0) && (apId != ""))
+				{
+					appCount = 1;
+				}
+				if(appCount == 0)
+				{
+					missing.add("applicant account (Deal Applicant Accounts)");
 				}
 				wantsImg = false;
 				stypes = dealRec.get("Braudit_Search_Types");
@@ -1143,13 +1661,13 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				if(missing.size() == 0)
 				{
 					dM.put("Next_Action","Send for Research");
-					dM.put("Braudit_Trigger_Status","ready");
+					dM.put("Braudit_Trigger_Status","Ready to Send");
 					dM.put("Braudit_Last_Error","");
 				}
 				else
 				{
 					dM.put("Next_Action","Set Up Order");
-					dM.put("Braudit_Trigger_Status","not_ready");
+					dM.put("Braudit_Trigger_Status","Not Ready");
 					dM.put("Braudit_Last_Error","Missing: " + missing.toString(", "));
 					tM = Map();
 					tM.put("Subject","Complete audit order information before research");
@@ -1167,10 +1685,23 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			else
 			{
 				dM.put("Stage","Invoiced");
-				dM.put("Next_Action","Confirm Payment");
+				dM.put("Next_Action","Awaiting Payment");
 				if(p.get("pay_date") != null)
 				{
 					dM.put("Payment_Due_Date",p.get("pay_date").toString().toDate());
+				}
+			}
+			// Scope responsibility on the STAFF path (Jonathan, 19 Sep 2026).
+			// The client wizard writes it at the `scope` stage; a staff order
+			// has no such stage, so the journey forwards it here from the
+			// stored enquiry -- the same source _staff_gate reads for G-03,
+			// so the Deal and the gate cannot disagree.
+			if(p.get("scope_responsibility") != null)
+			{
+				sRespO = p.get("scope_responsibility").toString().trim();
+				if(sRespO != "")
+				{
+					dM.put("Scope_Responsibility",sRespO);
 				}
 			}
 			if(ft == "requested")
@@ -1407,6 +1938,499 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			]
 		}
 		res.put("ok",true);
+	}
+	else if(stg == "load")
+	{
+		//
+		// --------------------------------------------------- stage: load
+		//
+		// Read-back for EDIT mode. Shared by BOTH staff forms -- Audit Fact
+		// Find (/staff-enquiry, sales) and Quick Audit (/quick-audit,
+		// Jonathan + admin). Added 15 Sep 2026.
+		//
+		// Why this stage exists. Every write stage here was ALREADY
+		// idempotent on zoho_deal_id -- contact, scope, summary, paid and
+		// order_complete all test dealId != "" and update rather than
+		// create. The gap was the other direction: nothing could read an
+		// audit back out, so opening an existing Deal gave a blank form and
+		// staff retyped what was already on the record. This closes that.
+		//
+		// READ ONLY. It creates nothing and updates nothing. Two guards make
+		// edit mode safe and NEITHER is decided here:
+		//
+		//   1. The caller must not create Lead/Contact/Account in edit mode.
+		//      Same rule as the Deal-scoped class builder (21 Aug): those
+		//      records already exist, and re-running the resolver against an
+		//      edit is how you get duplicates.
+		//   2. 'frozen' below reports whether Braudit_Frozen_At is stamped.
+		//      Past freeze the criteria are immutable -- a change generates a
+		//      NEW search_context_id, which is the contract's 409 case. The
+		//      form must block the edit or make the re-freeze explicit. We
+		//      report the fact; the form owns the decision.
+		//
+		// Exclusions are fetched from BOTH scopes deliberately, because they
+		// mean different things (see CLAUDE.md, EXCLUSIONS SCHEMA):
+		//   * deal-scoped   -> Deal_Override, a one-off "not a concern"
+		//   * account-scoped -> standing portfolio items on the APPLICANT
+		// An edit screen that showed only one of them would invite staff to
+		// re-add an exclusion that already exists at the other scope.
+		if(dealId == "")
+		{
+			res.put("ok",false);
+			res.put("error","deal id required");
+			return res.toString();
+		}
+		dR = zoho.crm.getRecordById("Deals",dealId.toLong());
+		if(dR == null)
+		{
+			res.put("ok",false);
+			res.put("error","deal not found");
+			return res.toString();
+		}
+		dM2 = Map();
+		flds = {"Deal_Name","Stage","Next_Action","Applicant_Match_Status","Applicant_Candidates","Audit_Payment_Method","Audit_Order_Ref","Audit_Deadline","Braudit_Trigger_Status","Braudit_Frozen_At","Logo_Awaited","Audit_Search_Layers","Trademark_Jurisdictions","Braudit_Search_Types","Lead_Source_Group","Amount"};
+		for each  fn in flds
+		{
+			dM2.put(fn,ifnull(dR.get(fn),""));
+		}
+		// for each over a literal range, NOT while: Deluge in this org rejects
+		// `while` outright (save fails with "syntax is incorrect"). The rest of
+		// this function uses `for each` 30 times and `while` zero times --
+		// that ratio was the clue.
+		slots = {1,2,3,4,5};
+		for each  i in slots
+		{
+			dM2.put("Search_Word_" + i,ifnull(dR.get("Search_Word_" + i),""));
+			dM2.put("Search_Operator_" + i,ifnull(dR.get("Search_Operator_" + i),""));
+			dM2.put("Search_Domain_" + i,ifnull(dR.get("Search_Domain_" + i),""));
+			dM2.put("Domain_Search_Operator_" + i,ifnull(dR.get("Domain_Search_Operator_" + i),""));
+		}
+		// Billing account and APPLICANT account are different things and the
+		// form must not conflate them. On a reseller deal Account_Name is the
+		// PARTNER; the Deal_Applicant_Accounts rows are the clients the audit
+		// is actually for.
+		accL = dR.get("Account_Name");
+		if(accL != null)
+		{
+			dM2.put("account_id",ifnull(accL.get("id"),"").toString());
+			dM2.put("account_name",ifnull(accL.get("name"),""));
+		}
+		// The person on the order (16 Sep): edit mode needs the contact to
+		// pass its own G-00 without retyping -- and must NEVER create one.
+		cL2 = dR.get("Contact_Name");
+		if(cL2 != null)
+		{
+			cid2 = ifnull(cL2.get("id"),"").toString();
+			dM2.put("contact_id",cid2);
+			dM2.put("contact_name",ifnull(cL2.get("name"),""));
+			if(cid2 != "")
+			{
+				cR2 = zoho.crm.getRecordById("Contacts",cid2.toLong());
+				if(cR2 != null)
+				{
+					dM2.put("contact_first",ifnull(cR2.get("First_Name"),""));
+					dM2.put("contact_last",ifnull(cR2.get("Last_Name"),""));
+					dM2.put("contact_email",ifnull(cR2.get("Email"),""));
+					dM2.put("contact_phone",ifnull(cR2.get("Phone"),""));
+					dM2.put("contact_title",ifnull(cR2.get("Title"),""));
+				}
+			}
+		}
+		// Applicants come from the Deal_Applicant_Accounts junction (16 Sep),
+		// never from Applicant_1 -- that field is retired because a mark can
+		// have any number of applicants. appIds feeds the account-scoped
+		// exclusions below, one search per applicant account.
+		applicants = List();
+		appIds = List();
+		appRows = zoho.crm.getRelatedRecords("Deal_Applicant_Accounts","Deals",dealId.toLong());
+		if(appRows != null)
+		{
+			for each  apr in appRows
+			{
+				apA = apr.get("Applicant_Account");
+				if(apA != null)
+				{
+					apM = Map();
+					apM.put("link_id",apr.get("id").toString());
+					apM.put("account_id",ifnull(apA.get("id"),"").toString());
+					apM.put("account_name",ifnull(apA.get("name"),""));
+					apM.put("role",ifnull(apr.get("Role"),""));
+					apM.put("source_type",ifnull(apr.get("Source_Type"),""));
+					applicants.add(apM);
+					appIds.add(ifnull(apA.get("id"),"").toString());
+				}
+			}
+		}
+		dM2.put("frozen",dR.get("Braudit_Frozen_At") != null);
+		res.put("deal",dM2);
+		res.put("applicants",applicants);
+		// Images + Vienna live on the Image_Mark_Information subform, per
+		// Jonathan's 12 Sep decision. Image_Assets is the eventual home but
+		// is empty and has no Deal link.
+		imgs = List();
+		if(dR.get("Image_Mark_Information") != null)
+		{
+			// Assign to a variable first. Deluge rejects a method call in the
+			// `for each ... in` clause -- the save fails pointing at the loop's
+			// opening brace, exactly like `while` does. Every existing loop in
+			// this function assigns first (see lst_t in the factfind stage).
+			imgRows = dR.get("Image_Mark_Information").toList();
+			for each  ir in imgRows
+			{
+				iM = Map();
+				iM.put("nickname",ifnull(ir.get("Image_Nickname"),""));
+				iM.put("vienna",ifnull(ir.get("Vienna_Codes"),""));
+				iM.put("division",ifnull(ir.get("Post_S_Img_Class_Div_Sub_Div"),""));
+				imgs.add(iM);
+			}
+		}
+		res.put("images",imgs);
+		// Frozen scope: the asset rows plus their class/term children.
+		scopes = List();
+		relS = zoho.crm.getRelatedRecords("G_S_Scope_Assets","Deals",dealId.toLong());
+		if(relS != null)
+		{
+			for each  sa in relS
+			{
+				sM = Map();
+				saId = sa.get("id").toString();
+				sM.put("id",saId);
+				sM.put("status",ifnull(sa.get("Asset_Status"),""));
+				sM.put("register",ifnull(sa.get("Register"),""));
+				terms = List();
+				srchT = zoho.crm.getRelatedRecords("G_S_Scope_Classes_Terms","G_S_Scope_Assets",saId.toLong());
+				if(srchT != null)
+				{
+					for each  tr in srchT
+					{
+						tM = Map();
+						tM.put("class_no",ifnull(tr.get("Nice_Class_Number_Snapshot"),""));
+						tM.put("description",ifnull(tr.get("Class_Description_Snapshot"),""));
+						tM.put("terms",ifnull(tr.get("Specific_Terms"),""));
+						tM.put("source",ifnull(tr.get("Terms_Source"),""));
+						terms.add(tM);
+					}
+				}
+				sM.put("terms",terms);
+				scopes.add(sM);
+			}
+		}
+		res.put("scope",scopes);
+		exs = List();
+		relX = zoho.crm.getRelatedRecords("Client_Search_Exclusions","Deals",dealId.toLong());
+		if(relX != null)
+		{
+			for each  xr in relX
+			{
+				xM = Map();
+				xM.put("id",xr.get("id").toString());
+				xM.put("value",ifnull(xr.get("Exclusion_Value"),""));
+				xM.put("target_type",ifnull(xr.get("Target_Type"),""));
+				xM.put("reason",ifnull(xr.get("Reason"),""));
+				xM.put("match_mode",ifnull(xr.get("Match_Mode"),""));
+				xM.put("active",ifnull(xr.get("Active"),false));
+				xM.put("scope","deal");
+				exs.add(xM);
+			}
+		}
+		for each  appId in appIds
+		{
+			srchX = zoho.crm.searchRecords("Client_Search_Exclusions","(Account:equals:" + appId + ")");
+			if(srchX != null)
+			{
+				for each  ar in srchX
+				{
+					if(exs.size() < 200)
+					{
+						aX = Map();
+						aX.put("id",ar.get("id").toString());
+						aX.put("value",ifnull(ar.get("Exclusion_Value"),""));
+						aX.put("target_type",ifnull(ar.get("Target_Type"),""));
+						aX.put("reason",ifnull(ar.get("Reason"),""));
+						aX.put("match_mode",ifnull(ar.get("Match_Mode"),""));
+						aX.put("active",ifnull(ar.get("Active"),false));
+						aX.put("scope","account");
+						exs.add(aX);
+					}
+				}
+			}
+		}
+		res.put("exclusions",exs);
+		res.put("ok",true);
+	}
+	else if(stg == "applicant_link")
+	{
+		//
+		// ------------------------------------------ stage: applicant_link
+		//
+		// Resolve WHO THE AUDIT IS FOR and link them to the Deal via the
+		// Deal_Applicant_Accounts junction (16 Sep 2026, Jonathan). Called by
+		// both staff forms and the client checkout once a Deal exists.
+		//
+		// Billing and applicant are different questions. The 'applicant'
+		// stage above resolves the BILLER into Account_Name; on a reseller or
+		// white-label deal that is the partner, not the client. This stage
+		// resolves the client, and it is the only writer of the junction.
+		//
+		// Inputs
+		//   zoho_deal_id                 required
+		//   applicant_same_as_billing    "true" -> link the Deal's Account_Name
+		//   applicant_name / applicant_company_number / applicant_identifier
+		//   source_type                  Staff | Client-Auto-Promoted
+		//
+		// Confidence rules (Jonathan, 12 Sep): company number and IPO
+		// applicant id are the only keys safe to act on alone. A name match
+		// is a CANDIDATE for a human, never an automatic link. An Account is
+		// CREATED only after a strong key was searched and found nothing --
+		// never from a name. Everything else queues for Laura as a Task.
+		//
+		// Guard: never creates a Lead or Contact. Never links Applicant_1.
+		if(dealId == "")
+		{
+			res.put("ok",false);
+			res.put("error","deal id required");
+			return res.toString();
+		}
+		dR = zoho.crm.getRecordById("Deals",dealId.toLong());
+		if(dR == null)
+		{
+			res.put("ok",false);
+			res.put("error","deal not found");
+			return res.toString();
+		}
+		dealNm = ifnull(dR.get("Deal_Name"),"");
+		srcT = "Staff";
+		if((p.get("source_type") != null) && (p.get("source_type").toString() == "Client-Auto-Promoted"))
+		{
+			srcT = "Client-Auto-Promoted";
+		}
+		sameAsBill = false;
+		if(p.get("applicant_same_as_billing") != null)
+		{
+			sameAsBill = p.get("applicant_same_as_billing").toString().equalsIgnoreCase("true");
+		}
+		apName = "";
+		if(p.get("applicant_name") != null)
+		{
+			apName = p.get("applicant_name").toString().trim();
+		}
+		apNum = "";
+		if(p.get("applicant_company_number") != null)
+		{
+			apNum = p.get("applicant_company_number").toString().trim();
+		}
+		apAid = "";
+		if(p.get("applicant_identifier") != null)
+		{
+			apAid = p.get("applicant_identifier").toString().trim();
+		}
+		matchedId = "";
+		matchedNm = "";
+		astatus = "";
+		cands = List();
+		// 1. Same as the biller -- but never a partner. If the billing account
+		//    carries a Partner_Type it is a reseller/introducer/white label and
+		//    cannot be the applicant by definition; that goes to review.
+		if(sameAsBill)
+		{
+			bL = dR.get("Account_Name");
+			if(bL != null)
+			{
+				bId = ifnull(bL.get("id"),"").toString();
+				if(bId != "")
+				{
+					bR = zoho.crm.getRecordById("Accounts",bId.toLong());
+					ptype = "";
+					if(bR.get("Partner_Type") != null)
+					{
+						ptype = bR.get("Partner_Type").toString();
+					}
+					if(ptype != "")
+					{
+						astatus = "Needs review";
+						cands.add(ifnull(bL.get("name"),"") + " (" + bId + ") is the biller but is a " + ptype + " partner, so cannot be the applicant");
+					}
+					else
+					{
+						matchedId = bId;
+						matchedNm = ifnull(bL.get("name"),"");
+						astatus = "Matched";
+					}
+				}
+			}
+		}
+		// 2. Strong keys: company number (Company_URN, text, keeps SC/NI
+		//    prefixes) then the IPO applicant id. One hit on either is a match.
+		if((matchedId == "") && (astatus == "") && (apNum != ""))
+		{
+			fa = zoho.crm.searchRecords("Accounts","(Company_URN:equals:" + apNum + ")");
+			if((fa != null) && (fa.size() > 0))
+			{
+				fa0 = fa.get(0);
+				matchedId = fa0.get("id").toString();
+				matchedNm = ifnull(fa0.get("Account_Name"),"");
+				astatus = "Matched";
+			}
+		}
+		if((matchedId == "") && (astatus == "") && (apAid != ""))
+		{
+			fb = zoho.crm.searchRecords("Accounts","(Applicant_identifier:equals:" + apAid + ")");
+			if((fb != null) && (fb.size() > 0))
+			{
+				fb0 = fb.get(0);
+				matchedId = fb0.get("id").toString();
+				matchedNm = ifnull(fb0.get("Account_Name"),"");
+				astatus = "Matched";
+			}
+		}
+		// 3. Name only -> candidates for a human, never a link. 14,404 accounts
+		//    with inconsistent naming; an automatic name match would create
+		//    duplicates or merge the wrong two.
+		if((matchedId == "") && (astatus == "") && (apName != ""))
+		{
+			fc = zoho.crm.searchRecords("Accounts","(Account_Name:equals:" + apName + ")");
+			if((fc != null) && (fc.size() > 0))
+			{
+				for each  cr in fc
+				{
+					if(cands.size() < 6)
+					{
+						cands.add(ifnull(cr.get("Account_Name"),"") + " (" + cr.get("id").toString() + ") - exact name match, no company number or applicant id to confirm");
+					}
+				}
+				astatus = "Needs review";
+			}
+		}
+		// 4. Nothing matched. Create ONLY if a strong key was searched and
+		//    found nothing; a bare name is not enough to invent an Account.
+		if((matchedId == "") && (astatus == ""))
+		{
+			if((apNum != "") || (apAid != ""))
+			{
+				nA = Map();
+				nA.put("Account_Name",apName);
+				nA.put("Applicant_name",apName);
+				if(apNum != "")
+				{
+					nA.put("Company_URN",apNum);
+					nA.put("Applicant_company_number",apNum);
+				}
+				if(apAid != "")
+				{
+					nA.put("Applicant_identifier",apAid.toLong());
+				}
+				at2 = List();
+				at2.add("Trademark Applicant");
+				nA.put("Account_Type_2",at2);
+				nr = zoho.crm.createRecord("Accounts",nA);
+				if(nr.get("id") != null)
+				{
+					matchedId = nr.get("id").toString();
+					matchedNm = apName;
+					astatus = "Created";
+				}
+			}
+			else if(apName != "")
+			{
+				astatus = "Needs review";
+				cands.add(apName + " - name only; no company number or applicant id, nothing found to match");
+			}
+			else
+			{
+				astatus = "No applicant supplied";
+			}
+		}
+		// 5. Link. Make sure the account is typed as an applicant, then write
+		//    the junction row unless one already exists for this pair.
+		if(matchedId != "")
+		{
+			aR2 = zoho.crm.getRecordById("Accounts",matchedId.toLong());
+			typs2 = List();
+			if(aR2.get("Account_Type_2") != null)
+			{
+				lst_t2 = aR2.get("Account_Type_2").toList();
+				for each  t2 in lst_t2
+				{
+					typs2.add(t2.toString());
+				}
+			}
+			if(typs2.contains("Trademark Applicant") == false)
+			{
+				typs2.add("Trademark Applicant");
+				aU2 = Map();
+				aU2.put("Account_Type_2",typs2);
+				zoho.crm.updateRecord("Accounts",matchedId.toLong(),aU2);
+			}
+			// Dedupe via the RELATED LIST, not searchRecords. Search is index-
+			// backed and lags on records created seconds earlier -- proven
+			// 16 Sep: two identical rows from two calls 30s apart, because the
+			// second call's search could not yet see the first row. The
+			// related-list read is direct and does not lag.
+			already = false;
+			relJ = zoho.crm.getRelatedRecords("Deal_Applicant_Accounts","Deals",dealId.toLong());
+			if(relJ != null)
+			{
+				for each  jr in relJ
+				{
+					jA = jr.get("Applicant_Account");
+					if(jA != null)
+					{
+						if(ifnull(jA.get("id"),"").toString() == matchedId)
+						{
+							already = true;
+						}
+					}
+				}
+			}
+			if(already == false)
+			{
+				jN = dealNm + " - " + matchedNm;
+				if(jN.length() > 120)
+				{
+					jN = jN.subString(0,120);
+				}
+				jM = Map();
+				jM.put("Name",jN);
+				jM.put("Deal",dealId.toLong());
+				jM.put("Applicant_Account",matchedId.toLong());
+				jM.put("Role","Applicant");
+				jM.put("Source_Type",srcT);
+				zoho.crm.createRecord("Deal_Applicant_Accounts",jM);
+			}
+		}
+		// 6. Record the outcome on the Deal. Needs review / No applicant
+		//    supplied leave NO junction row, which is what the research gate
+		//    in order_complete tests.
+		dU = Map();
+		dU.put("Applicant_Match_Status",astatus);
+		if(cands.size() > 0)
+		{
+			dU.put("Applicant_Candidates",cands.toString(nl));
+		}
+		else
+		{
+			dU.put("Applicant_Candidates","");
+		}
+		zoho.crm.updateRecord("Deals",dealId.toLong(),dU);
+		// 7. Queue for Laura. A Task, not an email -- the org API key still
+		//    sends as a departed user (open ticket).
+		if((astatus == "Needs review") || (astatus == "No applicant supplied"))
+		{
+			tQ = Map();
+			tQ.put("Subject","Confirm applicant account -- " + dealNm);
+			tQ.put("Description","Applicant Match Status: " + astatus + nl + "Candidates:" + nl + cands.toString(nl) + nl + nl + "Open the Deal, add the correct Account under Deal Applicant Accounts, then set Next Action Sub Status to 'Send for Research'.");
+			tQ.put("Status","Not Started");
+			tQ.put("Priority","High");
+			tQ.put("Due_Date",zoho.currentdate);
+			tQ.put("What_Id",dealId);
+			tQ.put("$se_module","Deals");
+			tQ.put("Owner","1964745000036444001");
+			zoho.crm.createRecord("Tasks",tQ);
+		}
+		res.put("ok",true);
+		res.put("status",astatus);
+		res.put("applicant_account_id",matchedId);
+		res.put("candidates",cands);
 	}
 	else if(stg == "staff_lookup")
 	{
