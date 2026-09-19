@@ -60,6 +60,16 @@
 
   .ac-warn{background:#fff6f2;border:2px solid #f5c6b0;border-radius:var(--r-md);
     padding:14px 16px;color:#8a3b12;font-size:14px;margin-top:12px}
+  /* "Would you rather we did this part?" (Jonathan, 19 Sep 2026). */
+  .ac-scope-resp{margin-top:20px;border:1px solid var(--line);border-radius:var(--r-md);
+    padding:16px 18px 12px;background:#F7F8FA}
+  .ac-scope-resp.chosen{background:#FDE7EE;border-color:#F3C3D2}
+  .ac-scope-resp .h{font-size:16px;font-weight:800;letter-spacing:-.2px;color:#1D1D1B}
+  .ac-scope-resp .sub{margin:5px 0 12px;font-size:14px;line-height:1.55;color:#617383}
+  .ac-resp-opt{display:flex;align-items:flex-start;gap:10px;padding:9px 0;cursor:pointer;
+    font-size:15px;line-height:1.45;color:#1D1D1B}
+  .ac-resp-opt input{margin:2px 0 0;flex:0 0 auto;width:17px;height:17px;accent-color:#E51652}
+  .ac-resp-opt small{color:#617383;font-size:13.5px}
   .ac-clsrow{border:2px solid var(--line);border-radius:var(--r-md);padding:16px 18px;margin-bottom:12px}
   .ac-clsrow .h{font-weight:800;color:var(--navy)}
   .ac-clsrow .h .n{color:var(--pink)}
@@ -263,6 +273,32 @@
     <div class="basket" id="cls-basket"></div>
     <div style="margin-top:14px">
       <button class="btn ghost" id="cls-tools-btn" onclick="openClassTools()">Select classes &amp; terms &rarr;</button>
+    </div>
+
+    <!-- "Let us pick" (Jonathan, 19 Sep 2026). An audit cannot run without
+         classes and terms, but it does not need them BEFORE payment:
+         order_complete gates the research after the money, so the order is
+         safe either way. What this changes is that the Deal reads correctly
+         — a client who ASKED us to pick is not a client who forgot, and the
+         gate used to say the same thing about both. -->
+    <div class="ac-scope-resp" id="cls-resp">
+      <div class="h">Would you rather we did this part?</div>
+      <p class="sub">Your audit is measured against your classes and terms, so they have to be
+        right. If you are not sure, hand it to us &mdash; we will confirm them with you before
+        the audit runs. It does not hold up your order either way.</p>
+      <label class="ac-resp-opt" data-resp="tmh_all">
+        <input type="radio" name="scoperesp" value="tmh_all" onchange="setScopeResp('tmh_all')">
+        <span>Let The Trademark Helpline pick my <b>Classes &amp; Terms</b></span>
+      </label>
+      <label class="ac-resp-opt" data-resp="tmh_terms" id="cls-resp-terms">
+        <input type="radio" name="scoperesp" value="tmh_terms" onchange="setScopeResp('tmh_terms')">
+        <span>Let The Trademark Helpline pick my <b>Terms</b>
+          <small>&mdash; you have chosen the classes</small></span>
+      </label>
+      <label class="ac-resp-opt" data-resp="client">
+        <input type="radio" name="scoperesp" value="client" checked onchange="setScopeResp('client')">
+        <span>I will choose them myself</span>
+      </label>
     </div>
 
     <div id="cls-rows" style="margin-top:20px"></div>
@@ -626,7 +662,7 @@ const state={
   contact:{first:'',last:'',email:'',phone:''},
   name:CONFIG.NAME||'', hasLogo:false, logoUrl:'', logoLater:false, tagline:'',
   now:['GB'], plan:[], nowMode:'uk', planMode:'none',
-  classes:[], scope:[], termsShown:true,
+  classes:[], scope:[], termsShown:true, scopeResp:'client',
   platforms:{ipos:{}, org:null, orgNone:false, domain:'', domainNone:false, soc:{}, shop:{}},
   consult:{taken:null, type:'', prefDate:'', prefTod:'', auditDate:''},
   applicant:{kind:'',name:'',id:'',addr1:'',addr2:'',addr3:'',postcode:''},
@@ -863,6 +899,22 @@ function classesMode(){
   const hasTerms=state.scope.some(r=>(r.terms||[]).length);
   return hasTerms?'change':'review';
 }
+/* SCOPE RESPONSIBILITY (Jonathan, 19 Sep 2026) -> Deals.Scope_Responsibility.
+   An ORDER-LEVEL INSTRUCTION, so it rides on the Deal and not on the scope
+   asset: a "TMH to pick" order has no class rows at all, so an instruction
+   stored on the asset would vanish exactly when it is needed.
+   The three stored values are the picklist's, verbatim, zero drift. */
+const SCOPE_RESP={client:'Client supplied',
+                  tmh_all:'TMH to pick classes and terms',
+                  tmh_terms:'TMH to pick terms'};
+function setScopeResp(v){
+  state.scopeResp=v;
+  if(v!=='client') clearErr('cls-err');   // the gate no longer applies
+  renderClasses();
+  logEvent('audit_checkout_scope_resp','audit_classes',
+    {scope_responsibility:SCOPE_RESP[v]||SCOPE_RESP.client},
+    {current_screen:'audit_classes'});
+}
 function renderClasses(){
   const bk=document.getElementById('cls-basket');
   bk.innerHTML=state.classes.length
@@ -882,7 +934,27 @@ function renderClasses(){
         ? 'These classes came through from your search. Review the official descriptions and terms so your audit measures the right things.'
         : 'These came through from your search. Review the wording, remove anything that doesn’t apply, or reopen the tools to change your classes.';
 
+  /* "Let us pick my Terms" only makes sense once classes exist, so it is
+     hidden until then — and de-selected if the visitor empties the basket,
+     which would otherwise leave an instruction naming classes that are gone. */
+  const termsOpt=document.getElementById('cls-resp-terms');
+  if(termsOpt){
+    const ok=state.classes.length>0;
+    termsOpt.style.display=ok?'':'none';
+    if(!ok&&state.scopeResp==='tmh_terms'){
+      state.scopeResp='tmh_all';
+      const r=document.querySelector('input[name="scoperesp"][value="tmh_all"]');
+      if(r) r.checked=true;
+    }
+  }
+  const respBox=document.getElementById('cls-resp');
+  if(respBox) respBox.classList.toggle('chosen', (state.scopeResp||'client')!=='client');
+
   const rows=document.getElementById('cls-rows');
+  /* Handed to us: the term editors would be editing nothing. */
+  if(state.scopeResp&&state.scopeResp!=='client'&&state.scopeResp!=='tmh_terms'){
+    rows.innerHTML=''; return;
+  }
   if(!state.termsShown||!state.scope.length){rows.innerHTML='';return;}
   rows.innerHTML=state.scope.map((r,i)=>`
     <div class="ac-clsrow"><div class="h"><span class="n">Class ${r.n}</span> &mdash; ${NICE[r.n]||''}</div>
@@ -944,11 +1016,19 @@ function collectTermEdits(){
   });
 }
 function submitClasses(){
-  if(!state.classes.length)
-    return showErr('cls-err','Pick at least one class — the tools make it quick.');
+  const resp=state.scopeResp||'client';
+  /* The gate stands ONLY for a client who is choosing them. Asking us to pick
+     is a valid answer, not an empty one — and it never blocks checkout,
+     because order_complete gates the research after payment regardless. */
+  if(resp==='client'&&!state.classes.length)
+    return showErr('cls-err',
+      'Pick at least one class — the tools make it quick. Or ask us to pick them for you.');
+  if(resp==='tmh_terms'&&!state.classes.length)
+    return showErr('cls-err','Pick your classes, or ask us to pick the classes too.');
   clearErr('cls-err');
   collectTermEdits();
-  logEvent('audit_checkout_classes','audit_classes',{application_scope:state.scope},
+  logEvent('audit_checkout_classes','audit_classes',
+    {application_scope:state.scope,scope_responsibility:SCOPE_RESP[resp]},
     {classes:state.classes,current_screen:'audit_classes'});
   buildIpoList();
   go('platforms');
@@ -1102,6 +1182,8 @@ function pushScope(){
     logo_later:state.logoLater,logo_url:state.logoUrl,
     trading_now:state.now,planning_to_trade:state.plan,
     search_layers:[...new Set(layers)],scope:scope,create_scope_asset:scope.length>0,
+    /* Deals.Scope_Responsibility — the stored picklist string, verbatim. */
+    scope_responsibility:SCOPE_RESP[state.scopeResp||'client'],
     exclusions:exclusions,description:desc});
 }
 
@@ -1326,7 +1408,21 @@ function renderSummary(){
 
   document.getElementById('sum-body').innerHTML=
     sec('Searches',searches.join(' &middot; '))+
-    sec('Classes &amp; terms',state.classes.map(n=>`<b>${n}</b> ${NICE[n]||''}`).join(' &middot; '))+
+    /* The summary must say WHICH of the two it is (Jonathan, 19 Sep): an
+       empty Classes line reads as an omission, and "we are picking them" is
+       the opposite of one. */
+    sec('Classes &amp; terms', (function(){
+      const r=state.scopeResp||'client';
+      const list=state.classes.map(n=>`<b>${n}</b> ${NICE[n]||''}`).join(' &middot; ');
+      if(r==='tmh_all')
+        return 'The Trademark Helpline will pick your classes and terms, and confirm them '+
+               'with you before the audit runs.';
+      if(r==='tmh_terms')
+        return (list||'No classes picked')+
+               '<br><span style="color:#617383">We will pick the specific terms for these '+
+               'classes and confirm them with you.</span>';
+      return list||'None picked';
+    })())+
     sec('Search platforms','Registers: '+ipoOn.join(', ')+
       '<br>UK Companies House &middot; Domain registers'+
       (socOn.length?'<br>Social: '+socOn.join(', '):'')+
