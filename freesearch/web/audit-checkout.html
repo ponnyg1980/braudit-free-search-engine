@@ -272,6 +272,13 @@
       <button class="link" onclick="goBack()">&larr; Back</button>
       <button class="btn primary" onclick="submitClasses()">Continue</button>
     </div>
+
+    <!-- Shared help line (help-line.js). Classes is the screen that stalls a
+         paid checkout; task #7 adds "Let The Trademark Helpline pick" here,
+         and this is the human route beside it. -->
+    <div data-tmh-help="strip" data-temmy="question" style="margin-top:24px"
+         data-help-title="Not sure which classes are yours?"
+         data-help-note="We can pick them for you"></div>
   </section>
 
   <!-- ============ 5 — PLATFORMS ============ -->
@@ -491,6 +498,11 @@
       <button class="link" onclick="goBack()">&larr; Back</button>
       <button class="btn primary" onclick="submitOrder()">Confirm my audit</button>
     </div>
+
+    <!-- Shared help line (help-line.js). Last screen before money changes
+         hands: a question answered here is an order, unanswered is an exit. -->
+    <div data-tmh-help="strip" data-temmy="phone" style="margin-top:24px"
+         data-help-title="Any questions before you confirm?"></div>
   </section>
 
   <!-- ============ 9 — CONFIRMATION + FACT FIND ============ -->
@@ -1624,5 +1636,6 @@ async function prepopulate(){
   renderScreen('contact');
 })();
 </script>
+<script src="/help-line.js" defer></script>
 </body>
 </html>
