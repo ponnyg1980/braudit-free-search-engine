@@ -423,6 +423,30 @@ function countryNames(codes: unknown): string[] {
 // [{nice_class, heading, class_label, terms: [{text, kept}]}] shape
 // (term_basket.py). Self-selected classes get a number-only row — Jonathan
 // chose "all picked classes" over tool-derived-only.
+// TERM FORMAT (Jonathan, 17 Sep 2026) -- the ONE rule for Specific_Terms.
+// Each term Capitalised (first letter upper, rest as entered), de-duplicated,
+// joined with "; " on ONE line per class. One-per-line did not survive into
+// IPO applications, and Terms Text is becoming a scoring input, so the
+// format is load-bearing. The pages format for display with the same rule
+// (fmtTerms in free-search / audit-checkout / staff-enquiry) so what the
+// visitor sees is byte-for-byte what Zoho stores. Accepts a list OR a
+// string in either legacy shape (newline- or "; "-separated).
+function fmtTerms(input: unknown): string {
+  const raw: string[] = Array.isArray(input) ? input.map(String)
+    : String(input ?? "").split(/[;\n]+/);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of raw) {
+    let t = r.replace(/\s+/g, " ").trim().replace(/[;.\s]+$/, "");
+    if (!t) continue;
+    t = t.charAt(0).toUpperCase() + t.slice(1);
+    const k = t.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k); out.push(t);
+  }
+  return out.join("; ").slice(0, 30000);
+}
+
 function zohoScopeBlock(session: Record<string, unknown>) {
   const classes = (Array.isArray(session.classes) ? session.classes : [])
     .map(Number).filter((n) => n >= 1 && n <= 45);
@@ -449,14 +473,15 @@ function zohoScopeBlock(session: Record<string, unknown>) {
       return {
         mark: session.name || "",
         additional_terms: extra || undefined,
-        classes: rows.map((r) => ({
+        classes: rows.map((r, idx) => ({
           n: r.n,
           label: r.heading || ZOHO_CLASS[r.n] || `Class ${r.n}`,
           terms: r.terms,
-          // Uncapped by design — a competitor-trademark route can carry
-          // dozens of terms. Only guard: Zoho's 32k textarea limit, because
-          // an oversize value voids the entire row write.
-          terms_text: r.terms.join("\n").slice(0, 30000),
+          // "; "-joined, Capitalised, one line per class (17 Sep) -- see
+          // fmtTerms. Uncapped by design; only Zoho's 32k textarea limit,
+          // because an oversize value voids the entire row write.
+          terms_text: fmtTerms(r.terms),
+          display_order: idx + 1,
           // Register split (22 Aug): the builder marks a row Custom Edited
           // when the visitor amends the approved wording; Deluge writes it
           // to Terms_Source on the class row.
@@ -488,12 +513,12 @@ function zohoScopeBlock(session: Record<string, unknown>) {
   }
   return {
     mark: session.name || "",
-    classes: classes.map((n) => ({
+    classes: classes.map((n, idx) => ({
       n, label: ZOHO_CLASS[n] || `Class ${n}`, terms: byClass[n] ?? [],
-      // Pre-joined with REAL newlines: Deluge cannot unescape "\n" in its
-      // own string literals (the first E2E stored a literal backslash-n),
-      // but a newline inside JSON decodes correctly through toMap().
-      terms_text: (byClass[n] ?? []).join("\n"),
+      // Same "; " rule as above (17 Sep). Formatted HERE, not in Deluge,
+      // because Deluge string literals cannot express separators reliably.
+      terms_text: fmtTerms(byClass[n] ?? []),
+      display_order: idx + 1,
     })),
   };
 }
@@ -1268,6 +1293,34 @@ serve(async (req) => {
         brands: (brandRows ?? []).map((b: Record<string, unknown>) => ({
           brand_name: b.brand_name, classes: b.classes, terms: b.terms,
           class_source: b.class_source, tagline: b.tagline,
+          // Per-class scope rows (17 Sep): the class builder's reviewed
+          // application_scope, one row per class with "; "-joined terms.
+          // Before this the intake wrote the brand's FLAT term list onto
+          // every class row. Falls back to that flat list (formatted) only
+          // when the builder was not used.
+          scope: (() => {
+            const cs = (b.class_source ?? {}) as Record<string, unknown>;
+            const app = Array.isArray(cs.application_scope)
+              ? cs.application_scope as Record<string, unknown>[] : [];
+            const rows = app
+              .map((r) => ({ n: Number(r.n), heading: String(r.heading ?? ""),
+                             terms: Array.isArray(r.terms) ? r.terms : [],
+                             src: String(r.terms_source ?? "") }))
+              .filter((r) => r.n >= 1 && r.n <= 45);
+            if (rows.length) {
+              return rows.map((r, idx) => ({
+                n: r.n, label: r.heading || ZOHO_CLASS[r.n] || `Class ${r.n}`,
+                terms_text: fmtTerms(r.terms),
+                terms_source: r.src === "Custom Edited" ? "Custom Edited" : "Approved",
+                display_order: idx + 1,
+              }));
+            }
+            const flat = fmtTerms(Array.isArray(b.terms) ? b.terms : []);
+            return (Array.isArray(b.classes) ? b.classes : []).map(Number)
+              .filter((n) => n >= 1 && n <= 45)
+              .map((n, idx) => ({ n, label: ZOHO_CLASS[n] || `Class ${n}`,
+                terms_text: flat, terms_source: "Approved", display_order: idx + 1 }));
+          })(),
           website_url: b.website_url, business_description: b.business_description,
           competitor_name: b.competitor_name, competitor_website: b.competitor_website,
         })),
@@ -1760,12 +1813,24 @@ serve(async (req) => {
       // payment references it by AccountID (confirmed with Jonathan, 8 Sep).
       const clearing = (Deno.env.get("XERO_CLEARING_ACCOUNT_ID")
         ?? "3c7966d7-2ce1-4f2e-9532-7ce04d6e16d7").trim();
-      if (clearing) {
+      // Quick Audit "payment already taken" (16 Sep 2026): staff record the
+      // date and reference of a payment that arrived outside Stripe. The
+      // payment is dated as recorded; it lands on the manual-payment account
+      // when XERO_MANUAL_PAYMENT_ACCOUNT_ID is set, else on Stripe clearing.
+      const manual = p.source === "quick_audit_recorded";
+      // Transfers land on "Business current account" (Jonathan, 16 Sep 2026).
+      const payAcct = manual
+        ? (Deno.env.get("XERO_MANUAL_PAYMENT_ACCOUNT_ID")
+           ?? "0d7870e4-b573-45bd-8e3e-320969c05112").trim()
+        : clearing;
+      const payDate = manual && /^\d{4}-\d{2}-\d{2}$/.test(String(p.paid_date ?? ""))
+        ? String(p.paid_date) : today;
+      if (payAcct) {
         const pay = await xeroApi("/Payments", "PUT", { Payments: [{
           Invoice: { InvoiceID: invoice.InvoiceID },
-          Account: { AccountID: clearing },
-          Date: today, Amount: invoice.Total,
-          Reference: String(p.payment_intent ?? p.stripe_session ?? ref),
+          Account: { AccountID: payAcct },
+          Date: payDate, Amount: invoice.Total,
+          Reference: String(p.payment_ref ?? p.payment_intent ?? p.stripe_session ?? ref),
         }] }, `payment_${sid}`);
         paid = pay.ok;
         if (!pay.ok) {
@@ -1892,6 +1957,16 @@ serve(async (req) => {
             const x = Array.isArray(ps.exclusions) ? ps.exclusions : [];
             return x.length ? x : undefined;
           })(),
+          // Scope responsibility (Jonathan, 19 Sep 2026) -> Deals.
+          // Scope_Responsibility. Read from the STORED enquiry, the same
+          // source _staff_gate reads for G-03, so the Deal and the gate can
+          // never disagree about who is picking the classes.
+          scope_responsibility: (() => {
+            const r = String((enq2 as Record<string, unknown>)?.scopeResp ?? "client");
+            return { client: "Client supplied",
+                     tmh_all: "TMH to pick classes and terms",
+                     tmh_terms: "TMH to pick terms" }[r] ?? "Client supplied";
+          })(),
           billing_kind: String(billX.kind ?? ""),
           company_number: String(billX.company_number ?? ""),
           billing_addr1: String(billX.addr1 ?? billX.addr ?? ""),
@@ -1911,6 +1986,44 @@ serve(async (req) => {
           // Lead_Source_Group (14 Sep 2026): the staff form asks; the Deluge
           // only falls back when this is absent (an older saved enquiry).
           lead_source_group: String(enq2?.leadSource ?? "") || undefined,
+          // Classes & terms (17 Sep 2026). Until now a STAFF order carried
+          // no scope at all -- order_complete never wrote the Scope Asset or
+          // the Classes_Terms sub-form, so its own research gate reported
+          // "Nice classes and terms" missing on every staff order. Same row
+          // shape as the client wizard's 'scope' stage; the Deluge writes
+          // the asset (Account + Deal), the class rows and the sub-form.
+          scope: (() => {
+            if (!enq2) return undefined;
+            const nums = String(enq2.classes ?? "").split(/[^0-9]+/)
+              .map((x) => parseInt(x, 10)).filter((n) => n >= 1 && n <= 45)
+              .filter((v, i, a) => a.indexOf(v) === i);
+            if (!nums.length) return undefined;
+            const sc = (enq2.scope ?? {}) as Record<string, unknown>;
+            const src = (enq2.scopeSource ?? {}) as Record<string, unknown>;
+            return nums.map((n, idx) => {
+              const txt = fmtTerms(sc[String(n)] ?? "");
+              return { n, label: ZOHO_CLASS[n] || `Class ${n}`, terms_text: txt,
+                terms_source: (txt && src[String(n)] !== "tool") ? "Custom Edited" : "Approved",
+                display_order: idx + 1 };
+            });
+          })(),
+          // Applicant Account (16 Sep 2026). The Deluge resolves the applicant
+          // inside order_complete, before its research gate. Absent = same as
+          // billing (the client wizard never asks). The staff forms carry a
+          // state.applicant block; forward it so a reseller/representative
+          // order links the real applicant, not the partner.
+          ...(() => {
+            const ap = (enq2?.applicant ?? null) as Record<string, unknown> | null;
+            if (!ap) return {};
+            const same = ap.sameAsBilling !== false;
+            return {
+              applicant_same_as_billing: same ? "true" : "false",
+              applicant_name: same ? undefined : String(ap.name ?? "").trim() || undefined,
+              applicant_company_number: same ? undefined
+                : String(ap.companyNumber ?? "").trim() || undefined,
+              applicant_source_type: "Staff",
+            };
+          })(),
           fast_track: ftFlag,
           approve_url: ftFlag ? await mkLink("approve") : "",
           reject_url: ftFlag ? await mkLink("reject") : "",
@@ -2021,6 +2134,62 @@ serve(async (req) => {
       return json({ ok: true, hits: Array.isArray(hits) ? hits : [] }, 200, origin);
     } catch (_e) {
       return json({ ok: false, hits: [] }, 200, origin);
+    }
+  }
+
+  // POST /staff/deal -- read an existing audit Deal back, for EDIT mode
+  // (15 Sep). Shared by BOTH staff forms: Audit Fact Find and Quick Audit.
+  //
+  // The checkout function was already idempotent on zoho_deal_id -- every
+  // write stage updates rather than creates when it is passed one. The gap
+  // was the other direction: nothing could read an audit back out, so opening
+  // an existing Deal gave a blank form and staff retyped what was already on
+  // the record. The Zoho `load` stage closes that; this is the relay.
+  //
+  // READ ONLY in every layer. The two guards that make edit mode safe belong
+  // to the CALLER, not here:
+  //   * never create Lead/Contact/Account in edit mode (the class-builder
+  //     rule, 21 Aug) -- those records already exist;
+  //   * `deal.frozen` reports whether Braudit_Frozen_At is stamped. Past
+  //     freeze a criteria change means a NEW search_context_id, the contract's
+  //     409 case. We surface the fact; the form decides.
+  if (req.method === "POST" && path === "/staff/deal") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    if (!ZOHO_CHECKOUT_URL) return json({ ok: false, error: "not configured" }, 200, origin);
+    const dealId = String(body?.deal_id ?? "").trim();
+    if (!/^\d+$/.test(dealId)) {
+      return json({ ok: false, error: "deal_id required" }, 400, origin);
+    }
+    try {
+      const r = await fetch(ZOHO_CHECKOUT_URL, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: "load", zoho_deal_id: dealId }),
+      });
+      const text = await r.text();
+      let parsed: Record<string, unknown> | null = null;
+      try { parsed = JSON.parse(text); } catch { parsed = null; }
+      // Zoho wraps a standalone function's return in details.output as a
+      // STRING of JSON -- same unwrap as /staff/lookup above.
+      let result: Record<string, unknown> | null = parsed;
+      const det = parsed?.details as Record<string, unknown> | undefined;
+      if (typeof det?.output === "string") {
+        try { result = JSON.parse(det.output as string); } catch { result = null; }
+      }
+      const o = (result ?? {}) as Record<string, unknown>;
+      return json({
+        ok: o.ok === true,
+        deal: (o.deal ?? null) as unknown,
+        // Applicant ACCOUNTS from the Deal_Applicant_Accounts junction (16 Sep)
+        // -- a list, because a mark can have any number of applicants.
+        applicants: Array.isArray(o.applicants) ? o.applicants : [],
+        images: Array.isArray(o.images) ? o.images : [],
+        scope: Array.isArray(o.scope) ? o.scope : [],
+        exclusions: Array.isArray(o.exclusions) ? o.exclusions : [],
+        error: o.error ?? null,
+      }, 200, origin);
+    } catch (_e) {
+      return json({ ok: false, error: "zoho unreachable" }, 200, origin);
     }
   }
 
