@@ -567,6 +567,12 @@
       </div>
     </div>
     <div class="err hidden" id="cls-gate"></div>
+
+    <!-- Shared help line (help-line.js). Classes is where people stall, on
+         every one of this file's five routes. -->
+    <div data-tmh-help="strip" data-temmy="question" style="margin-top:24px"
+         data-help-title="Not sure which classes are yours?"
+         data-help-note="We do this every day"></div>
   </section>
 
   <!-- CLASS BUILDER ONLY — review & send. The class tools' standalone exit
@@ -643,6 +649,12 @@
     <div class="err hidden" id="rv-err"></div>
     <div class="hidden" id="rv-done" style="margin-top:18px;padding:16px 18px;background:#eefbf2;border:1px solid #bfe8cc;border-radius:10px;font-weight:600"></div>
     <div class="actions"><button class="link" onclick="history.back()">&larr; Back</button></div>
+
+    <!-- Shared help line (help-line.js). The builder's last screen: the point
+         at which someone decides whether to commit to wording, which is
+         exactly where a human is worth offering. -->
+    <div data-tmh-help="card" data-temmy="phone" style="margin-top:24px"
+         data-help-title="Want a second pair of eyes on this?"></div>
   </section>
 
   <!-- STEP 3 — jurisdictions -->
@@ -774,6 +786,13 @@
       <button class="link" onclick="history.back()">&larr; Back to classes</button>
       <button class="link pink" onclick="resetAll()">Start a new search</button>
     </div>
+
+    <!-- Shared help line (help-line.js). A free search is a screening, not an
+         answer, so the results screen is the one place we must not leave
+         somebody alone with a red flag and no way to ask about it. -->
+    <div data-tmh-help="card" data-temmy="phone" style="margin-top:24px"
+         data-help-title="Want to talk one of these through?"
+         data-help-note="A free search is a first look, not the full picture."></div>
   </section>
 
   <!-- PORTAL OFFER (after Send my report) -->
@@ -3137,5 +3156,6 @@ document.getElementById('modeflag').textContent =
    expanded without end. The reporter above measures the content instead and
    is the only one now. */
 </script>
+<script src="/help-line.js" defer></script>
 </body>
 </html>
