@@ -425,7 +425,11 @@ def _static(path: str):
     None  -> not a static route at all, let the caller carry on routing.
     (None, ct) -> it IS a static route but the file isn't there: a real 404.
     """
-    if path in ('/braudit.css', '/wizard.css', '/demo-banner.js'):
+    # help-line.js is the ONE help line ("Need some help? Call us on…, Make an
+    # enquiry, Book a free 15 minute consultation") that every customer-facing
+    # tool mounts. Shared file so the number, the booking URL and the wording
+    # cannot drift apart across six pages.
+    if path in ('/braudit.css', '/wizard.css', '/demo-banner.js', '/help-line.js'):
         rel = path.lstrip('/')
     elif path.startswith('/brand/') or path.startswith('/fonts/'):
         rel = path.lstrip('/')
