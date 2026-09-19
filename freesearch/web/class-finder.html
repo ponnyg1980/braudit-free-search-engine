@@ -159,6 +159,13 @@ h2{font-size:31px;font-weight:800;letter-spacing:-.8px;margin:8px 0 10px;
     Counts come from marks registered at the UK IPO, so a term you see here has already
     been accepted. Nothing on this page is generated.
   </p>
+
+  <!-- Shared help line (help-line.js). Picking classes is the step people get
+       stuck on, and this tool deliberately saves nothing, so the offer of a
+       human belongs at the bottom of it. -->
+  <div data-tmh-help="strip" data-temmy="question" style="margin-top:22px"
+       data-help-title="Not sure which class is yours?"
+       data-help-note="We do this every day"></div>
 </div>
 
 <script>
@@ -368,5 +375,6 @@ $('q').addEventListener('input', onType);
   try{ window.parent.postMessage({brauditReady:true}, '*'); }catch(e){}
 })();
 </script>
+<script src="/help-line.js" defer></script>
 </body>
 </html>
