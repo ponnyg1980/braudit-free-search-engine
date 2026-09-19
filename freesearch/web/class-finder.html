@@ -110,7 +110,11 @@ h2{font-size:31px;font-weight:800;letter-spacing:-.8px;margin:8px 0 10px;
 <body>
 <div class="wrap" style="padding-top:26px;padding-bottom:26px">
 
-  <div style="margin-bottom:20px">
+  <!-- The host page supplies this heading when the widget is embedded, so
+       showing it here too prints it twice. embed.js always sends ?embed=1,
+       which is a reliable "somebody is framing me" signal. Standalone at
+       /class-finder it stays. -->
+  <div id="own-head" style="margin-bottom:20px">
     <div class="eyebrow">Goods and services classes</div>
     <h2>Find your class, and see the wording real businesses used</h2>
     <p class="lead">Type what you sell. Every term below came off a granted UK registration,
@@ -327,6 +331,13 @@ document.addEventListener('click', e => {
 $('q').addEventListener('input', onType);
 
 (async function init(){
+  // Embedded: the host page has already said what this is. Drop our heading
+  // and the outer padding so it sits flush in whatever frames it.
+  if(new URLSearchParams(location.search).get('embed') === '1'){
+    const h = $('own-head'); if(h) h.style.display = 'none';
+    const w = document.querySelector('.wrap');
+    if(w){ w.style.paddingTop = '0'; w.style.paddingBottom = '0'; }
+  }
   typePh('Try “coffee”, “software” or “retail”', 0);
   syncFoot();
   try{
