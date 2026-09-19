@@ -416,6 +416,20 @@
     <div class="sf-hint">Comma-separated Nice class numbers.
       <a href="#" onclick="openTools();return false;" style="color:var(--pink);font-weight:700">
         Open the class tools</a> if you need to work them out on the call.</div>
+
+    <!-- SCOPE RESPONSIBILITY (Jonathan, 19 Sep 2026): "On the staff facing
+         versions they can pick classes and terms later and take money there
+         and then." Choosing "we will pick" satisfies G-03, and nothing else
+         does — the rule is enforced server-side in _staff_gate against the
+         STORED enquiry, never against a browser claim. -->
+    <label class="fld" style="margin-top:16px">Who is choosing the classes and terms?</label>
+    <select id="f-scoperesp">
+      <option value="client">The client has &mdash; use the classes above</option>
+      <option value="tmh_terms">We will pick the TERMS &mdash; client gave us the classes</option>
+      <option value="tmh_all">We will pick the CLASSES AND TERMS &mdash; confirm with them later</option>
+    </select>
+    <div class="sf-hint" id="f-scoperesp-hint"></div>
+
     <div id="f-scope" style="margin-top:14px"></div>
   </section>
 
@@ -902,7 +916,7 @@ const state={
         account_id:'',account_name:'',searchIn:''},
   discovery:{desc:'',reason:'',trading:'',knowledge:'',terrNow:[],terrPlan:[],deadline:'',risk:''},
   marks:[{text:'',kind:'word',price:149}],
-  classes:'',
+  classes:'', scopeResp:'client',
   scope:{},
   scopeSource:{},        /* per class: 'tool' (approved) | 'staff' (edited) */
   /* Their brand online (10 Sep). The client wizard captures the client's OWN
@@ -980,8 +994,10 @@ function gateRules(){
      ok:marks.length>0,
      why:'Add the mark text for at least one audit.'},
     {id:'G-03',sec:'marks',label:'Classes agreed',
-     ok:parseClasses(state.classes).length>0,
-     why:'Enter the Nice classes the audit will cover.'},
+     /* Mirrors _staff_gate exactly. "We will pick the classes and terms" is
+        an answer; leaving it blank is not. */
+     ok:parseClasses(state.classes).length>0||state.scopeResp==='tmh_all',
+     why:'Enter the Nice classes the audit will cover, or record that we are picking them.'},
     {id:'G-04',sec:'advice',label:'Advice confirmed',
      ok:a.risks&&a.fees&&a.noguarantee&&a.questions,
      why:'All four advice statements must be ticked, and only once you have said them.'},
@@ -1800,6 +1816,7 @@ async function saveNow(explicit){
       business_name:c.org||undefined,
       name:(state.marks[0]&&state.marks[0].text)||undefined,
       classes:parseClasses(state.classes),
+      scopeResp:state.scopeResp||'client',   /* _staff_gate G-03 reads THIS */
       class_source:'staff',
       email_source:'staff_enquiry',
       current_screen:'staff_'+state.section,
@@ -2001,6 +2018,8 @@ function finishLoad(){
   if(!Array.isArray(d.terrPlan)) d.terrPlan=[];
   set('f-deadline',d.deadline);set('f-risk',d.risk);
   set('f-classes',state.classes);
+  const _sr=document.getElementById('f-scoperesp');
+  if(_sr) _sr.value=state.scopeResp||'client';
   /* Their brand online — older sessions have no platforms block; the defaults
      in state cover that and renderPlatforms() backfills any missing keys. */
   if(!state.platforms) state.platforms={domain:'',domainMode:'',soc:{},shop:{}};
@@ -2152,6 +2171,22 @@ function bindAll(){
 
   const cl=document.getElementById('f-classes');
   cl.addEventListener('input',()=>{state.classes=cl.value;renderScope();touch();});
+
+  /* Scope responsibility (19 Sep 2026). Drives G-03 and rides to the Deal. */
+  const sr=document.getElementById('f-scoperesp');
+  if(sr){
+    sr.value=state.scopeResp||'client';
+    const hint=()=>{
+      const h=document.getElementById('f-scoperesp-hint'); if(!h) return;
+      h.textContent={
+        client:'',
+        tmh_terms:'The classes above are the client\u2019s. We derive the terms before the audit runs.',
+        tmh_all:'You can take payment now and leave Classes blank. The audit will not be sent for research until the scope is on the Deal.'
+      }[sr.value]||'';
+    };
+    hint();
+    sr.addEventListener('change',()=>{state.scopeResp=sr.value;hint();renderGate();touch();});
+  }
 
   bind('f-domain',v=>state.platforms.domain=v);
 
