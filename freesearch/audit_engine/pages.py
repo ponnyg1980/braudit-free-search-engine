@@ -458,6 +458,17 @@ def triage_page(run_id: str, staff_name: str) -> str:
  <p class="hd-note">These are words dropped from the MARK before searching. Company legal forms &mdash; Ltd, GmbH, AS &mdash; are handled separately, per result and per that record&rsquo;s own jurisdiction; open a company result below to see what was removed from it.</p>
  <p class="hd-note"><b>Structural</b> words are never part of a mark &mdash; stripping &ldquo;Ltd&rdquo; is not a judgement, and putting it back would only flood the search. <b>Weak</b> words are usually noise but are occasionally the mark itself, which is why they are the ones worth questioning &mdash; DIRECT LINE is the obvious case. <b>Industry</b> words are noise for one client and the whole point for another.</p>
  <div id="ss-ignored"></div>
+ <div class="formcard" style="margin-top:12px">
+  <input id="ss-word" placeholder="a word to ignore on this search &mdash; courier, bakery, plumbing"
+         style="width:min(340px,100%);padding:8px;border:1px solid #d8dce2;border-radius:7px;font:inherit">
+  <input id="ss-why" placeholder="why (optional)"
+         style="width:min(280px,100%);padding:8px;border:1px solid #d8dce2;border-radius:7px;font:inherit;margin-left:6px">
+  <label style="margin-left:10px"><input type="checkbox" id="ss-global"> propose for the global list</label>
+  <a class="btn sec" style="margin-left:8px" onclick="addIgnored()">Add</a>
+  <div class="hd-note" style="margin-top:8px">Adding affects this search. Proposing does <b>not</b> change
+   anything globally &mdash; it queues the word with the evidence from this run for R&amp;D to rule on.</div>
+  <div id="ss-addmsg"></div>
+ </div>
  <h3 style="margin-top:22px">Criteria of record</h3>
  <p class="hd-note">What the registers were actually searched with, after the words above were removed.</p>
  <div id="ss-criteria"></div>
@@ -492,8 +503,11 @@ function renderSettings(){
  const byKind={};for(const w of ig)(byKind[w.kind]=byKind[w.kind]||[]).push(w);
  document.getElementById('ss-ignored').innerHTML=ig.length
   ?Object.keys(byKind).map(k=>`<h4 style="margin:14px 0 6px">${esc(k[0].toUpperCase()+k.slice(1))} <span class="tmno">${esc(KIND_NOTE[k]||'')}</span></h4>`
-     +'<table class="tick"><tr><th>Word</th><th>Where</th><th>Why it was dropped</th></tr>'
-     +byKind[k].map(w=>`<tr><td><b>${esc(w.word)}</b></td><td>${esc(w.where_applied)}</td><td class="why">${esc(w.source)}${w.restored_by?' &middot; <b class="ok">restored by '+esc(w.restored_by)+'</b>':''}</td></tr>`).join('')
+     +'<table class="tick"><tr><th>Word</th><th>Where</th><th>Why it was dropped</th><th style="width:90px"></th></tr>'
+     +byKind[k].map(w=>`<tr><td><b>${esc(w.word)}</b></td><td>${esc(w.where_applied)}</td><td class="why">${esc(w.source)}${w.restored_by?' &middot; <b class="ok">restored by '+esc(w.restored_by)+'</b>':''}</td>`
+        +`<td>${w.kind==='structural'?'<span class="tmno">always</span>'
+             :w.restored_by?'<span class="tmno">restored</span>'
+             :`<a class="abtn p" onclick="restoreWord('${esc(w.word)}')">Restore</a>`}</td></tr>`).join('')
      +'</table>').join('')
   :'<p class="empty">Nothing was dropped from this mark — or this run predates 18 Sep 2026, when the filter was silent and recorded nothing.</p>';
  document.getElementById('ss-criteria').innerHTML=(D.run.criteria||[]).map(c=>`<span class="plat q">${esc(c.match_type)}: ${esc(c.phrase)}${c.class_filtered?' [classes]':''}</span>`).join(' ')||'<p class="empty">None recorded.</p>';
@@ -505,6 +519,31 @@ function renderSettings(){
  pick.onchange=()=>showBreakdown(pick.value);
  showBreakdown(scored.length?pick.value:null);
  document.getElementById('n-excluded');
+}
+async function restoreWord(word){
+ if(!confirm(`Put "${word}" back into the search?\n\nThe weak list acts when the search is built, so this takes effect on the next run of this audit, not on the results below.`))return;
+ const r=await fetch('/api/runs/'+RUN+'/ignored/restore',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({word:word})});
+ const d=await r.json();
+ if(!r.ok){alert(d.detail||'could not restore that word');return}
+ alert(`"${word}" restored. ${d.note}`); load();
+}
+async function addIgnored(){
+ const w=document.getElementById('ss-word').value.trim();
+ const why=document.getElementById('ss-why').value.trim();
+ const g=document.getElementById('ss-global').checked;
+ const msg=document.getElementById('ss-addmsg');
+ if(w.length<2){msg.innerHTML='<p class="empty">Type a word first.</p>';return}
+ const r=await fetch('/api/runs/'+RUN+'/ignored',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({word:w,reason:why,propose_global:g})});
+ const d=await r.json();
+ if(!r.ok){msg.innerHTML='<p class="empty">'+esc(d.detail||'could not add that word')+'</p>';return}
+ const ev=d.evidence||{};
+ msg.innerHTML=`<div class="banner todo" style="margin-top:8px"><b>&ldquo;${esc(w)}&rdquo; added to this search.</b>
+   It appears in ${ev.rows_touched||0} result(s) on this run, ${ev.rows_medium_plus||0} of them Medium or above.
+   ${d.proposal?'Queued for R&amp;D as a global exclusion with that evidence.':''}</div>`;
+ document.getElementById('ss-word').value='';document.getElementById('ss-why').value='';
+ document.getElementById('ss-global').checked=false; load();
 }
 function showBreakdown(id){
  const box=document.getElementById('ss-breakdown');
