@@ -39,7 +39,7 @@ from .goods_similarity import build_idf, goods_similarity
 from .risk_model import TradingEvidence, assess_risk
 from .word_scoring import parse_classes, risk_from_score, score_word_result
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 __all__ = [
     "score_word_result",
