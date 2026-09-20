@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.2.0 — finding G ruled: legal forms are per jurisdiction (19 Sep 2026)
+
+First intended behaviour change since the consolidation. Record:
+`releases/2.2.0.md`.
+
+Neither old pattern was adopted. Both applied a legal form outside the country
+whose law defines it — the audit engine ate UK/GROUP/HOLDINGS, Watch ate a
+bare AS/SA. Now `LEGAL_FORMS_GENERIC` applies everywhere and
+`LEGAL_FORMS_BY_JURISDICTION` applies only where the record belongs, so a
+British name never meets the Norwegian list. `DESCRIPTIVE_SUFFIXES` is its own
+list, off by default.
+
+Measured: 167 of 2,064 audit company rows (8.1%) normalise differently and
+**2 bands move**. Both products now produce identical normalisation on all
+1,183 ledger names. band_diff is ZERO DIFFERENCES, as expected — the change
+is upstream of the scoring functions it replays.
+
+Stripping moved from inside the comparison to Refine:
+`normalise_company_name()` returns the compared form AND what was stripped,
+and the audit company row carries `compared_as` / `legal_forms_stripped`.
+
 ## 2.1.0 — ignore words centralised, mark scorer explains itself (18 Sep 2026)
 
 No scoring change: ZERO DIFFERENCES across 55,526 Watch records and 1,164
@@ -36,7 +57,7 @@ turns its xfail red, as intended.
 |---|---|---|---|
 | A | A RELATED_CLASSES pair lifts two specifications with ZERO shared terms to "related" (tier 2), above a SHARED class with the same text (tier 1). The module says related classes are the fallback when text is missing, yet the class-only fallback never consults them. Applied backwards. | D8, module docstring | 1,566 pairs related on the class pair alone; 1,005 currently Medium+ |
 | B | The IPO tail "information, advisory and consultancy services relating to all the aforesaid" survives: patterns lack commas and need "all OF the". Unrelated trades match on it. | D8 | 274 pairs match on it alone; 99 Medium+ |
-| G | The legal-form patterns disagree on 27 of 1,183 real names (2.3%). The audit engine strips UK, GROUP and HOLDINGS, eating words that are load-bearing in British marks ("UK & FRIED CHICKEN" -> "& FRIED CHICKEN"); Watch keeps them but strips a bare AS and SA, which eat ordinary English ("SHOP AS YOU GO LIMITED"). Neither list is simply right. | new, 18 Sep | 27 of 1,183 names strip differently |
+| G | **RULED 19 Sep, fixed in 2.2.0** — per-jurisdiction lists. ~~The legal-form patterns disagree on 27 of 1,183 real names (2.3%). The audit engine strips UK, GROUP and HOLDINGS, eating words that are load-bearing in British marks ("UK & FRIED CHICKEN" -> "& FRIED CHICKEN"); Watch keeps them but strips a bare AS and SA, which eat ordinary English ("SHOP AS YOU GO LIMITED"). Neither list is simply right. ~~ | ruled 19 Sep | closed: 2 bands moved |
 | C | Stemming does not converge for -ings plurals (fittings/fitting), -ing on ss/ll roots (dressing/dress, processing/process, selling/sell) and -ses plurals (houses/house, databases/database); clothes/clothing never meet; "preparation" is filtered only in the plural. The "every rule is idempotent" comment is false for 330 ledger words. | D8 | 183 pairs miss a variant (20 then share nothing); 122 clothes/clothing; 12 preparation-only |
 | D | Class-only fallback: two shared classes = one shared class = tier 2. | D7 "multiple rank above one" | not measured |
 | E | Band matrix: mark tier 1 x trade tier 4 = Medium, so D10's "tier 0-1 cannot reach a reportable band" holds for the conflict score but not the band; SWIFT COURIERS v RAPID COURIERS in the same trade is Medium. | D9, D10 | 0 Watch rows; 1 row in audit 8ccac5ee |
