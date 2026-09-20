@@ -136,6 +136,49 @@ def _search_score_settings(st, run: dict, run_id: str) -> dict:
             "package": package}
 
 
+@app.post("/api/runs/{run_id}/ignored/restore")
+async def api_ignored_restore(run_id: str, request: Request, who: dict = Depends(staff)):
+    """Put a weak word back. Structural words are refused: un-ignoring "Ltd"
+    does not sharpen a search, it floods it."""
+    body = await request.json()
+    word = str(body.get("word") or "").strip()
+    if not word:
+        raise HTTPException(400, "word is required")
+    n = _store().restore_ignored_word(run_id, word, who["name"])
+    if not n:
+        raise HTTPException(409, "that word is not on this run's weak list "
+                                 "(structural words cannot be restored)")
+    return {"restored": word, "rows": n,
+            "note": "the weak list acts at search time, so re-run the audit for "
+                    "this to take effect"}
+
+
+@app.post("/api/runs/{run_id}/ignored")
+async def api_ignored_add(run_id: str, request: Request, who: dict = Depends(staff)):
+    """Add a word to ignore on this run, optionally proposing it as global.
+
+    The proposal is a queue entry, never a write to a global list — global
+    settings are R&D's, and the queue carries the evidence they are ruled on.
+    """
+    body = await request.json()
+    word = str(body.get("word") or "").strip()
+    if len(word) < 2:
+        raise HTTPException(400, "a word of at least two characters is required")
+    st = _store()
+    out = st.add_ignored_word(run_id, word, who["name"])
+    out["evidence"] = st.word_evidence(run_id, word)
+    if body.get("propose_global"):
+        out["proposal"] = st.propose_global(word, run_id, who["name"],
+                                            str(body.get("reason") or ""))
+    return out
+
+
+@app.get("/api/proposals")
+def api_proposals(status: str = "proposed", who: dict = Depends(staff)):
+    """The global-exclusion queue. Read-only here: ruling happens in R&D."""
+    return {"proposals": _store().proposals(status)}
+
+
 @app.get("/api/runs/{run_id}")
 def api_run(run_id: str, who: dict = Depends(staff)):
     st = _store()
