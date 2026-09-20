@@ -455,6 +455,7 @@ def triage_page(run_id: str, staff_name: str) -> str:
  <p class="hd-note">What this run refused to search on, and how each result got the score it did. Read-only: nothing here changes a score. Global settings are set in R&amp;D.</p>
  <div id="ss-version"></div>
  <h3 style="margin-top:22px">Words we did not search on</h3>
+ <p class="hd-note">These are words dropped from the MARK before searching. Company legal forms &mdash; Ltd, GmbH, AS &mdash; are handled separately, per result and per that record&rsquo;s own jurisdiction; open a company result below to see what was removed from it.</p>
  <p class="hd-note"><b>Structural</b> words are never part of a mark &mdash; stripping &ldquo;Ltd&rdquo; is not a judgement, and putting it back would only flood the search. <b>Weak</b> words are usually noise but are occasionally the mark itself, which is why they are the ones worth questioning &mdash; DIRECT LINE is the obvious case. <b>Industry</b> words are noise for one client and the whole point for another.</p>
  <div id="ss-ignored"></div>
  <h3 style="margin-top:22px">Criteria of record</h3>
@@ -510,9 +511,18 @@ function showBreakdown(id){
  const r=(D.results||[]).find(x=>String(x.id)===String(id));
  if(!r||!r.components){box.innerHTML='<p class="empty">No breakdown recorded for this result. Runs before 18 Sep 2026 stored only the total and the sentence.</p>';return}
  const c=r.components;
+ // Refine (tmh-scoring 2.2.0): what the scorer was actually handed. The name
+ // on the report is the real one; this is the one it was compared as, and the
+ // legal forms that came out to get there — per the record's own jurisdiction,
+ // so a British name never meets the Norwegian list.
+ const d=r.detail||{},ca=d.compared_as,lf=d.legal_forms_stripped||[];
+ const refine=ca?`<div class="banner" style="margin-bottom:12px;background:#f3f6f9;border-left:3px solid #cbd6df;padding:10px 12px">
+   <b>Compared as</b> &ldquo;${esc(ca)}&rdquo;${ca!==(r.title||'')?` &mdash; the record says &ldquo;${esc(r.title||'')}&rdquo;`:''}
+   ${lf.length?`<br><span class="tmno">legal forms removed: ${lf.map(esc).join(', ')}${d.jurisdiction?' &middot; '+esc(d.jurisdiction)+' list':''}</span>`
+              :'<br><span class="tmno">no legal forms removed</span>'}</div>`:'';
  if(c.kind==='register'){
   const m=c.mark||{},t=c.trade||{};
-  box.innerHTML=`<div class="two">
+  box.innerHTML=refine+`<div class="two">
    <div><h4>Mark similarity</h4><table class="tick">
     <tr><th>Compartment</th><th style="width:110px">Result</th></tr>
     <tr><td>Tier</td><td><b>${m.tier??'—'}</b></td></tr>
@@ -532,7 +542,7 @@ function showBreakdown(id){
    ${(c.rights_reasons||[]).length?'<h4 style="margin-top:14px">Rights</h4><p class="hd-note">'+c.rights_reasons.map(esc).join(' &middot; ')+'</p>':''}`;
  }else{
   const pts=c.points||{},comps=c.comparisons||[];
-  box.innerHTML=`<div class="two">
+  box.innerHTML=refine+`<div class="two">
    <div><h4>Points by compartment</h4><table class="tick"><tr><th>Compartment</th><th style="width:90px">Points</th></tr>`
    +Object.keys(pts).map(k=>`<tr><td>${esc(k.replace(/_/g,' '))}</td><td><b>${pts[k]}</b></td></tr>`).join('')
    +`</table></div>
