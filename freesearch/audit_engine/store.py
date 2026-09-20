@@ -500,6 +500,66 @@ class Store:
                                        when 'client' then 2 else 3 end, lower(word)""",
                 (run_id,)).fetchall()
 
+    # --- Search & Score Settings: the interactive half (19 Sep 2026) ---------
+    # Nothing here writes a global list. A word staff want everywhere becomes a
+    # proposal carrying its evidence; Jonathan rules in R&D.
+
+    def restore_ignored_word(self, run_id: str, word: str, by: str) -> int:
+        """Staff put a weak word back. Recorded, not applied: the weak list acts
+        at SEARCH, so the word only returns on a fresh run — which is why the
+        caller is told to re-run rather than shown a changed screen."""
+        with self._conn() as c:
+            return c.execute(
+                """update audit.ignored_words set restored_by = %s, restored_at = now()
+                    where run_id = %s and lower(word) = lower(%s) and kind <> 'structural'""",
+                (by, run_id, word)).rowcount
+
+    def add_ignored_word(self, run_id: str, word: str, by: str,
+                         kind: str = "industry", where: str = "staff, this run") -> dict:
+        with self._conn() as c:
+            row = c.execute(
+                """insert into audit.ignored_words (run_id, word, kind, source, where_applied)
+                   values (%s, %s, %s, %s, %s) returning id""",
+                (run_id, word, kind, f"added by {by}", where)).fetchone()
+        return {"id": str(row["id"]), "word": word, "kind": kind}
+
+    def word_evidence(self, run_id: str, word: str) -> dict:
+        """How many of this run's results the word actually touches. This is
+        what a global proposal is ruled on, so it is measured rather than
+        asserted."""
+        like = f"%{word.lower()}%"
+        with self._conn() as c:
+            r = c.execute(
+                """select count(*) n,
+                          count(*) filter (where band in ('High','Medium/High','Medium')) hi
+                     from audit.results
+                    where run_id = %s and (lower(title) like %s or lower(owner) like %s)""",
+                (run_id, like, like)).fetchone()
+        return {"rows_touched": r["n"], "rows_medium_plus": r["hi"]}
+
+    def propose_global(self, word: str, run_id: str, by: str, reason: str = "",
+                       kind: str = "industry") -> dict:
+        run = self.run(run_id) or {}
+        ev = self.word_evidence(run_id, word)
+        with self._conn() as c:
+            row = c.execute(
+                """insert into audit.global_proposals
+                       (word, kind, proposed_from, client_id, client_name, proposed_by,
+                        reason, rows_removed, bands_moved)
+                   values (%s, %s, %s, %s, %s, %s, %s, %s, %s) returning id""",
+                (word, kind, run_id, run.get("client_id"), run.get("client_name"),
+                 by, reason or None, ev["rows_touched"], ev["rows_medium_plus"])).fetchone()
+        return {"id": str(row["id"]), "word": word, **ev}
+
+    def proposals(self, status: str = "proposed") -> list[dict]:
+        with self._conn() as c:
+            return c.execute(
+                """select id, word, kind, client_name, proposed_by, reason,
+                          rows_removed, bands_moved, status, created_at
+                     from audit.global_proposals
+                    where (%s = 'all' or status = %s) order by created_at desc limit 200""",
+                (status, status)).fetchall()
+
     def report_meta(self, token: str) -> dict:
         """Who made the report and when — audit.report_view() does not return
         created_by or the token, and both belong on the cover."""
