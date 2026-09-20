@@ -66,7 +66,11 @@ MAX_AGE_DAYS = 30
 
 # Moved into the scoring package 18 Sep 2026, unchanged. It is NOT the same
 # pattern the audit engine uses - see tmh_scoring/ignore_words.py.
-from tmh_scoring.ignore_words import LEGAL_FORMS_WATCH as _LEGAL_FORMS  # noqa: E402
+# Per-jurisdiction legal forms (finding G, ruled 19 Sep 2026). Every company
+# this module sees comes from Companies House, so GB is the right default;
+# the old pattern stripped GMBH, SARL, AS and SA from British names, and a
+# bare AS eats ordinary English ("SHOP AS YOU GO LIMITED").
+from tmh_scoring.ignore_words import normalise_key as _normalise_key  # noqa: E402
 
 # Companies House status values, mapped to the three states D11 cares about.
 _ACTIVE = {"active"}
@@ -91,10 +95,8 @@ class TradingEvidence:
 NO_EVIDENCE = TradingEvidence(note="no matching UK company - factor skipped")
 
 
-def normalise(name: str) -> str:
-    n = _LEGAL_FORMS.sub(" ", (name or "").upper())
-    n = re.sub(r"[^A-Z0-9]+", "", n)
-    return n
+def normalise(name: str, jurisdiction: str = "GB") -> str:
+    return _normalise_key(name, jurisdiction)
 
 
 def _get(path: str, timeout: int = 20):
