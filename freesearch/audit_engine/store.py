@@ -126,7 +126,12 @@ def _company_row(r) -> dict:
         dates={"incorporated": r.incorporated, "dissolved": r.dissolved},
         detail={"company_type": r.company_type, "sic_codes": r.sic_codes, "sic_sectors": r.sic_sectors,
                 "address": r.address, "jurisdiction": r.jurisdiction, "officers": r.officers,
-                "previous_names": r.previous_names, "enriched": r.enriched},
+                "previous_names": r.previous_names, "enriched": r.enriched,
+                # Refine output (2.2.0): what the scorer actually compared, and
+                # which legal forms came out to get there. The report shows the
+                # real name; this is how staff see why it matched.
+                "compared_as": getattr(r, "compared_as", "") or None,
+                "legal_forms_stripped": list(getattr(r, "legal_forms_stripped", None) or []) or None},
         score=r.score, band=r.band, explanation=r.explanation,
         excluded=(r.exclusion_status == "excluded_initial_asset"),
     )
