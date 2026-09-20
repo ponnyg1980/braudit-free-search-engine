@@ -57,10 +57,13 @@ MAX_RETRIES = 3
 RATE_LIMIT_SEC = 0.12          # ~500/5min, inside the 600 allowance
 ENRICH_MIN_SCORE = 3           # fetch the profile only if the row scored something
 
-# Moved into the scoring package 18 Sep 2026, unchanged. It is NOT the same
-# pattern Watch uses - see tmh_scoring/ignore_words.py for the divergence and
-# why unifying them needs a ruling rather than an edit.
-from tmh_scoring.ignore_words import LEGAL_FORMS_AUDIT as _LEGAL_FORMS  # noqa: E402
+# Legal forms are stripped per the record's OWN jurisdiction (finding G,
+# ruled 19 Sep 2026). The old single pattern stripped UK, GROUP and HOLDINGS
+# from every name, eating words that carry meaning in British ones.
+from tmh_scoring.ignore_words import (                    # noqa: E402
+    normalise_company_name as _normalise_name,
+    normalise_key as _normalise_key,
+)
 
 # SIC 2007 sections. Companies House returns bare codes; there is no API for
 # descriptions, so this gives a human-readable sector without inventing the
@@ -129,6 +132,8 @@ class CompanyRow:
     dissolved: str = ""
     address: str = ""
     jurisdiction: str = ""
+    compared_as: str = ""              # the name the scorer saw, legal forms out
+    legal_forms_stripped: list = field(default_factory=list)
     sic_codes: str = ""
     sic_sectors: str = ""
     previous_names: str = ""
@@ -290,8 +295,10 @@ def _score(rows: list, crit_set) -> tuple:
     kept, noise = [], 0
     for r in rows:
         live = (r.status or "").lower() in {"active", "open", "registered"}
-        bare = _LEGAL_FORMS.sub(" ", r.name or "")
-        bare = re.sub(r"\s+", " ", bare).strip() or (r.name or "")
+        # REFINE, not score: normalise once, keep both halves on the row so
+        # the Settings panel can show what the scorer actually compared.
+        bare, r.legal_forms_stripped = _normalise_name(r.name, r.jurisdiction)
+        r.compared_as = bare
         out = score_word_result(
             {"status": "Registered" if live else "Ended",
              "mark_text": bare, "mark_type": "", "classes": ""},
@@ -331,8 +338,10 @@ def _apply_exclusions(rows: list, exclusions) -> int:
     return hit
 
 
-def _normalise(name: str) -> str:
-    return re.sub(r"[^A-Z0-9]+", "", _LEGAL_FORMS.sub(" ", (name or "").upper()))
+def _normalise(name: str, jurisdiction: str = "GB") -> str:
+    """Comparison key. Defaults to GB because every caller here is looking at
+    Companies House; pass the real jurisdiction when the source has one."""
+    return _normalise_key(name, jurisdiction)
 
 
 # ---------------------------------------------------------------------------
