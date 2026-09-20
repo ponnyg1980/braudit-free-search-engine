@@ -470,3 +470,34 @@ neither product yet.
 Ruling needed on which list is authoritative, or on a third list built from
 the evidence. Unifying will move scores on both sides, so it is a versioned
 release with its own band_diff, not an edit.
+
+### G — RULING (Jonathan, 19 September 2026)
+
+Neither list. Both were wrong in the same way: applying a legal form outside
+the jurisdiction whose law defines it. AS is a legal form in Norway and a
+preposition in England; whether to strip it is a property of the record, not
+of the word.
+
+**Decided:** a generic list of forms that mean the same thing in every
+jurisdiction we search, plus one list per jurisdiction, applied only when the
+record's own jurisdiction matches. Descriptive words — HOLDINGS, GROUP,
+INTERNATIONAL, GLOBAL, UK — are not legal forms and are not stripped by
+default; they are their own list, and turning it on is a decision somebody
+makes rather than something that happens.
+
+**Also decided:** the per-jurisdiction lists start short and grow from
+evidence. A form is added when a real record shows it should have been
+stripped and was not. They are not populated from what a country is expected
+to use, because an assumption that reaches a client is worse than a gap that
+shows up in triage. This is R&D's standing task, and each addition is a
+versioned release.
+
+**Also decided:** stripping is a REFINE step, not a scoring step. Normalise
+once, keep both the original and the compared form on the row, score the
+compared form, present the original. The previous arrangement — normalising
+inside the comparison — is why two different lists could run side by side for
+weeks without anyone noticing.
+
+Shipped in 2.2.0. Measured: 167 of 2,064 audit company rows normalise
+differently, 2 bands move, both products now identical on all 1,183 ledger
+names.
