@@ -149,7 +149,7 @@ h2{font-size:31px;font-weight:800;letter-spacing:-.8px;margin:8px 0 10px;
     <div class="foot">
       <span class="msg" id="msg">Browsing is free and open. Tick the classes that look right,
         and the builder will keep your list and email it to you.</span>
-      <a class="btn" id="go" href="#" aria-disabled="true">Build and save my list</a>
+      <a class="btn" id="go" href="#" aria-disabled="true">Continue with these classes</a>
     </div>
   </div>
 
@@ -265,12 +265,16 @@ function toggle(n){
 function syncFoot(){
   const go = $('go');
   if(!basket.length){
-    $('msg').textContent = 'Browsing is free and open. Tick the classes that look right, ' +
-      'and the builder will keep your list and email it to you.';
+    $('msg').textContent = 'Browsing is free and open, and nothing here is saved. ' +
+      'Tick the classes that look right and take them to the builder, which can ' +
+      'keep your list and email it to you.';
     go.setAttribute('aria-disabled','true');
     go.style.background = '#C9D2DA';
     go.removeAttribute('href');
-    go.textContent = 'Build and save my list';
+    /* NOT "save": nothing is saved here, and the next screen cannot
+       save either until it has a name and an email. The label now
+       promises only what the click actually does (Jonathan, 21 Sep). */
+    go.textContent = 'Continue with these classes';
     return;
   }
   $('msg').innerHTML = '<b style="color:var(--navy)">Class ' +
@@ -279,7 +283,7 @@ function syncFoot(){
   go.removeAttribute('aria-disabled');
   go.style.background = '';
   go.href = '/class-builder?classes=' + basket.join(',');
-  go.textContent = 'Build and save my list (' + basket.length + ')';
+  go.textContent = 'Continue with these ' + basket.length + ' class' + (basket.length===1?'':'es');
 }
 
 /* ---- search ----------------------------------------------------------- */
