@@ -81,9 +81,15 @@ def extract(src: str, name: str) -> str:
 # same-origin iframe rather than embed.js because this page IS the widget host;
 # ?embed=1 tells the finder a host page owns the heading.
 FINDER = f'''
-      <!-- LIVE class finder, replacing the design's sample browser. -->
+      <!-- LIVE class finder, replacing the design's sample browser.
+           margin-top (Jonathan, 21 Sep): dropping the widget's own card also
+           dropped the breathing room under the header, so the search box sat
+           hard against the "Book a free 15 minute call" button. The gap
+           belongs to the HOST, not the widget — the widget cannot know what
+           is above it, and standalone at /class-finder there is nothing to
+           clear. Same principle as the chrome: the host owns the layout. -->
       <iframe id="finder" src="/class-finder?embed=1" title="Find your trademark class"
-              style="width:100%;border:0;display:block;height:1180px"></iframe>
+              style="width:100%;border:0;display:block;height:1180px;margin-top:26px"></iframe>
       <div style="border-top:1px solid #E6E9ED;background:#F7F8FA;padding:14px 34px;
            font-size:13px;line-height:1.6;color:#617383">
         Counts here are of every mark registered in that class, from 683,327 UK
