@@ -117,9 +117,16 @@ def _scope_selector_list(head: str, scope: str) -> str:
 
 FINDER_EMBED = (
     '  <!-- The live Keyword Class Finder, embedded the same way every other TMH\n'
-    '       widget is: one script tag. embed.js frames it and sizes it. -->\n'
-    f'  <script src="{WIDGET_HOST}/embed.js" data-widget="class-finder" '
-    'data-tenant="tmh" async></script>'
+    '       widget is: one script tag. embed.js frames it and sizes it.\n'
+    '       The wrapper carries the 26px gap under the header buttons that the\n'
+    '       served page puts on the iframe itself (Jonathan, 21 Sep). Without\n'
+    '       it the WP page would silently lose that spacing, because this\n'
+    '       substitution throws the iframe and its inline style away. A\n'
+    '       transform that REPLACES an element must carry its layout over. -->\n'
+    '  <div style="margin-top:26px">\n'
+    f'    <script src="{WIDGET_HOST}/embed.js" data-widget="class-finder" '
+    'data-tenant="tmh" async></script>\n'
+    '  </div>'
 )
 
 
