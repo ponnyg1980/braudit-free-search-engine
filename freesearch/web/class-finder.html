@@ -343,7 +343,24 @@ $('q').addEventListener('input', onType);
   if(new URLSearchParams(location.search).get('embed') === '1'){
     const h = $('own-head'); if(h) h.style.display = 'none';
     const w = document.querySelector('.wrap');
-    if(w){ w.style.paddingTop = '0'; w.style.paddingBottom = '0'; }
+    /* The HOST already draws the panel — its own border, radius and shadow,
+       with the heading and the help buttons inside it. Left alone, this
+       widget draws a SECOND card within that one: the design's single panel
+       became a card-in-a-card with the search box inset by the wrap padding
+       (Jonathan, 21 Sep). Embedded, the widget contributes CONTENT only and
+       lets the host own the chrome. Standalone at /class-finder it keeps
+       its card, because there is nothing else to sit in. */
+    if(w){ w.style.padding = '0'; w.style.maxWidth = 'none'; }
+    const shell = document.querySelector('.shell');
+    if(shell){
+      shell.style.border = '0';
+      shell.style.borderRadius = '0';
+      shell.style.boxShadow = 'none';
+    }
+    const legend = document.querySelector('.legend');
+    if(legend){ legend.style.margin = '14px 22px 0'; }
+    const help = document.querySelector('[data-tmh-help]');
+    if(help){ help.style.margin = '18px 22px 4px'; }
   }
   typePh('Try “coffee”, “software” or “retail”', 0);
   syncFoot();
