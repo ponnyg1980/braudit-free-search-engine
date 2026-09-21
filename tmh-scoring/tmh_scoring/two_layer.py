@@ -288,6 +288,26 @@ class MarkSimilarity:
     shared_words: list = field(default_factory=list)
     visual: str | None = None
 
+    # 2.5.0 — the raw axis measurements, kept so that a row can be re-banded
+    # at a different sensitivity, and so the Triage panel can say WHY a row
+    # moved rather than only that it did.
+    #
+    # `orthographic` above is NOT one of these: it has carried `best`, the
+    # winning score across all axes, since before the axes were separated, and
+    # renaming it would break every stored row. `spelling` below is the
+    # spelling axis proper. Both are kept; neither is removed.
+    written: float = 0.0        # whole-string / distinctive-core resemblance
+    sound: float = 0.0          # phonetic_score
+    spelling: float = 0.0       # orthographic_score (edit distance)
+    token: float = 0.0          # best distinctive-token pair
+    axis: str = ""              # which of written/sound/spelling carried it
+
+    def axes(self) -> dict:
+        """The three independent axes plus the token measure, for display."""
+        return {"written": self.written, "sound": self.sound,
+                "spelling": self.spelling, "token": self.token,
+                "axis": self.axis}
+
 
 def _segment(mark: str, vocabulary) -> set:
     """Words in `mark`, opening up run-together ones.
@@ -345,7 +365,9 @@ def mark_similarity(client_mark: str, cited_mark: str,
         return MarkSimilarity(0, "one or both marks have no text")
 
     if a == b:
-        return MarkSimilarity(4, "identical mark text", 1.0, True)
+        return MarkSimilarity(4, "identical mark text", 1.0, True,
+                              written=1.0, sound=1.0, spelling=1.0,
+                              token=1.0, axis="written")
 
     core_a, core_b = _norm(strip_generic(a)), _norm(strip_generic(b))
     words_a = {w.upper() for w in a.split() if len(w) > 2}
@@ -444,7 +466,11 @@ def mark_similarity(client_mark: str, cited_mark: str,
         tier = visual_floor
         reason = f"visual match: {visual_decision} (text similarity only {best:.2f})"
 
-    return MarkSimilarity(tier, reason, round(best, 3), phon, shared, visual_decision)
+    return MarkSimilarity(tier, reason, round(best, 3), phon, shared,
+                          visual_decision,
+                          written=round(whole_like, 3), sound=round(phon_score, 3),
+                          spelling=round(ortho_score, 3), token=round(token, 3),
+                          axis=axis)
 
 
 # ---------------------------------------------------------------------------
