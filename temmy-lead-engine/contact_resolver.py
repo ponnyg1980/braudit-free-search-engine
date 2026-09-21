@@ -111,6 +111,47 @@ FREE_EMAIL_PROVIDERS = {
 SERPER_BASE = 'https://google.serper.dev'
 MIN_CORROBORATION_TOKENS = 1   # >=1 shared meaningful token required to accept a candidate
 
+# CORRECTED (Jonathan, live TASK 4 test, 6 Aug): a Serper /search organic result for an
+# individual with no company site can be that person's OWN LinkedIn profile — the top hit for
+# "Tahseen Islam company" was `pk.linkedin.com/in/tahseenislam`, which then landed in `website`
+# and got pushed to Cerebrum's `Website URL`, duplicating `Profile URL` and describing a LinkedIn
+# profile as if it were a company website. `Website URL` must only ever hold a genuine company
+# website; for an individual with none, it must stay empty — a duplicate of the LinkedIn URL is
+# wrong in both directions (misleads on what the field means, AND throws away the distinction
+# between "no company site" and "here's their LinkedIn"). Fixed at the source, in `resolve()`
+# itself (this module's whole point — "ONE RESOLVER" — so every caller is covered, not just
+# route1_adjudicate.py). Country-coded LinkedIn subdomains (`pk.linkedin.com`, `uk.linkedin.com`,
+# `de.linkedin.com`, ...) are exactly why this checks the REGISTRABLE domain, not an exact-string
+# match against `linkedin.com`.
+SOCIAL_DOMAINS = {
+    'linkedin.com', 'facebook.com', 'twitter.com', 'x.com', 'instagram.com',
+    'youtube.com', 'tiktok.com', 'pinterest.com', 'threads.net',
+}
+
+# COMPANY EMAIL (Jonathan, 10 Aug): "A serper search finds a generic email... A LinkedIn Email
+# search is for a person. Person email is a better contact email." So this is deliberately narrow
+# — only these four generic local-parts are ever candidates. Anything else (firstname.lastname@,
+# initials@, a named individual's address) is never even considered a match, so there is no
+# "looks personal, discard it" filter needed after the fact — personal addresses simply never
+# enter `candidates` in the first place. See route1_adjudicate.py's CEREBRUM_FIELD_MAP note on
+# `company_email` for why this must never land in the `work_email`/person-email slot.
+CONTACT_EMAIL_PREFIXES = {'info', 'contact', 'hello', 'enquiries'}
+EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
+COMPANY_EMAIL_FETCH_TIMEOUT = 8
+COMPANY_EMAIL_MAX_BYTES = 500_000   # never read an unbounded response
+
+
+def _is_social_url(url: str | None) -> bool:
+    """True if `url` resolves to a known social/networking platform, not a real company
+    website — checked against the REGISTRABLE domain (last two labels), so a country-coded or
+    `www.`/`m.`-prefixed subdomain (`pk.linkedin.com`, `m.facebook.com`) is still caught."""
+    domain = _domain_from_url(url) if url else None
+    if not domain:
+        return False
+    labels = domain.split('.')
+    registrable = '.'.join(labels[-2:]) if len(labels) >= 2 else domain
+    return registrable in SOCIAL_DOMAINS
+
 
 # --------------------------------------------------------------------------- config ---
 
@@ -166,24 +207,32 @@ def _domain_from_url(url: str) -> str | None:
 # ------------------------------------------------------------------------- corroborate ---
 
 def _corroborate(candidate_text: str, context_terms: list[str] | None,
-                  min_tokens: int = MIN_CORROBORATION_TOKENS) -> tuple[bool, str]:
-    """True/reason — does `candidate_text` (a company/site name+snippet) plausibly match
-    what the lead told us about their business? Same token-overlap discipline as
-    `search_guard.validate_results` (RULE 2), applied to a single candidate rather than a
-    batch. No context_terms at all means nothing to check against — corroboration is
-    then vacuously skipped (not failed), same as `search_guard` treats an unvalidatable
-    batch: the caller decides whether that's acceptable for this step.
+                  min_tokens: int = MIN_CORROBORATION_TOKENS) -> tuple[bool, str, bool]:
+    """(ok, reason, checked) — does `candidate_text` (a company/site name+snippet)
+    plausibly match what the lead told us about their business? Same token-overlap
+    discipline as `search_guard.validate_results` (RULE 2), applied to a single candidate
+    rather than a batch. No context_terms at all means nothing to check against —
+    corroboration is then vacuously skipped (not failed), same as `search_guard` treats
+    an unvalidatable batch: the caller decides whether that's acceptable for this step.
+
+    THE THIRD RETURN VALUE EXISTS BECAUSE THE SKIP WAS INVISIBLE (21 Sep 2026).
+    Every caller used to record `{'checked': True, 'matched': True}` regardless, so a
+    vacuous skip was stored identically to a real pass. In production that meant all 43
+    enrichment runs to 21 Sep read as corroborated when not one had been checked — the
+    safeguard this module is built around had never run, and nothing said so. `checked`
+    now reports whether there was anything to check; `ok` alone must never be read as
+    evidence of a match.
     """
     wanted = set()
     for term in (context_terms or []):
         wanted.update(sg._tokens(term))
     if not wanted:
-        return True, 'no context_terms supplied — corroboration skipped'
+        return True, 'no context_terms supplied — corroboration skipped', False
     blob = sg._norm(candidate_text or '')
     matched = [t for t in wanted if t in blob]
     if len(matched) >= min_tokens:
-        return True, f'matched {matched[:5]}'
-    return False, f'no overlap with {sorted(wanted)[:8]}'
+        return True, f'matched {matched[:5]}', True
+    return False, f'no overlap with {sorted(wanted)[:8]}', True
 
 
 # --------------------------------------------------------------------------- serper ---
@@ -211,13 +260,79 @@ def _best_place(body: dict) -> dict | None:
 
 
 def _best_organic_website(body: dict) -> str | None:
+    """Skips social/networking URLs (LinkedIn, Facebook, ...) rather than just taking the
+    first hit — a LinkedIn profile is very often the top organic result for a person's name,
+    and it is never a company website (see SOCIAL_DOMAINS/_is_social_url above). Keeps looking
+    through the remaining organic results for a real one instead of accepting the first link
+    unconditionally; returns None only if every candidate is social (or there are none)."""
     kg = (body or {}).get('knowledgeGraph') or {}
-    if kg.get('website'):
-        return kg['website']
+    kg_site = kg.get('website')
+    if kg_site and not _is_social_url(kg_site):
+        return kg_site
     for r in (body or {}).get('organic') or []:
-        if r.get('link'):
-            return r['link']
+        link = r.get('link')
+        if link and not _is_social_url(link):
+            return link
     return None
+
+
+# --------------------------------------------------------------------- company email ---
+
+def _fetch_url_text(url: str, timeout: int = COMPANY_EMAIL_FETCH_TIMEOUT) -> str | None:
+    """Raw best-effort fetch of a URL's body as text. Isolated as its own function — same
+    pattern as `_serper()` — so tests can monkeypatch just the network call and exercise the
+    real extraction/preference logic in `_extract_company_email()` against canned HTML. Any
+    failure at all (timeout, DNS, TLS, HTTP error, non-text content-type, decode error) returns
+    None rather than raising — a company site being unreachable must never break `resolve()`."""
+    try:
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
+                          '(KHTML, like Gecko) Chrome/125.0 Safari/537.36'})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            ctype = (r.headers.get('Content-Type') or '').lower()
+            if ctype and 'text' not in ctype and 'html' not in ctype:
+                return None
+            raw = r.read(COMPANY_EMAIL_MAX_BYTES)
+            charset = r.headers.get_content_charset() or 'utf-8'
+            return raw.decode(charset, errors='replace')
+    except Exception:
+        return None
+
+
+def _extract_company_email(website: str | None) -> str | None:
+    """Fetch a resolved website and pull out a GENERIC contact address only — see
+    CONTACT_EMAIL_PREFIXES. Never returns a personal-looking address: the local-part must be an
+    EXACT case-insensitive match against that fixed set, so `info@` matches but
+    `info.requests@`, `jsmith@`, or `john.smith@` never do.
+
+    Preference when the page carries more than one generic address:
+      1. one on the SAME registrable domain as the resolved website (the ordinary case — an
+         `info@ourcompany.com` mailto/text on ourcompany.com's own site)
+      2. otherwise, whichever generic address appeared first on the page (e.g. a third-party
+         contact-form/mailto widget) — still a real, usable generic channel
+
+    Returns None on a missing website, a failed fetch, or no generic address found. Never raises.
+    """
+    if not website:
+        return None
+    url = website if '://' in website else f'https://{website}'
+    text = _fetch_url_text(url)
+    if not text:
+        return None
+
+    target_domain = _domain_from_url(website)
+    same_domain_hit, first_hit = None, None
+    for m in EMAIL_RE.finditer(text):
+        addr = m.group(0).lower().rstrip('.')
+        local, _, dom = addr.partition('@')
+        if local not in CONTACT_EMAIL_PREFIXES:
+            continue
+        if first_hit is None:
+            first_hit = addr
+        dom_clean = dom[4:] if dom.startswith('www.') else dom
+        if same_domain_hit is None and target_domain and dom_clean == target_domain:
+            same_domain_hit = addr
+    return same_domain_hit or first_hit
 
 
 # --------------------------------------------------------------------- suppression ---
@@ -309,6 +424,14 @@ def resolve(search_term: str, *, cfg: dict | None = None,
       {'ok': True, 'found': bool, 'step': <which step resolved it, or None>,
        'website': str|None, 'domain': str|None, 'phone': str|None, 'address': str|None,
        'company_number': str|None, 'sic_codes': list|None, 'officer_names': list|None,
+       'company_email': str|None,   # GENERIC address only (info@/contact@/hello@/enquiries@),
+                                     # fetched off the resolved website — see
+                                     # _extract_company_email(). None whenever no website was
+                                     # resolved, the fetch failed, or no generic address was
+                                     # found. NEVER a personal address — read by
+                                     # route1_adjudicate.build_payload() into the `Company Email`
+                                     # field, kept strictly separate from `work_email` (the
+                                     # person's own address).
        'corroboration': {'checked': bool, 'matched': bool, 'reason': str},
        'suppression': {'checked': bool, 'suppressed': bool, 'aid': str|None},
        'credits_used': int, 'reason': str|None}
@@ -326,10 +449,12 @@ def resolve(search_term: str, *, cfg: dict | None = None,
     # --- Step 1 (free): domain of a supplied email --------------------------------
     domain = _domain_from_email(email) if email else None
     if domain:
+        email_domain_website = f'https://{domain}'
         _record(entry_point, term, 'found', step='email_domain', channel='domain')
         return {'ok': True, 'found': True, 'step': 'email_domain', 'domain': domain,
-                'website': f'https://{domain}', 'phone': None, 'address': None,
+                'website': email_domain_website, 'phone': None, 'address': None,
                 'company_number': None, 'sic_codes': None, 'officer_names': None,
+                'company_email': _extract_company_email(email_domain_website),
                 'corroboration': {'checked': False, 'matched': True, 'reason': 'given by lead'},
                 'suppression': {'checked': False, 'suppressed': False, 'aid': None},
                 'credits_used': 0, 'reason': None}
@@ -341,17 +466,23 @@ def resolve(search_term: str, *, cfg: dict | None = None,
         return {'ok': True, 'found': True, 'step': 'customer_website', 'domain': domain,
                 'website': website, 'phone': None, 'address': None,
                 'company_number': None, 'sic_codes': None, 'officer_names': None,
+                'company_email': _extract_company_email(website),
                 'corroboration': {'checked': False, 'matched': True, 'reason': 'given by lead'},
                 'suppression': {'checked': False, 'suppressed': False, 'aid': None},
                 'credits_used': 0, 'reason': None}
 
     # --- Step 3 (free): Companies House by name — also a location hint for Places ---
     ch_hit, ch_conf, ch_officers = None, 'none', []
+    # Initialised so the Companies-House-only return further down can never
+    # NameError if the CH branch is skipped (no key, no hit). They carry the
+    # step-3 corroboration outcome forward; False/"not corroborated" is the
+    # honest default, not an optimistic one.
+    corr_checked, why = False, 'not corroborated'
     ch_key = cfg.get('COMPANIES_HOUSE_API_KEY')
     if ch_key:
         hit, conf = che.search_company(term, ch_key)
         if hit:
-            ok, why = _corroborate(hit.get('company_name') or hit.get('matched_name') or '',
+            ok, why, corr_checked = _corroborate(hit.get('company_name') or hit.get('matched_name') or '',
                                    all_context)
             if ok:
                 ch_hit, ch_conf = hit, conf
@@ -382,18 +513,24 @@ def resolve(search_term: str, *, cfg: dict | None = None,
         credits_used += int(places_body.get('credits') or 0)
         best = _best_place(places_body)
         if best:
-            ok, why = _corroborate(best.get('title') or '', all_context)
+            ok, why, corr_checked = _corroborate(best.get('title') or '', all_context)
             if ok:
+                # defense in depth — a Places listing's own 'website' field can occasionally be
+                # a social page too; same rule as _best_organic_website, never a social URL out.
+                best_website = best.get('website')
+                if _is_social_url(best_website):
+                    best_website = None
                 _record(entry_point, term, 'found', step='serper_places',
                         credits_used=credits_used, channel='phone' if best.get('phoneNumber') else 'website')
                 return {
                     'ok': True, 'found': True, 'step': 'serper_places',
-                    'website': best.get('website'), 'domain': _domain_from_url(best.get('website') or ''),
+                    'website': best_website, 'domain': _domain_from_url(best_website or ''),
                     'phone': best.get('phoneNumber'), 'address': best.get('address'),
                     'company_number': ch_hit.get('company_number') if ch_hit else None,
                     'sic_codes': ch_hit.get('sic') if ch_hit else None,
                     'officer_names': [o['name'] for o in ch_officers] or None,
-                    'corroboration': {'checked': True, 'matched': True, 'reason': why},
+                    'company_email': _extract_company_email(best_website),
+                    'corroboration': {'checked': corr_checked, 'matched': corr_checked, 'reason': why},
                     'suppression': supp, 'credits_used': credits_used, 'reason': None,
                 }
             _record(entry_point, term, 'no_match', step='serper_places',
@@ -406,7 +543,7 @@ def resolve(search_term: str, *, cfg: dict | None = None,
         if cand_site:
             cand_text = ((search_body.get('knowledgeGraph') or {}).get('title') or
                         (search_body.get('organic') or [{}])[0].get('title') or cand_site)
-            ok, why = _corroborate(cand_text, all_context)
+            ok, why, corr_checked = _corroborate(cand_text, all_context)
             if ok:
                 _record(entry_point, term, 'found', step='serper_search',
                         credits_used=credits_used, channel='website')
@@ -417,7 +554,8 @@ def resolve(search_term: str, *, cfg: dict | None = None,
                     'company_number': ch_hit.get('company_number') if ch_hit else None,
                     'sic_codes': ch_hit.get('sic') if ch_hit else None,
                     'officer_names': [o['name'] for o in ch_officers] or None,
-                    'corroboration': {'checked': True, 'matched': True, 'reason': why},
+                    'company_email': _extract_company_email(cand_site),
+                    'corroboration': {'checked': corr_checked, 'matched': corr_checked, 'reason': why},
                     'suppression': supp, 'credits_used': credits_used, 'reason': None,
                 }
             _record(entry_point, term, 'no_match', step='serper_search',
@@ -431,7 +569,9 @@ def resolve(search_term: str, *, cfg: dict | None = None,
             'website': None, 'domain': None, 'phone': None,
             'address': ch_hit.get('address'), 'company_number': ch_hit.get('company_number'),
             'sic_codes': ch_hit.get('sic'), 'officer_names': [o['name'] for o in ch_officers] or None,
-            'corroboration': {'checked': True, 'matched': True, 'reason': f'CH confidence {ch_conf}'},
+            'company_email': None,   # no website resolved at this step — nothing to fetch
+            'corroboration': {'checked': corr_checked, 'matched': corr_checked,
+                              'reason': f'CH confidence {ch_conf}; {why}'},
             'suppression': supp, 'credits_used': credits_used, 'reason': None,
         }
 
