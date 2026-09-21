@@ -17,6 +17,7 @@ import base64
 import binascii
 
 from .jurisdictions_data import VALID_CODES, expand_for_profiling, picker_payload
+
 from .models import FreeSearchRequest, Jurisdictions
 from .serialize import serialize_result
 from .service import run_free_search
@@ -348,6 +349,35 @@ def handle_enrich(payload: dict) -> dict:
         payload.get('business_name'), payload.get('trading_name'),
         payload.get('tagline'),
     ) if t]
+
+    # DELIBERATELY NOT ADDING THE VISITOR'S CLASSES HERE — see 21 Sep 2026.
+    #
+    # It looks like the obvious fix for "corroboration never runs on Quick
+    # Search" (all three fields above are empty there, so `_corroborate`
+    # returns "skipped" and accepts on name similarity alone). It was written,
+    # tested, and reverted, because `_corroborate` compares context tokens
+    # against the CANDIDATE'S TITLE — a company name — and a company name
+    # almost never contains its own Nice class label:
+    #
+    #   "Ruby Rebel Ltd"  vs ["class 25","Clothing, footwear & headgear"]
+    #       -> REJECTED, and it is plainly the right company
+    #   "Moo Music Bracknell" vs class 41 labels
+    #       -> REJECTED, and it is a children's music business
+    #
+    # So gating on classes swaps "accepts everything" for "rejects almost
+    # everything", which is worse: it would silently kill the resolver's
+    # yield. Adding the brand name to context instead re-accepts everything,
+    # because MIN_CORROBORATION_TOKENS is 1 and "Black Flock" shares "flock"
+    # with "Flock Development & Research Ltd" — the exact false positive.
+    #
+    # A SIC-to-Nice check would be the principled comparison, but
+    # `data/sic_terms.csv` covers only 61 SIC codes and none of the observed
+    # candidates (64209, 90030, 46341) are among them.
+    #
+    # The open proposal is to RECORD class/SIC agreement as a visible
+    # confidence signal on the Lead rather than gate on it: no yield risk,
+    # and it answers the question staff actually have, which is whether to
+    # trust this match before ringing it. Needs Jonathan's call.
 
     # Competitor fields — corroboration-only, see docstring. Deliberately
     # collected into a SEPARATE list from context_terms and passed to the
