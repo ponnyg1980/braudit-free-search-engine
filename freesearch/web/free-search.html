@@ -1101,7 +1101,14 @@ const TOOLS={'existing-trademark':{opt:'5', name:'Use an existing trademark'},
              'my-company':        {opt:'3', name:'Your company'},
              'describe-business': {opt:'1', name:'Describe your business'},
              'my-website':        {opt:'2', name:'Your website'}};
-const TOOL_SLUG=(location.pathname.match(/class-builder\/([a-z-]+)/)||[])[1]||'';
+/* The slug comes from the PATH on the engine (/class-builder/my-company), or
+   from ?tool= when the page is embedded. A WordPress host page is a single
+   published page with a single embed tag, so it has no path to carry the slug;
+   embed.js forwards ?tool= into the iframe instead. Path wins when both are
+   present — it is the more specific statement of intent. */
+const TOOL_SLUG=(location.pathname.match(/class-builder\/([a-z-]+)/)||[])[1]
+  || (new URLSearchParams(location.search).get('tool')||'').trim()
+  || '';
 const ONLY_TOOL=TOOLS[TOOL_SLUG]||null;
 if(ONLY_TOOL){
   document.title='Trademark Class Builder — '+ONLY_TOOL.name+' — The Trademark Helpline';
