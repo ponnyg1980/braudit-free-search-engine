@@ -125,6 +125,38 @@ def build() -> str:
     if re.search(r'url\("[0-9a-f]{8}-', head_extra):
         raise SystemExit('a bundler-UUID font url survived the swap')
 
+    # HERO BALANCE (Jonathan, 21 Sep): "the hero text is all the way to the
+    # left where as in other sections it sits within borders", and "loads of
+    # dead space between the hero text and the grid". Both were real, and both
+    # measured before changing anything:
+    #
+    #   text 302..844 | 91px of nothing | number grid 935..1375 | 51px slack
+    #
+    # The 91px came from the right column being 542 wide while its content is
+    # capped at 440 and CENTRED, so half the surplus fell in the middle. The
+    # flush-left look came from the hero using the full container while the
+    # prose column below is inset.
+    #
+    # Two small changes, measured after: text 352..844, gap 40, grid ends 1324.
+    # The h1 stays on TWO lines, which a narrower text column breaks (at 480 it
+    # wraps to three, and the design sets it on two) -- that is the constraint
+    # that decides the 1080, so do not narrow it further.
+    #
+    # `repeat(auto-fit,minmax(320px,1fr))` is left ALONE: it is what stacks the
+    # hero on a phone. Fixing this with `1fr auto` also works on desktop and
+    # silently removes the stacking, which is why it was not used.
+    hero_before = doc
+    doc = doc.replace(
+        'max-width:1180px;margin:0 auto;padding:40px 28px 34px',
+        'max-width:1080px;margin:0 auto;padding:40px 28px 34px', 1)
+    doc = doc.replace(
+        '<div style="display:flex;justify-content:center">\n'
+        '        <div ref="{{ heroFit }}"',
+        '<div style="display:flex;justify-content:flex-start">\n'
+        '        <div ref="{{ heroFit }}"', 1)
+    if doc == hero_before:
+        raise SystemExit('hero balance edits matched nothing -- the design markup moved')
+
     # 1. The sample browser: from the search input through the footer bar.
     #    Anchored on the two pane slots so a copy change above cannot shift it.
     start = doc.find('<input type="text" placeholder="{{ searchPlaceholder }}"')
