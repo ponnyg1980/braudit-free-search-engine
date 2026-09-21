@@ -75,7 +75,7 @@ def _sic_to_classes() -> dict[str, frozenset[int]]:
 
 
 def assess(search_term: str, matched_name: str | None,
-           sic_codes=None, classes=None) -> tuple[str, str]:
+           sic_codes=None, classes=None, step: str | None = None) -> tuple[str, str]:
     """(confidence, evidence). Confidence is one of the five picklist values;
     evidence is the one-line human explanation that goes beside it."""
     want = _tokens(search_term)
@@ -129,6 +129,26 @@ def assess(search_term: str, matched_name: str | None,
             trade_note = (f'Trade: classes {sorted(cls)} do not match SIC '
                           f'{", ".join(known)}, which registers in '
                           f'{sorted(set().union(*known.values()))[:6]}.')
+
+    # --- WHAT KIND OF THING DID WE MATCH? ------------------------------------
+    #
+    # `serper_search` returns ORGANIC WEB RESULTS — page titles, not businesses.
+    # Proved on the 21 Sep re-scoring run: "Ruby Rebel" matched
+    #   "Ruby Rebel: Virgin Atlantic Kicks off 40th Birthday..."
+    # which is a press release about an AIRCRAFT named Ruby Rebel. Both words
+    # matched, so on name and trade alone it scored "Good" — the exact false
+    # confidence this field exists to prevent. All five bad scores in that run
+    # came from this step; every `serper_places` match was at least a real
+    # business listing.
+    #
+    # A page title proves only that a web page mentions the brand, so it can
+    # never read Strong or Good however well the name matches.
+    if step == 'serper_search':
+        note = (' Source: matched a web page title, not a business listing, '
+                'so this may not be a company at all.')
+        band = ('Check - matched a web page, not a business'
+                if name_state != 'none' else 'Unverified')
+        return band, (f'{name_note} {trade_note}{note}')[:255]
 
     if name_state == 'none':
         conf = 'Unverified'
