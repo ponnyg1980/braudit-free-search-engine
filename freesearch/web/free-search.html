@@ -1270,9 +1270,17 @@ function ensureSession(){
  * `?s=` is the same marker the Brand Audit already used, so anything that can
  * read a session id keeps working unchanged.
  */
-function exitUrl(base){
+function exitUrl(base, param){
   if(!state.sessionId) return base;
-  const s='s='+encodeURIComponent(state.sessionId);
+  /* PARAMETER NAME IS NOT FREE — `s` IS WORDPRESS'S SEARCH QUERY.
+   * Shipped `?s=` to every exit on 21 Sep and it turned
+   * /apply-for-trademark/ into a SEARCH RESULTS page: HTTP 404, application
+   * form gone. Verified: clean 200 / 4 forms, `?s=` 404 / 3 forms,
+   * `?fs=` 200 / 4 forms. Caught within the hour, but it was live.
+   * Our own /audit page reads `s` and is served by the engine, not
+   * WordPress, so it keeps `s`. Anything landing on thetrademarkhelpline.com
+   * must use `fs` — which is already the parameter /search-report/ uses. */
+  const s=(param||'s')+'='+encodeURIComponent(state.sessionId);
   // A fragment URL (the booking link is /#/webinitialcall) needs the query
   // BEFORE the hash, or the booking app never sees it.
   const hash=base.indexOf('#');
@@ -1304,7 +1312,7 @@ function goToBrandAudit(){
 function goToBooking(ev){
   if(ev && ev.preventDefault) ev.preventDefault();
   beaconExit('booking_clicked');
-  window.open(exitUrl(CONFIG.BOOK_URL),'_blank','noopener');
+  window.open(exitUrl(CONFIG.BOOK_URL,'fs'),'_blank','noopener');
 }
 function logEvent(type,screen,payload,includeSnapshot){
   payload = payload||{};
@@ -3017,7 +3025,7 @@ function goToApply(){
   }
   // The click was already logged above; what was missing was the session on
   // the URL, so the Lead the application form creates had no way back.
-  window.open(exitUrl(CONFIG.APPLY_URL),'_blank','noopener');
+  window.open(exitUrl(CONFIG.APPLY_URL,'fs'),'_blank','noopener');
 }
 
 /* The free-search allowance is used up. Show what they get for signing up
@@ -3066,11 +3074,20 @@ function sendReport(){
                   business_name:biz,status:'lead_captured'}}),
       keepalive:true}).catch(()=>{});
   });
-  /* LIVE: POST the lead + report request to the Edge Function (Zoho + email).
-     ⚠ When this is wired up: someone can now legitimately go back to Results
-     and press "Send my report" a second time (e.g. to fix a typo'd email).
-     Make that POST idempotent per report/session, the same lesson the
-     Industry Report tool already learned the hard way — see its build doc. */
+  /* The Zoho push is NOT done here — it happens server-side. The journey's
+     /session/event handler sees `lead_captured` with an email on the session
+     (`givenContact`) and fires the full lead to Zoho Flow itself, carrying
+     session.zoho_lead_id so a resolver-created "Search Result Only" Lead is
+     UPDATED rather than duplicated. The report email hangs off the workflow
+     that Zoho write triggers.
+
+     Pressing "Send my report" twice is therefore already safe: the second
+     press updates the same record (zoho_lead_id, then dedupe on Email as the
+     backstop) instead of creating a second Lead.
+
+     This comment used to say the push was unbuilt and to-do. It was built;
+     the note was never removed, and it read as "the report does not send".
+     Corrected 21 Sep 2026. */
   // Direct link to the unique full-report page (spec §6: the emailed report
   // and this page are the same complete result set).
   const prl=document.getElementById('portal-report-link');
