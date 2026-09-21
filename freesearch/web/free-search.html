@@ -3113,6 +3113,23 @@ let SEEDED_BUILDER = false;
     const wm=document.getElementById('word-mark'); if(wm) wm.value=state.name;
   }
   renderBasket();
+  /* ACKNOWLEDGE THE HAND-OFF (Jonathan, 21 Sep 2026). The classes arrived
+     from somewhere else -- the keyword finder's "Continue with these classes",
+     or a seeded link -- but the screen opened headed "What do you sell?" over
+     a search box and all 45 classes, which reads as starting again. The
+     basket on the right did carry them; nothing was lost. It just never said
+     so. Only the SEEDED case is retouched; the normal builder flow, and Free
+     and Quick Search which share this screen, are untouched. */
+  (function sayTheyCameWithYou(){
+    const n = cls.length;
+    const h = document.querySelector('[data-screen="classes"] h1');
+    const p = document.querySelector('[data-screen="classes"] p.lead');
+    if(h) h.textContent = n===1 ? 'Your class came with you'
+                                : 'Your ' + n + ' classes came with you';
+    if(p) p.innerHTML = 'They are in your list on the right, ready to go. '+
+      'Add or remove any you want, then review the official descriptions and '+
+      'the terms real businesses registered.';
+  })();
   if(CONFIG.RESUME_SCREEN === 'review'){
     renderScreen('classes');            // so the back button lands somewhere sane
     history.replaceState({screen:'classes'},'','#classes');
