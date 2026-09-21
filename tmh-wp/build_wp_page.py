@@ -153,6 +153,39 @@ def build() -> str:
         css = ("@import url('https://fonts.googleapis.com/css2?"
                "family=Public+Sans:wght@400;600;700;800&display=swap');\n") + css
 
+    # THE ONE DELIBERATE EXCEPTION TO "EVERYTHING IS SCOPED" (Jonathan, 21 Sep).
+    #
+    # The theme is Hello Elementor, and its DEFAULT page template prints the
+    # WordPress page title as `.page-header > h1.entry-title` ABOVE the
+    # content. The design carries its own eyebrow and h1, so the page rendered
+    # with two titles stacked -- "Goods and Services Classes" sitting over
+    # "The part of your trademark most people get wrong". The page is not
+    # built in Elementor, so it has no per-page "hide title" toggle.
+    #
+    # This rule has to reach OUTSIDE #tmh-gs-page, which nothing else here is
+    # allowed to do. It is made safe by `:has()`: it hides the theme header
+    # ONLY on a page that contains this block, so it cannot affect any other
+    # page on the site, and it needs no page id (an id would break the day the
+    # page is recreated). Two H1s also means the wrong one ranks; after this
+    # the design's h1 is the page's only h1.
+    css += (
+        "\n/* Hide the Hello Elementor page title on pages carrying this block.\n"
+        "   :has() keeps it to THIS page -- see build_wp_page.py for why. */\n"
+        ".site-main:has(#tmh-gs-page) > .page-header,\n"
+        "body:has(#tmh-gs-page) .site-main > .page-header{display:none}\n"
+        # The Elementor kit sets .site-main{max-width:1140px}. The design is
+        # built to 1236 -- 1180 of content plus its own 28px of padding each
+        # side (content-box, so the padding sits OUTSIDE the max-width). On a
+        # 1140 container the hero lost 96px, which squeezed the left text
+        # column from 570 to 522 and read as the title sitting too far left.
+        # Nothing was off-centre: both halves measured symmetric throughout.
+        # Widening to 1236 restores the designed proportions exactly. The
+        # block carries its own max-width and margin:0 auto, so it can never
+        # exceed the design width however wide the container gets.
+        "body:has(#tmh-gs-page) .site-main{max-width:1236px;"
+        "margin-left:auto;margin-right:auto}\n"
+    )
+
     # 3. the finder: iframe -> embed tag, and drop the listener that sized it
     # Match on the src, not on a class/id the mockup builder is free to rename.
     # It WAS `<iframe class="finder"`, the v2 build emits `id="finder"`, and the
