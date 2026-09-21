@@ -147,8 +147,8 @@ h2{font-size:31px;font-weight:800;letter-spacing:-.8px;margin:8px 0 10px;
     </div>
 
     <div class="foot">
-      <span class="msg" id="msg">Browsing is free and open. Tick the classes that look right,
-        and the builder will keep your list and email it to you.</span>
+      <span class="msg" id="msg">Tick the classes that look right and take them to the
+        builder, which can keep your list and email it to you. Nothing is saved here.</span>
       <a class="btn" id="go" href="#" aria-disabled="true">Continue with these classes</a>
     </div>
   </div>
@@ -265,9 +265,13 @@ function toggle(n){
 function syncFoot(){
   const go = $('go');
   if(!basket.length){
-    $('msg').textContent = 'Browsing is free and open, and nothing here is saved. ' +
-      'Tick the classes that look right and take them to the builder, which can ' +
-      'keep your list and email it to you.';
+    /* Opening words matter here: the HOST page used to carry a near-identical
+       bar ("Browsing is free and open...") directly beneath this one, which
+       was deleted 21 Sep. Jonathan then read THIS bar as the deleted one still
+       being present, because both began the same way. Keep the opening
+       distinct from anything the host says. */
+    $('msg').textContent = 'Tick the classes that look right and take them to the ' +
+      'builder, which can keep your list and email it to you. Nothing is saved here.';
     go.setAttribute('aria-disabled','true');
     go.style.background = '#C9D2DA';
     go.removeAttribute('href');
