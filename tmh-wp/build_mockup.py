@@ -176,6 +176,93 @@ def build() -> str:
                        host=WIDGET_HOST)
 
 
+LOCAL_PROBE = '''
+<script>
+/* LOCAL PREVIEW ONLY -- never in the served or WordPress build.
+ *
+ * A file:// page embeds three live things: the class finder and the two
+ * search-box widgets. When one of them does not appear there is nothing on
+ * screen to say so -- an iframe that never loads is just white space, which
+ * is indistinguishable from "the design is missing a section". That cost a
+ * round trip, so the preview now reports its own state instead.
+ *
+ * Each embed gets: a load check, and a visible fallback panel naming the tool
+ * and linking to where it does work. The banner summarises all three. */
+(function(){{
+  var HOST = '{host}';
+  var LIVE = HOST + '/trademark-goods-and-services-classifications';
+  function panel(label, url){{
+    var d = document.createElement('div');
+    d.style.cssText = 'border:1.5px dashed #C9D2DA;border-radius:14px;background:#F7F8FA;'+
+      'padding:26px 24px;text-align:center;font-family:inherit';
+    d.innerHTML = '<div style="font-size:15px;font-weight:800;color:#2D455A">'+label+'</div>'+
+      '<p style="margin:8px 0 14px;font-size:14px;line-height:1.55;color:#617383">'+
+      'This is a live tool. It did not load in this local file &mdash; a page opened '+
+      'from disk cannot always embed it.</p>'+
+      '<a href="'+url+'" target="_blank" rel="noopener" style="display:inline-block;'+
+      'background:#E51652;color:#fff;border-radius:9px;padding:10px 18px;font-size:14px;'+
+      'font-weight:700;text-decoration:none">Open the tool</a>';
+    return d;
+  }}
+  var checks = [
+    {{id:'finder',  label:'Find your class', url:HOST+'/class-finder',  frame:function(){{
+        return document.getElementById('finder'); }} }},
+    {{id:'w-quick', label:'Quick search',    url:HOST+'/uk-trademark-quick-search',
+      frame:function(){{ var e=document.getElementById('w-quick');
+        return e && e.querySelector('iframe'); }} }},
+    {{id:'w-free',  label:'Free search',     url:HOST+'/free-search',
+      frame:function(){{ var e=document.getElementById('w-free');
+        return e && e.querySelector('iframe'); }} }}
+  ];
+  /* An iframe that loaded has a non-zero rendered height AND fired load.
+     Cross-origin means we cannot read inside it, so height + load is as far
+     as the browser lets us go -- which is enough to tell blank from drawn. */
+  var state = {{}};
+  checks.forEach(function(c){{
+    state[c.id] = 'waiting';
+    var poll = setInterval(function(){{
+      var f = c.frame();
+      if(f && f.getBoundingClientRect().height > 40) {{
+        state[c.id] = 'ok'; clearInterval(poll); render();
+      }}
+    }}, 400);
+    setTimeout(function(){{
+      clearInterval(poll);
+      if(state[c.id] === 'ok') return;
+      state[c.id] = 'blocked';
+      var f = c.frame();
+      var host = f ? (f.id === 'finder' ? f : f.parentNode) : document.getElementById(c.id);
+      if(host && host.parentNode) host.parentNode.replaceChild(panel(c.label, c.url), host);
+      render();
+    }}, 9000);
+  }});
+  var bar = document.createElement('div');
+  bar.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:99999;background:#2D455A;'+
+    'color:#fff;border-radius:10px;padding:10px 14px;font:600 12.5px/1.5 -apple-system,'+
+    'BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;'+
+    'box-shadow:0 8px 24px rgba(45,69,90,.28);max-width:290px';
+  document.addEventListener('DOMContentLoaded', function(){{
+    document.body.appendChild(bar); render();
+  }});
+  function render(){{
+    var bad = checks.filter(function(c){{ return state[c.id] === 'blocked'; }});
+    var wait = checks.filter(function(c){{ return state[c.id] === 'waiting'; }});
+    if(wait.length) {{
+      bar.innerHTML = 'LOCAL PREVIEW &middot; loading '+wait.length+' live tool'+
+        (wait.length===1?'':'s')+'&hellip;';
+    }} else if(bad.length) {{
+      bar.innerHTML = 'LOCAL PREVIEW<br><span style="font-weight:400">'+bad.length+
+        ' live tool'+(bad.length===1?'':'s')+' could not load from a file on disk. '+
+        'The design is all here; the tools work on the '+
+        '<a href="'+LIVE+'" target="_blank" rel="noopener" '+
+        'style="color:#FFB3C7;font-weight:700">served page</a>.</span>';
+    }} else {{
+      bar.innerHTML = 'LOCAL PREVIEW &middot; all three live tools loaded';
+    }}
+  }}
+}})();
+</script>'''
+
 FONT_LINK = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
@@ -325,6 +412,7 @@ def main() -> int:
             '     {{ slots }} and bundler-id images, so it cannot render alone.\n'
             '     Needs internet -- the images, the finder and the two search\n'
             '     widgets are served live from the widget host. -->', 1)
+        local = local.replace('</body>', LOCAL_PROBE.format(host=WIDGET_HOST) + '\n</body>', 1)
         dest = design_path().parent / 'Goods and Services Classes v2 - PREVIEW.html'
         dest.write_text(local, encoding='utf-8')
         print(f'local   {dest}')
