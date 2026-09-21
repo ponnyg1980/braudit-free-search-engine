@@ -356,8 +356,14 @@
        copy underneath gets its full measure back. -->
   <div class="steprow">
     <div class="steps" id="stepper"></div>
-    <a class="btn primary res-call" href="https://bookings.thetrademarkhelpline.com/"
-       target="_blank" rel="noopener">Book a Free Call</a>
+    <!-- href kept as a real, working link so the button still does the right
+         thing if the script has not run or JS is off; goToBooking() upgrades
+         it with the session id and logs the click. Both point at the FREE
+         CONSULTATION, not the bookings root. -->
+    <a class="btn primary res-call" id="res-call"
+       href="https://bookings.thetrademarkhelpline.com/#/webinitialcall"
+       target="_blank" rel="noopener"
+       onclick="return goToBooking(event)">Book a Free Call</a>
   </div>
 
   <!-- STEP 1 -->
@@ -963,7 +969,13 @@ const CONFIG = (function(){
     // the dedicated application page, which is the route the new Apply for
     // Trademark flow will use once the Brand Audit is built. Both wizards
     // read this one constant, so Free Search and Quick Search stay in step.
-    APPLY_URL:'https://www.thetrademarkhelpline.com/apply-for-trademark/' };
+    APPLY_URL:'https://www.thetrademarkhelpline.com/apply-for-trademark/',
+    // "Book a Free Call" from Results. The FREE CONSULTATION link, not the
+    // bookings root — the root drops the visitor on a service picker, and
+    // the brand file has recorded that exact stray once before (audit-thanks,
+    // fixed 19 Sep). This page was the last one still on it. Every other
+    // customer tool already uses this URL.
+    BOOK_URL:'https://bookings.thetrademarkhelpline.com/#/webinitialcall' };
 })();
 
 /* Hide our own logo and call CTA when we are inside someone else's page — see
@@ -1243,18 +1255,56 @@ function ensureSession(){
 // gate. Carries whatever's known (name, classes, jurisdictions, and contact
 // details if "Send my report" was already used) via session_id; Brand Audit
 // fetches the snapshot itself and pre-fills, fully editable, from there.
-function goToBrandAudit(){
-  const url=CONFIG.BRAND_AUDIT_URL+(state.sessionId?('?s='+encodeURIComponent(state.sessionId)):'');
-  // The page is about to navigate away, so use sendBeacon (survives unload)
-  // rather than a normal fetch for this specific, last call.
-  if(state.sessionId && navigator.sendBeacon){
-    try{
-      const body=JSON.stringify({session_id:state.sessionId,event_type:'brand_audit_handoff',
-        screen:'results',payload:{}});
-      navigator.sendBeacon(journeyBase()+'/session/event', new Blob([body],{type:'application/json'}));
-    }catch(e){}
+/* EVERY EXIT FROM RESULTS CARRIES THE SESSION (Jonathan, 21 Sep 2026).
+ *
+ * Until now only the Brand Audit did. "Book a Free Call" was a plain <a> with
+ * no handler and no session, and Apply logged the click but opened a bare URL.
+ * So a visitor who searched and then booked or applied created a SECOND,
+ * unlinked Lead — and because the resolver Lead carries no email, dedupe
+ * cannot join them either. The funnel therefore read "19 saw a result, none
+ * converted", when what it could actually prove was only that none converted
+ * *traceably*. Two form Leads landed 8 and 9 minutes after a real search
+ * cluster on 10 and 15 Sep; neither can now be confirmed, because the link
+ * was never recorded.
+ *
+ * `?s=` is the same marker the Brand Audit already used, so anything that can
+ * read a session id keeps working unchanged.
+ */
+function exitUrl(base){
+  if(!state.sessionId) return base;
+  const s='s='+encodeURIComponent(state.sessionId);
+  // A fragment URL (the booking link is /#/webinitialcall) needs the query
+  // BEFORE the hash, or the booking app never sees it.
+  const hash=base.indexOf('#');
+  if(hash>-1){
+    const head=base.slice(0,hash), tail=base.slice(hash);
+    return head+(head.indexOf('?')>-1?'&':'?')+s+tail;
   }
+  return base+(base.indexOf('?')>-1?'&':'?')+s;
+}
+/* One beacon helper for all three exits — the page is about to unload, so a
+ * normal fetch is not reliable here. */
+function beaconExit(type){
+  if(!(state.sessionId && navigator.sendBeacon)) return;
+  try{
+    const body=JSON.stringify({session_id:state.sessionId,event_type:type,
+      screen:'results',payload:{}});
+    navigator.sendBeacon(journeyBase()+'/session/event',
+                         new Blob([body],{type:'application/json'}));
+  }catch(e){}
+}
+function goToBrandAudit(){
+  const url=exitUrl(CONFIG.BRAND_AUDIT_URL);
+  beaconExit('brand_audit_handoff');
   location.href=url;
+}
+/* "Book a Free Call". Was a bare <a href> with no session and NO event at
+ * all, so a booking off the results page left no trace anywhere: the Lead
+ * arrives as Lead_Source "Zoho Bookings" with nothing pointing back. */
+function goToBooking(ev){
+  if(ev && ev.preventDefault) ev.preventDefault();
+  beaconExit('booking_clicked');
+  window.open(exitUrl(CONFIG.BOOK_URL),'_blank','noopener');
 }
 function logEvent(type,screen,payload,includeSnapshot){
   payload = payload||{};
@@ -2957,13 +3007,17 @@ function goToApply(){
   logEvent('apply_clicked','results',
     {score:(state.lastResult&&state.lastResult.viability||{}).score||null},false);
   // Same sendBeacon reasoning as goToBrandAudit(): the page is about to go.
+  // Kept inline rather than using beaconExit() because this one also stamps
+  // a snapshot status, which the other two exits do not.
   if(state.sessionId && navigator.sendBeacon){
     try{ navigator.sendBeacon(journeyBase()+'/session/event',
       new Blob([JSON.stringify({session_id:state.sessionId,
         event_type:'apply_clicked',screen:'results',payload:{},
         snapshot:{status:'apply_clicked'}})],{type:'application/json'})); }catch(e){}
   }
-  window.open(CONFIG.APPLY_URL,'_blank','noopener');
+  // The click was already logged above; what was missing was the session on
+  // the URL, so the Lead the application form creates had no way back.
+  window.open(exitUrl(CONFIG.APPLY_URL),'_blank','noopener');
 }
 
 /* The free-search allowance is used up. Show what they get for signing up
