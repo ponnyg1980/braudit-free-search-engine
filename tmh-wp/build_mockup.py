@@ -149,11 +149,30 @@ def build() -> str:
     doc = doc.replace(
         'max-width:1180px;margin:0 auto;padding:40px 28px 34px',
         'max-width:1080px;margin:0 auto;padding:40px 28px 34px', 1)
+    # SYMMETRY, second pass (Jonathan, 21 Sep): "there should be an equal
+    # distance right to left of the border to where Temmy starts as there is
+    # left to right of the border where the text starts." So the grid goes
+    # back OUT to the right and the dead space returns to the middle, which is
+    # where it belongs -- it was never the gap that was wrong, only which side
+    # of the grid it sat on.
+    #
+    #   flex-start : left inset 106 | right inset 168   (grid hard left)
+    #   center     : left inset 106 | right inset 142   (the original)
+    #   flex-end   : left inset 106 | right inset 116   (10px out)
+    #   + -10px    : left inset 106 | right inset 106   <- exact
+    #
+    # The stubborn 10px is the owl itself: it is positioned `left:272px;
+    # width:158px` inside a 440px box, so its right edge stops 10px short of
+    # the box. flex-end aligns the BOX, not the artwork. The negative margin
+    # pulls the box out by exactly that 10 so the visible owl, not its
+    # invisible container, is what lines up with the text on the other side.
+    # If the hero artwork is ever re-exported, re-measure that 10.
     doc = doc.replace(
         '<div style="display:flex;justify-content:center">\n'
-        '        <div ref="{{ heroFit }}"',
-        '<div style="display:flex;justify-content:flex-start">\n'
-        '        <div ref="{{ heroFit }}"', 1)
+        '        <div ref="{{ heroFit }}" style="width:100%;max-width:440px">',
+        '<div style="display:flex;justify-content:flex-end">\n'
+        '        <div ref="{{ heroFit }}" '
+        'style="width:100%;max-width:440px;margin-right:-10px">', 1)
     if doc == hero_before:
         raise SystemExit('hero balance edits matched nothing -- the design markup moved')
 
