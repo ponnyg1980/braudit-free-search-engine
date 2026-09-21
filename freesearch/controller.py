@@ -411,7 +411,8 @@ def handle_enrich(payload: dict) -> dict:
         try:
             from .match_confidence import assess
             conf, evidence = assess(search_term, result.get('matched_name'),
-                                    result.get('sic_codes'), nice_classes)
+                                    result.get('sic_codes'), nice_classes,
+                                    result.get('step'))
             result['match_confidence'] = conf
             result['match_evidence'] = evidence
         except Exception as exc:
