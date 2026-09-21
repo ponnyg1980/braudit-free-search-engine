@@ -751,6 +751,12 @@ async function runEnrichment(session: Record<string, unknown>):
         competitor_website: competitorWebsite || null,
         competitor_trademark: competitorTrademark || null,
         competitor_name: competitorName || null,
+        // The visitor's Nice classes. SCORING ONLY (Jonathan, 21 Sep 2026):
+        // controller.py feeds these to match_confidence.assess(), never to
+        // contact_resolver's corroboration gate — gating on them rejects
+        // correct companies, because a company name does not contain its own
+        // class label. See the note above `nice_classes` in controller.py.
+        classes: Array.isArray(session.classes) ? session.classes : [],
       }),
     });
     engineResult = await r.json();
@@ -969,6 +975,41 @@ serve(async (req) => {
               Company_Number1: engineResult.company_number || undefined,
               SIC: Array.isArray(engineResult.sic_codes)
                 ? engineResult.sic_codes.join(", ") : undefined,
+              // WHERE THESE DETAILS CAME FROM (Jonathan, 21 Sep 2026).
+              //
+              // A phone on one of these Leads looks exactly like a phone
+              // somebody typed into a form, and staff reasonably assumed it
+              // was one. It is not: Companies House publishes no phone
+              // number, so every one of these came from Serper /places, i.e.
+              // a Google Maps business listing the company published for
+              // customers. Email_Source already carried this idea for email;
+              // phone and website had no equivalent, so the provenance was
+              // invisible at exactly the point someone decides to ring it.
+              //
+              // Keyed off the resolver's own `step`, never guessed.
+              Phone_Source: engineResult.phone
+                ? (engineResult.step === "serper_places"
+                    ? "Resolver - Serper Places" : "Resolver - website")
+                : undefined,
+              Website_Source: engineResult.website
+                ? (engineResult.step === "serper_places"
+                    ? "Resolver - Serper Places"
+                  : engineResult.step === "companies_house"
+                    ? "Resolver - Companies House" : "Resolver - website")
+                : undefined,
+              // Serper spend per record. Jonathan: the credits are worth it
+              // "as long as we log it" — this is the log.
+              Enrichment_Credits:
+                typeof engineResult.credits_used === "number"
+                  ? engineResult.credits_used : undefined,
+              // HOW FAR TO TRUST THIS MATCH, and why, in words. These leads
+              // are found by searching, not self-submitted, so the company
+              // may not be the person who searched — "Black Flock" resolved
+              // to a holding company called Flock Development. The band is
+              // the summary; Match_Evidence names the company matched so a
+              // human can judge before ringing.
+              Match_Confidence: engineResult.match_confidence || undefined,
+              Match_Evidence: engineResult.match_evidence || undefined,
             },
             scope: zohoScopeBlock(session),
           }, { zohoLeadId: null, isNewRecord: true }));
@@ -1713,6 +1754,43 @@ serve(async (req) => {
       const hits = (q.data as { Contacts?: { ContactID: string }[] })?.Contacts;
       if (q.ok && hits?.length) contactId = hits[0].ContactID;
     }
+    // COMPANY NUMBER BEFORE CREATING (Jonathan, 21 Sep 2026).
+    //
+    // Email then name was the whole match, and both miss the case this
+    // business actually has: the SAME company reached twice under a
+    // different address and a slightly different name. That is precisely
+    // the Prosper Limited / Prosper² shape recorded in the 19 Aug incident
+    // note — two records, one company, and the duplicate looks legitimate
+    // because nothing contradicts it.
+    //
+    // A company number is the one identifier that does not drift, and we
+    // already WRITE it on create; not reading it back was the gap.
+    // Ordered third because email is the strongest signal of "this person",
+    // and this is the strongest signal of "this entity".
+    // UNVERIFIED AT SHIP TIME, DELIBERATELY SELF-REPORTING. Xero documents
+    // `where` on Name/EmailAddress/AccountNumber; CompanyNumber is a newer
+    // field and may not be filterable. It could not be probed from outside
+    // this function, because Xero refresh tokens ROTATE — calling the API
+    // with the stored token would invalidate the one the live function
+    // holds. So: if the filter is rejected we fall through to the existing
+    // create path (no worse than before) and LOG it, rather than silently
+    // never matching. Check journey_events for xero_contact_filter_unsupported
+    // after the next real audit.
+    const coNo = String(billX.company_number ?? "").replace(/\s+/g, "").toUpperCase();
+    if (!contactId && coNo) {
+      const q = await xeroApi(
+        `/Contacts?where=${encodeURIComponent(`CompanyNumber=="${coNo}"`)}`, "GET");
+      const hits = (q.data as { Contacts?: { ContactID: string }[] })?.Contacts;
+      if (q.ok && hits?.length) {
+        contactId = hits[0].ContactID;
+      } else if (!q.ok) {
+        await admin.from("journey_events").insert({ session_id: sid,
+          event_type: "xero_contact_filter_unsupported",
+          payload: { field: "CompanyNumber", value: coNo,
+                     detail: JSON.stringify(q.data).slice(0, 300) } });
+      }
+    }
+
     if (!contactId) {
       const addr1 = String(billX.addr1 ?? billX.addr ?? "").trim();
       const xAddr = addr1 ? [{ AddressType: "POBOX",
