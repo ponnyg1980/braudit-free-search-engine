@@ -91,10 +91,10 @@ a{color:#E51652}a:hover{color:#c9134a}
               style="width:100%;border:0;display:block;height:1180px;margin-top:26px"></iframe>
       <div style="border-top:1px solid #E6E9ED;background:#F7F8FA;padding:14px 34px;
            font-size:13px;line-height:1.6;color:#617383">
-        Counts here are of every mark registered in that class, from 683,327 UK
-        registrations in the last five years. The figures in the panel below count
-        something different and narrower &mdash; marks filed by businesses in your
-        sector &mdash; which is why the two do not match. Both are counts.
+        Counts here are of every UK trademark registered in that class over the
+        last five years, 683,327 registrations in all. The panel further down
+        counts something narrower, the marks filed by businesses in your sector,
+        which is why its percentages run on a different scale. Both are counts.
       </div>
 
       <div style="border-top:1px solid #E6E9ED;background:#F7F8FA;padding:22px 34px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
@@ -151,7 +151,7 @@ a{color:#E51652}a:hover{color:#c9134a}
             </div>
           </div>
           <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:26px 28px">
-            <div style="font-family:'Public Sans',sans-serif;font-size:11px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:#FFB3C7;margin-bottom:14px">How we label a suggestion</div>
+            <div style="font-family:'Public Sans',sans-serif;font-size:11px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:#FFB3C7;margin-bottom:14px">How we label a suggestion in your sector</div>
             <div style="display:flex;flex-direction:column;gap:11px"><div id="bands" style="display:contents"></div></div>
           </div>
           <div style="background:#fff;border-radius:18px;padding:26px 28px">
@@ -615,7 +615,7 @@ const CLASSES = [
   {c:45, t:'Legal, Security, Social & Funeral Services', k:'s', terms:[['Legal services',1744,'always'],['Security services',866,'most'],['Trademark registration services',412,'some'],['Dating services',311,'some'],['Funeral services',188,'few'],['Wedding planning',241,'few']]}
 ];
 const BANDS = {
-  always:{label:'always', hint:'75%+ of filings in that class', op:1},
+  always:{label:'always', hint:'75%+ of filings in your sector', op:1},
   most:{label:'most', hint:'50%+', op:.72},
   some:{label:'some', hint:'15%+', op:.48},
   few:{label:'a few', hint:'under 15%', op:.28}
