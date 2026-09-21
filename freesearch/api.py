@@ -248,7 +248,14 @@ _EMBED_JS = """(function(){
     // 'fs' is the WordPress-safe alias for the session param: WP reserves
     // ?s= for site search and 404s page URLs carrying it (21 Aug). The
     // host page uses fs; the iframe wizard still receives s.
-    ['s','fs','screen','q','journey','searchbase','deal',
+    // 'tool' (21 Sep): the Goods and Services Classes page links each of its
+    // four cards at the tool it describes. The engine already answers
+    // /class-builder/<slug>, but a WordPress host page cannot: it is ONE
+    // published page carrying ONE embed tag, so the slug has nowhere to live
+    // in the path. Forwarding ?tool= means the four cards work against the
+    // /class-builder/ page that is already live, with no new pages to publish
+    // and therefore no 404 waiting on somebody remembering to publish them.
+    ['s','fs','screen','q','journey','searchbase','deal','tool',
      'utm_source','utm_medium','utm_campaign'].forEach(function(k){
       var v=hp.get(k); if(v) q+='&'+(k==='fs'?'s':k)+'='+encodeURIComponent(v);
     });
