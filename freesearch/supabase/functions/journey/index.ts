@@ -96,6 +96,71 @@ const ZOHO_FLOW_URL = Deno.env.get("ZOHO_FLOW_URL") ?? "";
 const UTM_SOURCE_MAP: Record<string, { source: string; group: string }> = {
   your_business_magazine: { source: "Your Business", group: "Press Advertising" },
 };
+
+// ---------------------------------------------------------------------------
+// XERO TRACKING (Jonathan, 21 Sep 2026)
+//
+// Two tracking categories already exist in Xero and both are used by the
+// finance team, so nothing here creates anything — it only ever SELECTS from
+// options that are already there.
+//
+//   Consultant   Alex · Jon · Martin · Matt · Steve · Web
+//   Lead Source  the nine House-/Self-Gen- options below
+//
+// "Web" is the consultant on an invoice the CLIENT raised through the wizard,
+// which is exactly the case `last_result.staff_enquiry == null` identifies.
+// Staff orders are deliberately left untracked until there is a Zoho-user to
+// consultant-name map; guessing one would put revenue against the wrong
+// person, which is worse than leaving the field empty.
+//
+// Lead Source carries the GROUP, not the specific source (Jonathan: "Lead
+// Source should be used to track the Lead Source Group and then Zoho tidies
+// up the specifics"). Zoho's group picklist has 22 values and Xero's has 9,
+// so this is a genuine mapping rather than a pass-through.
+//
+// THE RULE THAT MAKES THIS SAFE: Xero REJECTS an invoice carrying a tracking
+// option it does not know, so an unmapped group must drop the tracking and
+// still raise the invoice. An untracked invoice is a reporting gap; a refused
+// invoice is a customer who paid and has nothing to show for it.
+const XERO_LEAD_SOURCE_OPTIONS = new Set([
+  "House - Client Referral", "House - Data", "House - Existing Client",
+  "House - Introducer", "House - Partner Referral", "House - Social Media",
+  "House - Web", "Self-Gen - Direct", "Self-Gen - Introducer",
+]);
+const ZOHO_GROUP_TO_XERO_LEAD_SOURCE: Record<string, string> = {
+  // everything that arrived through the website, however it got there
+  "Website Forms": "House - Web",
+  "Website Chat": "House - Web",
+  "Google Organic": "House - Web",
+  "Google Ads": "House - Web",
+  "AI Search": "House - Web",
+  "Industry Report": "House - Web",
+  "Bookings Meetings": "House - Web",
+  "Social Media": "House - Social Media",
+  "Referral": "House - Client Referral",
+  "Reseller": "House - Partner Referral",
+  "Networking": "Self-Gen - Direct",
+  "Temmy Data": "House - Data",
+  "Cognism Data": "House - Data",
+  "Manual Research": "House - Data",
+  "Existing Contact": "House - Existing Client",
+  "Existing Account": "House - Existing Client",
+  // Deliberately absent, because Xero has no honest home for them and a wrong
+  // bucket is worse than an empty one: Email, Whatsapp SMS, Advertisement,
+  // Press Advertising, Other.
+};
+
+/** Tracking to stamp on every line of an invoice, or [] when we cannot say. */
+function xeroTracking(isClientOrder: boolean, zohoGroup: string):
+    { Name: string; Option: string }[] {
+  const out: { Name: string; Option: string }[] = [];
+  if (isClientOrder) out.push({ Name: "Consultant", Option: "Web" });
+  const ls = ZOHO_GROUP_TO_XERO_LEAD_SOURCE[zohoGroup];
+  if (ls && XERO_LEAD_SOURCE_OPTIONS.has(ls)) {
+    out.push({ Name: "Lead Source", Option: ls });
+  }
+  return out;
+}
 // Brand Audits do NOT become Leads (Jonathan, 27 Aug 2026): an audit is
 // buying intent, so it lands as Contact + Account + one Deal per brand via
 // its own CRM function. Falls back to the lead pipe if unset, so deploying
@@ -1863,6 +1928,32 @@ serve(async (req) => {
         AccountCode: acct, TaxType: taxT,
       });
     }
+
+    // TRACKING (21 Sep). Consultant = Web on a client-raised invoice, and the
+    // Lead Source group carried across from the session. Xero puts tracking on
+    // the LINE, not the invoice, so it goes on every line including the
+    // negative promotion line -- otherwise a report by consultant shows the
+    // gross and not the net.
+    //
+    // NO ITEM CODES ANYWHERE, and that is not an omission: a Xero line points
+    // at its nominal through `AccountCode` directly. Items ("Products and
+    // services") only pre-fill a description, price and account for a human
+    // typing an invoice, so the hundreds of stale ones in the account are
+    // irrelevant to anything raised here.
+    {
+      const utmX = ((lrX.utm ?? {}) as Record<string, unknown>);
+      const utmSrcX = String(utmX.source ?? "").trim().toLowerCase();
+      const grp = UTM_SOURCE_MAP[utmSrcX]?.group ?? "Website Forms";
+      const tracking = xeroTracking(!enqX, grp);
+      if (tracking.length) for (const it of items) it.Tracking = tracking;
+      else {
+        await admin.from("journey_events").insert({ session_id: sid,
+          event_type: "xero_tracking_skipped",
+          payload: { kind, staff_order: !!enqX, zoho_group: grp,
+                     note: "no mapped Xero tracking option; invoice raised untracked" } });
+      }
+    }
+
     const inv: Record<string, unknown> = {
       Type: "ACCREC", Status: "AUTHORISED",
       Contact: { ContactID: contactId },
