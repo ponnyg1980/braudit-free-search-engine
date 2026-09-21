@@ -217,9 +217,29 @@ LOCAL_PROBE = '''
   /* An iframe that loaded has a non-zero rendered height AND fired load.
      Cross-origin means we cannot read inside it, so height + load is as far
      as the browser lets us go -- which is enough to tell blank from drawn. */
+  /* CHROME WILL NOT EMBED A LIVE TOOL INTO A file:// PAGE (Jonathan, 21 Sep:
+     "the tools show in the browser tab within Claude but not when I load up
+     in Chrome"). A page opened from disk is an opaque origin; remote IMAGES
+     still load, which is why the rest of the design renders and only the
+     three embeds are blank. The served page is https and works in the same
+     Chrome -- verified, all three drawn. So on file:// do not wait 9s to
+     discover this: say it at once, and point at the page that works. */
+  var FROM_DISK = location.protocol === 'file:';
+
   var state = {{}};
   checks.forEach(function(c){{
     state[c.id] = 'waiting';
+    if(FROM_DISK){{
+      document.addEventListener('DOMContentLoaded', function(){{
+        state[c.id] = 'blocked';
+        var f = c.frame();
+        var host = f ? (f.id === 'finder' ? f : f.parentNode)
+                     : document.getElementById(c.id);
+        if(host && host.parentNode) host.parentNode.replaceChild(panel(c.label, c.url), host);
+        render();
+      }});
+      return;
+    }}
     var poll = setInterval(function(){{
       var f = c.frame();
       if(f && f.getBoundingClientRect().height > 40) {{
@@ -251,11 +271,13 @@ LOCAL_PROBE = '''
       bar.innerHTML = 'LOCAL PREVIEW &middot; loading '+wait.length+' live tool'+
         (wait.length===1?'':'s')+'&hellip;';
     }} else if(bad.length) {{
-      bar.innerHTML = 'LOCAL PREVIEW<br><span style="font-weight:400">'+bad.length+
-        ' live tool'+(bad.length===1?'':'s')+' could not load from a file on disk. '+
-        'The design is all here; the tools work on the '+
-        '<a href="'+LIVE+'" target="_blank" rel="noopener" '+
-        'style="color:#FFB3C7;font-weight:700">served page</a>.</span>';
+      bar.innerHTML = 'OPENED FROM DISK<br><span style="font-weight:400">'+
+        'Chrome will not embed a live tool into a page opened from a file, so the '+
+        'three tools are shown as panels. Every other part of the design is real. '+
+        'For the working page:</span><br>'+
+        '<a href="'+LIVE+'" target="_blank" rel="noopener" style="display:inline-block;'+
+        'margin-top:8px;background:#E51652;color:#fff;border-radius:8px;padding:8px 14px;'+
+        'text-decoration:none;font-weight:700">Open the full page</a>';
     }} else {{
       bar.innerHTML = 'LOCAL PREVIEW &middot; all three live tools loaded';
     }}
