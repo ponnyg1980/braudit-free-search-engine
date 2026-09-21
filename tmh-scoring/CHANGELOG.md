@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.5.0 — mark similarity reports its axes (21 Sep 2026)
+
+**ZERO DIFFERENCES** across 55,526 Watch and 1,164 audit records. No scoring
+change: new fields only, and `Assessment.as_row()` — what band_diff compares
+and what the engine stores — is untouched.
+
+`MarkSimilarity` now carries the raw axis measurements it already computed and
+threw away: `written`, `sound`, `spelling`, `token`, and `axis` (which of the
+three carried the mark). `MarkSimilarity.axes()` returns them together.
+
+Needed for two things. A row cannot be re-banded at a different sensitivity
+from its stored breakdown unless the raw measurements are in that breakdown —
+the old `components` held the scorer's OUTPUTS at the default settings, so a
+different gate had nothing to be applied to. And the Triage panel could only
+say a row moved, never why: "spelling 0.95, sound 0.86" is the answer to the
+question staff actually ask.
+
+`MarkSimilarity.orthographic` is deliberately NOT renamed. It has carried
+`best` — the winning score across all axes — since before the axes were
+separated, and stored rows depend on it. `spelling` is the spelling axis
+proper. Both are kept.
+
 ## 2.4.0 — labelled sensitivity steps (21 Sep 2026)
 
 **ZERO DIFFERENCES** — nothing in this release executes unless a step is set.
