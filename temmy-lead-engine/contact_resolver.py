@@ -524,6 +524,8 @@ def resolve(search_term: str, *, cfg: dict | None = None,
                         credits_used=credits_used, channel='phone' if best.get('phoneNumber') else 'website')
                 return {
                     'ok': True, 'found': True, 'step': 'serper_places',
+                    # what we matched on — for the caller's confidence signal
+                    'matched_name': best.get('title') or None,
                     'website': best_website, 'domain': _domain_from_url(best_website or ''),
                     'phone': best.get('phoneNumber'), 'address': best.get('address'),
                     'company_number': ch_hit.get('company_number') if ch_hit else None,
@@ -549,6 +551,7 @@ def resolve(search_term: str, *, cfg: dict | None = None,
                         credits_used=credits_used, channel='website')
                 return {
                     'ok': True, 'found': True, 'step': 'serper_search',
+                    'matched_name': cand_text or None,
                     'website': cand_site, 'domain': _domain_from_url(cand_site),
                     'phone': None, 'address': None,
                     'company_number': ch_hit.get('company_number') if ch_hit else None,
@@ -566,6 +569,7 @@ def resolve(search_term: str, *, cfg: dict | None = None,
         _record(entry_point, term, 'found', step='companies_house', channel='company_number')
         return {
             'ok': True, 'found': True, 'step': 'companies_house',
+            'matched_name': ch_hit.get('company_name') or ch_hit.get('matched_name') or None,
             'website': None, 'domain': None, 'phone': None,
             'address': ch_hit.get('address'), 'company_number': ch_hit.get('company_number'),
             'sic_codes': ch_hit.get('sic'), 'officer_names': [o['name'] for o in ch_officers] or None,
