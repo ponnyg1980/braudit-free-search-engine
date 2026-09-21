@@ -63,7 +63,7 @@ a{color:#E51652}a:hover{color:#c9134a}
     <p style="font-size:18px;line-height:1.7;color:#3f4c58;margin:0;text-wrap:pretty">That is why this page exists, and why we would rather you spent ten minutes here than ten minutes guessing.</p>
   </div>
 
-  <div style="max-width:1180px;margin:0 auto;padding:58px 28px 0">
+  <div style="background:#F7F8FA;border-top:1px solid #E6E9ED;border-bottom:1px solid #E6E9ED;padding-bottom:58px"><div style="max-width:1180px;margin:0 auto;padding:58px 28px 0">
     <div style="border:2px solid #D3DAE1;border-radius:20px;overflow:hidden;box-shadow:0 8px 30px rgba(45,69,90,.08)">
       <div style="padding:34px 34px 26px;border-bottom:1px solid #E6E9ED">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:26px;flex-wrap:wrap">
@@ -107,7 +107,7 @@ a{color:#E51652}a:hover{color:#c9134a}
            what it replaced (here: net -1), which is asserted after the
            swap. -->
       </div>
-    </div>
+    </div></div>
     
   </div>
 
@@ -126,7 +126,7 @@ a{color:#E51652}a:hover{color:#c9134a}
     </div>
   </div>
 
-  <div style="background:#2D455A;margin-top:64px;padding:66px 28px 70px">
+  <div style="max-width:1180px;margin:0 auto;padding:0 28px"><div style="background:#2D455A;border-radius:22px;margin-top:64px;padding:54px 40px 58px">
     <div style="max-width:1180px;margin:0 auto">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:44px;align-items:start">
         <div>
@@ -168,16 +168,16 @@ a{color:#E51652}a:hover{color:#c9134a}
         </div>
       </div>
     </div>
-  </div>
+  </div></div>
 
-  <div style="max-width:760px;margin:0 auto;padding:70px 28px 0">
+  <div style="background:#F7F8FA;border-top:1px solid #E6E9ED;border-bottom:1px solid #E6E9ED;padding-bottom:58px"><div style="max-width:760px;margin:0 auto;padding:70px 28px 0">
     <h2 style="font-size:31px;font-weight:800;letter-spacing:-.8px;margin:0 0 20px;text-wrap:balance">What these tools are, and what they are not</h2>
     <p style="font-size:18px;line-height:1.7;color:#3f4c58;margin:0 0 18px;text-wrap:pretty">These are guidance tools and they are free. They will get you a long way, and for a straightforward business they may well get you all the way.</p>
     <p style="font-size:18px;line-height:1.7;color:#3f4c58;margin:0 0 18px;text-wrap:pretty">What they cannot do is know your plans.</p>
     <p style="font-size:18px;line-height:1.7;color:#3f4c58;margin:0 0 18px;text-wrap:pretty">They cannot see that you are launching a second product line next spring, that you licence your name to a distributor in Ireland, or that the thing you most need to protect is a service you have not started selling yet. Those decisions change the answer, and they come from a conversation rather than a dataset.</p>
     <p style="font-size:18px;line-height:1.7;color:#3f4c58;margin:0 0 18px;text-wrap:pretty">So the tools do the heavy lifting and narrow the field. Before you commit money to an application, we would always recommend a <a href="https://www.thetrademarkhelpline.com/trademark-consultation-and-audit/" style="font-weight:700">trademark consultation and audit</a>, where somebody looks at your business and signs off the classes and terms with you.</p>
     <p style="font-size:18px;line-height:1.7;color:#3f4c58;margin:0;text-wrap:pretty">You are welcome to use the tools and file elsewhere. They are free either way.</p>
-  </div>
+  </div></div>
 
   <div style="max-width:1180px;margin:0 auto;padding:70px 28px 0">
     <div style="display:flex;align-items:flex-start;gap:22px;flex-wrap:wrap;margin-bottom:28px">
@@ -209,7 +209,7 @@ a{color:#E51652}a:hover{color:#c9134a}
     </div>
   </div>
 
-  <div style="max-width:880px;margin:0 auto;padding:60px 28px 0">
+  <div style="background:#F7F8FA;border-top:1px solid #E6E9ED;border-bottom:1px solid #E6E9ED;padding-bottom:58px"><div style="max-width:880px;margin:0 auto;padding:60px 28px 0">
     <div style="display:flex;align-items:flex-start;gap:22px;flex-wrap:wrap;margin-bottom:26px">
       <img src="https://braudit-free-search.onrender.com/brand/temmy/clean/question.png" alt="" style="width:118px;height:auto;display:block">
       <div style="flex:1;min-width:280px">
@@ -218,7 +218,7 @@ a{color:#E51652}a:hover{color:#c9134a}
       </div>
     </div>
     <div style="border:1px solid #E6E9ED;border-radius:16px;overflow:hidden"><div id="faq" style="display:contents"></div></div>
-  </div>
+  </div></div>
 
   <div style="max-width:1180px;margin:0 auto;padding:56px 28px 80px">
     <div style="background:#F7F8FA;border:1px solid #E6E9ED;border-radius:20px;padding:38px 40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px;align-items:center">
@@ -660,12 +660,30 @@ if($('heroGrid')) $('heroGrid').outerHTML = Array.from({length:45}, (_,i)=>i+1).
       ? 'background:#E51652;border:1px solid #E51652;color:#fff'
       : 'background:#fff;border:1px solid #E6E9ED;color:#8b99a5'}">${n}</div>`).join('');
 
-/* The four tools. */
+/* The four tools. Each card is a LINK to the tool it describes (Jonathan,
+   21 Sep: "they don't currently link to anything"). They were descriptive
+   boxes, so the design's ROUTES carry no URL; the map lives here, keyed on
+   the number the design already gives each route.
+
+   ?tool= rather than /class-builder/<slug>. The engine answers the path form,
+   but a WordPress host page is ONE published page carrying ONE embed tag and
+   has no path to put the slug in. embed.js forwards ?tool= into the iframe,
+   so these four links work against the /class-builder/ page that is already
+   live: no new pages to publish, and therefore no card pointing at a 404
+   while somebody remembers to publish them. */
+const TOOL_URL = {
+  '1': 'https://www.thetrademarkhelpline.com/class-builder/?tool=existing-trademark',
+  '2': 'https://www.thetrademarkhelpline.com/class-builder/?tool=my-company',
+  '3': 'https://www.thetrademarkhelpline.com/class-builder/?tool=my-website',
+  '4': 'https://www.thetrademarkhelpline.com/class-builder/?tool=describe-business'
+};
 if($('routes')) $('routes').outerHTML = ROUTES.map(r=>`
-  <div style="border:1px solid #E6E9ED;border-radius:16px;padding:26px 26px 28px;display:flex;
-       flex-direction:column;transition:transform .18s ease,box-shadow .18s ease"
-       onmouseover="this.style.transform='scale(1.035)';this.style.boxShadow='0 14px 34px rgba(45,69,90,.13)'"
-       onmouseout="this.style.transform='';this.style.boxShadow=''">
+  <a href="${TOOL_URL[r.n] || 'https://www.thetrademarkhelpline.com/class-builder/'}"
+     style="border:1px solid #E6E9ED;border-radius:16px;padding:26px 26px 28px;display:flex;
+       flex-direction:column;text-decoration:none;color:inherit;background:#fff;
+       transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease"
+       onmouseover="this.style.transform='scale(1.035)';this.style.boxShadow='0 14px 34px rgba(45,69,90,.13)';this.style.borderColor='#E51652'"
+       onmouseout="this.style.transform='';this.style.boxShadow='';this.style.borderColor='#E6E9ED'">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
       <span style="font-family:'Public Sans',sans-serif;font-size:12px;font-weight:800;
         letter-spacing:1.2px;color:#E51652">${r.n}</span>
@@ -676,8 +694,9 @@ if($('routes')) $('routes').outerHTML = ROUTES.map(r=>`
     </div>
     <h3 style="font-size:20px;font-weight:800;letter-spacing:-.4px;margin:0 0 8px;line-height:1.28">${esc(r.t)}</h3>
     <p style="font-size:15px;line-height:1.5;color:#2D455A;font-weight:700;margin:0 0 12px">${esc(r.w)}</p>
-    <p style="font-size:15.5px;line-height:1.6;color:#617383;margin:0">${esc(r.d)}</p>
-  </div>`).join('');
+    <p style="font-size:15.5px;line-height:1.6;color:#617383;margin:0 0 18px">${esc(r.d)}</p>
+    <span style="margin-top:auto;font-size:15.5px;font-weight:700;color:#E51652">Open this tool &rarr;</span>
+  </a>`).join('');
 
 /* Band legend, on navy. */
 if($('bands')) $('bands').outerHTML = Object.values(BANDS).map(b=>`
