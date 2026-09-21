@@ -43,7 +43,7 @@ from .settings import (COMPARTMENTS, COMPARTMENT_FIELDS, COMPARTMENT_LABELS,
 from .risk_model import TradingEvidence, assess_risk
 from .word_scoring import parse_classes, risk_from_score, score_word_result
 
-__version__ = "2.4.0"
+__version__ = "2.5.0"
 
 __all__ = [
     "score_word_result",
