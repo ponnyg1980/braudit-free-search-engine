@@ -96,6 +96,17 @@ a{color:#E51652}a:hover{color:#c9134a}
         counts something narrower, the marks filed by businesses in your sector,
         which is why its percentages run on a different scale. Both are counts.
       </div>
+      <!-- THIS CLOSER IS LOAD-BEARING. Do not delete it as "stray".
+           The slice this block replaces starts at the design's search INPUT,
+           which sits INSIDE the finder panel's header div
+           (`padding:34px 34px 26px;border-bottom:...`). That header's own
+           </div> lies further down, inside the removed region — so the slice
+           takes out one more </div> than <div>, and without this one the
+           header is never closed and silently wraps the whole rest of the
+           page. Tag balance of the replacement must match the balance of
+           what it replaced (here: net -1), which is asserted after the
+           swap. -->
+      </div>
     </div>
     
   </div>
