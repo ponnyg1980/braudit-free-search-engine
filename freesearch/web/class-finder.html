@@ -377,10 +377,44 @@ $('q').addEventListener('input', onType);
   }catch(e){
     $('list').innerHTML = '<div class="empty">Could not load the class list. ' +
       'Please refresh the page.</div>';
+    signalReady();          // show the error: the panel must come down for it
     return;
   }
   shown = ALL.slice(); sel = 1; renderList();
+  signalReady();            // NOW there is something to look at
 })();
+
+/* "Ready" must mean DRAWN, not "my script is running" (Jonathan, 21 Sep:
+   the finder appeared as a tall blank box on the WordPress page).
+
+   embed.js paints a branded loading panel over the iframe and tears it down
+   on the first `brauditReady` or `brauditHeight`. This file used to post
+   `brauditReady` at the bottom of the script — i.e. BEFORE `await api('all=1')`
+   had returned and before a single row had rendered. So the panel came down
+   while the tool was still fetching, and what replaced it was nothing. On a
+   cold Render dyno that gap runs to several seconds and looks exactly like a
+   section that failed to load.
+
+   The other widgets do the same thing and are CORRECT to: free-search and
+   audit-checkout paint their first screen straight from markup, so parse time
+   and paint time are the same moment. The finder is the only one that needs a
+   network round trip before it has anything to show, which is why it is the
+   only one that needed this.
+
+   AND THE HEIGHT REPORT HAS TO WAIT TOO. embed.js treats the first
+   `brauditHeight` as "I have rendered" as well, and this page's
+   MutationObserver watches attributes — so the typewriter animating the search
+   placeholder was firing height messages within a few hundred milliseconds of
+   load and taking the panel down by that route instead. Fixing only the ready
+   signal would have left the bug exactly where it was, arriving via the other
+   message. */
+let FINDER_READY = false;
+function signalReady(){
+  FINDER_READY = true;
+  if(window.parent === window) return;
+  try{ window.parent.postMessage({brauditReady:true}, '*'); }catch(e){}
+  window.dispatchEvent(new Event('resize'));   // first real height, now
+}
 
 /* Embedded on the WordPress page this lives in an iframe that embed.js sizes
    from brauditHeight messages — the same contract as the other widgets. */
@@ -389,6 +423,7 @@ $('q').addEventListener('input', onType);
   const wrap = document.querySelector('.wrap');
   let last = 0;
   function send(){
+    if(!FINDER_READY) return;          // see signalReady(): height also means "drawn"
     const h = Math.ceil(wrap.getBoundingClientRect().height) + 24;
     if(Math.abs(h - last) < 8) return; last = h;
     try{ window.parent.postMessage({brauditHeight:h}, '*'); }catch(e){}
@@ -397,7 +432,9 @@ $('q').addEventListener('input', onType);
     {childList:true, subtree:true, attributes:true});
   window.addEventListener('load', send); window.addEventListener('resize', send);
   setInterval(send, 800);
-  try{ window.parent.postMessage({brauditReady:true}, '*'); }catch(e){}
+  /* NO `brauditReady` here — see signalReady() above. It is sent once the
+     class list has actually rendered, and posting it from this IIFE would
+     put it back at parse time, which is the fault that was just fixed. */
 })();
 </script>
 <script src="/help-line.js" defer></script>
