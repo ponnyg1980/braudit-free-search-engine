@@ -1097,10 +1097,34 @@ if(BUILDER){
    The other three are offered back on a quiet line underneath, because "my
    competitor is not registered" and "my site is a landing page" are both dead
    ends on a page that shows one tool and nothing else. */
-const TOOLS={'existing-trademark':{opt:'5', name:'Use an existing trademark'},
-             'my-company':        {opt:'3', name:'Your company'},
-             'describe-business': {opt:'1', name:'Describe your business'},
-             'my-website':        {opt:'2', name:'Your website'}};
+/* STEP 1 HAS TO SAY WHICH TOOL YOU PICKED (Jonathan, 21 Sep: "All the tools go
+   to the same place"). He was right, and the plumbing was not the problem —
+   ?tool= arrives correctly and the right drawer does open. The fault was that
+   it only opens on screen TWO, so all four cards landed on an identical
+   "give us a name" screen whose only tell was a line of small pink eyebrow
+   text. Four links that look like they went to one page.
+
+   So each tool now states what it is about to do, and why it needs the name
+   first. `h1` replaces the generic builder headline; `lead` is shown (the
+   builder normally hides it). */
+const TOOLS={
+  'existing-trademark':{opt:'5', name:'Use an existing trademark',
+    h1:'Which brand are you creating classes and terms for?',
+    lead:'Pop in your brand name, then we&rsquo;ll search the UK register for a trademark '+
+         'you already own or a competitor&rsquo;s, and take its classes and terms as your '+
+         'starting point.'},
+  'my-company':{opt:'3', name:'Your company',
+    h1:'Which brand are you creating classes and terms for?',
+    lead:'Pop in your brand name, then we&rsquo;ll find your company at Companies House and '+
+         'show you what businesses in your sector actually registered.'},
+  'describe-business':{opt:'1', name:'Describe your business',
+    h1:'Which brand are you creating classes and terms for?',
+    lead:'Pop in your brand name, then answer a few plain questions about what you sell '+
+         'and who you sell it to, and we&rsquo;ll build your classes and terms from the answers.'},
+  'my-website':{opt:'2', name:'Your website',
+    h1:'Which brand are you creating classes and terms for?',
+    lead:'Pop in your brand name, then give us your website address. We&rsquo;ll read the '+
+         'site, ask a couple of questions to fill the gaps, and propose your classes and terms.'}};
 /* The slug comes from the PATH on the engine (/class-builder/my-company), or
    from ?tool= when the page is embedded. A WordPress host page is a single
    published page with a single embed tag, so it has no path to carry the slug;
@@ -1114,6 +1138,12 @@ if(ONLY_TOOL){
   document.title='Trademark Class Builder — '+ONLY_TOOL.name+' — The Trademark Helpline';
   var _e3=document.getElementById('s1-eyebrow');
   if(_e3)_e3.textContent='Trademark Class Builder — '+ONLY_TOOL.name;
+  /* Runs AFTER the BUILDER block above, so it overrides the generic headline
+     and un-hides the lead that block had just hidden. Order matters here. */
+  var _h3=document.getElementById('s1-h1');
+  if(_h3 && ONLY_TOOL.h1) _h3.textContent=ONLY_TOOL.h1;
+  var _l3=document.getElementById('s1-lead');
+  if(_l3 && ONLY_TOOL.lead){ _l3.innerHTML=ONLY_TOOL.lead; _l3.classList.remove('hidden'); }
 }
 /* Applied once, the first time the classes screen is shown: open the chosen
    tool, take the other three out of the list, and offer them back as links. */
