@@ -55,6 +55,21 @@ from tmh_scoring.ignore_words import (                    # noqa: E402
     is_structural as _is_structural,
 )
 
+def contains_fallback(mark_text: str) -> tuple:
+    """The one broadening a declared search is allowed, and only by hand.
+
+    `Contains` on the WHOLE phrase — never the stem. The stem is what turned
+    an Exact Match order for "Capital Thermal" into a class-filtered
+    `Contains: Capital` and filled the report with finance and media marks;
+    on a mark chosen for Exact Match precisely because its words are common,
+    the stem is the worst available broadening.
+
+    Jonathan, 22 Sep 2026: "the fall back is too broad" — so it is offered,
+    recorded and pressed by a person, never reached for by the engine.
+    """
+    return ("Contains", (mark_text or "").strip())
+
+
 MIN_STEM = 4
 MAX_CRITERIA = 5          # the contract's per-order limit
 
@@ -166,13 +181,34 @@ def ignored_in(text: str, *, where: str) -> list[dict]:
 
 
 def build(mark_text: str, classes=None, applicant: str | None = None,
-          tagline: str | None = None, extra=None) -> CriteriaSet:
+          tagline: str | None = None, extra=None,
+          declared=None) -> CriteriaSet:
     """Derive the criteria for one word audit.
 
     `tagline` is searched as an additional word criterion in the same order —
     a tagline is not a separate search type (decision 27 Aug).
     `extra` accepts staff-supplied criteria as (match_type, phrase) pairs;
     these are honoured verbatim and marked as manual.
+
+    `declared` (decision I, 22 Sep 2026) is what the ORDER FORM asked for —
+    the Deal's Search_Word/Search_Operator slots, as (match_type, phrase).
+    When it is non-empty it REPLACES the derived set entirely: only what was
+    declared runs. No Exact Match auto-add, no Similar To, no one-word form,
+    no stem.
+
+    Why replacement and not addition. Exact Match is chosen precisely when the
+    mark contains very common words — the order is saying "do not go wide".
+    Deriving a `Contains` on the distinctive stem is then the exact opposite of
+    the instruction, and on Capital Thermal it filled the report with finance
+    and media marks sharing the word "capital". An order form that promises one
+    thing while the engine does four is not a form, it is decoration.
+
+    What it costs, honestly: honouring a narrow operator can return nothing.
+    Measured on run eae681d1, not one of the 4,966 candidates scored above
+    nothing on `Exact Match: Capital Thermal`. That empty answer is the
+    truthful one, and it is reported as empty. The `Contains` whole-phrase
+    fallback is offered to staff in Triage, never applied automatically — it
+    is too broad to reach for on the engine's own initiative.
     """
     mark = (mark_text or "").strip()
     cs = CriteriaSet(classes=sorted({int(c) for c in (classes or [])
@@ -199,6 +235,26 @@ def build(mark_text: str, classes=None, applicant: str | None = None,
             return
         seen.add(c.key)
         cs.criteria.append(c)
+
+    # Decision I: an order that declared its own operators governs. Nothing
+    # below this block runs in that case - the derived shapes are what the
+    # engine would ask for when NOBODY has said what to search.
+    declared = [(m, p) for m, p in (declared or []) if (p or "").strip()]
+    if declared:
+        for match_type, phrase in declared[:MAX_CRITERIA]:
+            add(phrase, match_type, False,
+                "declared on the order form", "declared")
+        if len(declared) > MAX_CRITERIA:
+            cs.notes.append(
+                "WARNING more than %d declared criteria; kept the first %d: %s"
+                % (MAX_CRITERIA, MAX_CRITERIA,
+                   "; ".join(f"{m}:{p}" for m, p in declared[MAX_CRITERIA:])))
+        cs.notes.append(
+            "the order form declared its own search criteria, so they are the "
+            "whole search: no variant, one-word or stem criteria were added "
+            "(decision I, 22 Sep 2026). A narrow operator can legitimately "
+            "return nothing.")
+        return cs
 
     # 1. The mark itself, both shapes. Exact is cheap and unambiguous;
     #    similar is the workhorse.
