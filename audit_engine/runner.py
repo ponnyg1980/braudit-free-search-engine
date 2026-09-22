@@ -42,7 +42,18 @@ class AuditRequest:
     applicant: str | None = None
     goods_text: str = ""
     exclusions: list = field(default_factory=list)      # own marks/numbers/domains
-    extra_criteria: list = field(default_factory=list)  # staff additions
+    # The order form's own word criteria, word 1 INCLUDED, as
+    # (match_type, phrase). Named `extra_criteria` since before it carried
+    # word 1; kept for every existing caller and stored request.
+    extra_criteria: list = field(default_factory=list)
+    # Set when this run IS the staff-pressed Contains fallback, naming the run
+    # it came from, so the stored run says why it is broader than the order
+    # form asked for.
+    fallback_from_run: str = ""
+    # True when a person chose those operators on the Deal (Search_Operator_n
+    # or a search record), false when they were reconstructed by the legacy
+    # reader. Only a choice governs the search - decision I, 22 Sep 2026.
+    criteria_declared: bool = False
     deal_id: str = ""
     nature_of_business: str = ""
     # Cover-block identity, carried from the Deal so the report can name the
@@ -448,6 +459,18 @@ def _canary(result: AuditResult) -> None:
             "and re-run")
         return
     if not result.rows:
+        # Decision I, 22 Sep 2026. This hold was written when every run
+        # derived its own broad criteria, and against those an empty result
+        # really is more likely broken than clean. A DECLARED search is the
+        # opposite case: Exact Match is chosen precisely when the mark's words
+        # are common, and finding nothing is the answer the client is paying
+        # for. Holding it would turn the correct result into a blocked run and
+        # teach staff to broaden every order until something came back.
+        #
+        # The narrow case still holds: nothing declared, nothing found, so we
+        # cannot tell a clean register from a broken search.
+        if getattr(result.request, "criteria_declared", False):
+            return
         result.held, result.hold_reason = True, (
             "no records returned from any source — a clearance audit that finds "
             "nothing is more likely broken than clean")
@@ -466,7 +489,11 @@ def _canary(result: AuditResult) -> None:
 def run_audit(req: AuditRequest, signa_client=None) -> AuditResult:
     crit_set = criteria_mod.build(
         req.mark_text, classes=req.classes, applicant=req.applicant,
-        tagline=req.tagline, extra=req.extra_criteria,
+        tagline=req.tagline,
+        # Decision I: declared operators replace the derived set; a legacy
+        # guess is only ever an addition.
+        declared=(req.extra_criteria if req.criteria_declared else None),
+        extra=(None if req.criteria_declared else req.extra_criteria),
     )
     srcs = sources_mod.resolve(req.jurisdictions, layers=req.register_layers)
     result = AuditResult(request=req, criteria=crit_set, sources=srcs)
@@ -655,6 +682,24 @@ def run_audit(req: AuditRequest, signa_client=None) -> AuditResult:
             result.searches_run.extend(snotes)
         except Exception as exc:
             result.warnings.append(f"WARNING Serper layer failed and was skipped: {exc}")
+
+    # Decision I, second half. A DECLARED search that finds nothing on the
+    # register is not a failure — on a mark chosen for Exact Match because its
+    # words are common, it is very often the correct answer. Say so plainly,
+    # and name the one broadening that is allowed, so a staff member reading
+    # an empty register section knows why it is empty and what the alternative
+    # would cost. The engine does not take that alternative: Jonathan,
+    # 22 Sep 2026, "the fall back is too broad" — it is a person's decision.
+    if req.criteria_declared and not result.rows and not req.fallback_from_run:
+        declared = "; ".join(f"{c.match_type}: {c.phrase}" for c in crit_set.criteria)
+        result.warnings.append(
+            f"NOTHING FOUND ON THE REGISTER for the criteria the order form "
+            f"declared ({declared}). That is a result, not an error — nothing "
+            f"on the searched registers matches. The only broadening available "
+            f"is Contains on the whole phrase "
+            f"('Contains: {req.mark_text}'), which is deliberately not applied "
+            f"automatically because it is broad. Run it from Triage if the "
+            f"client needs the wider field.")
 
     _canary(result)
     return result
