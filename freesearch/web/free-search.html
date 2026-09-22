@@ -951,7 +951,11 @@ const CONFIG = (function(){
     // Audit Checkout sends ?classes=25,35&screen=review so a visitor who
     // picked classes during their search reviews the wording rather than
     // starting the picker again. Ignored outside builder mode.
-    SEED_CLASSES:q.get('classes')||'',
+    /* `classes` is the comma list the class finder hands over. `class` is the
+       singular alias the 45 class pages use ("Build your class 3
+       specification"), so /class-builder/?class=3 seeds the basket the same
+       way. Plural wins if somehow both are present. */
+    SEED_CLASSES:q.get('classes')||q.get('class')||'',
     RESUME_NAME:q.get('q')||'',
     // The journey Edge Function. Production default (param-overridable) —
     // relative same-origin calls 404 on the Render engine, which had been
