@@ -551,3 +551,71 @@ exclusions untouched, and appends rather than deletes.
 a sensitivity override and the subsequent exclusion verdict on the rows it
 moved says whether a step found something real or only added noise. That is the
 evidence for moving a global default, and there is no other way to get it.
+
+
+---
+
+## I — The order form's search operator governs the search
+
+**Ruling (Jonathan, 22 September 2026).** "Exact Match is chosen when there are
+very common words. The Exact Match should be honoured. If no results came
+back, the only alternative would be Contains the whole string, just to get some
+results, but the fallback is too broad."
+
+Answers to the two questions that ruling raised: the declared operator
+**replaces** every derived criterion — only what was declared runs — and when
+it returns nothing the report **says so**, with the Contains fallback offered
+in Triage as a staff action, never applied automatically.
+
+**What was wrong.** `deal_reader._criteria()` returned `words[0][1], words[1:]`.
+Word 1's phrase became `mark_text` and word 1's OPERATOR was discarded on that
+line. `criteria.build()` then derived four shapes from the bare mark — Exact
+Match, Similar To, Similar To on the one-word form, and `Contains` on the
+distinctive stem restricted to the client's classes — and appended whatever
+remained as a fifth. A Deal set to Exact Match ran four searches, the broadest
+of which was a stem search.
+
+Proof it was the operator being dropped rather than a mapping slip: run
+`ce25a67b` carried `extra_criteria = []`, nothing from the Deal at all, and
+produced the identical four criteria and 4,968 rows.
+
+**Why replacement rather than addition.** Exact Match is chosen *because* the
+mark's words are common. Deriving `Contains` on its distinctive stem is then
+the exact opposite of the instruction — on Capital Thermal it produced 982
+Medium rows, 683 of which shared only the word "capital". An order form that
+promises one thing while the engine does four is not a form.
+
+**What it costs, stated honestly.** Honouring a narrow operator can return
+nothing. Measured on run `eae681d1`: of the 4,966 candidates returned, **zero**
+score above nothing on `Exact Match: Capital Thermal`, and zero on
+`Contains: Capital Thermal` either. The empty register section is the truthful
+answer — there is no Capital Thermal on the searched registers — and the 4,966
+rows were noise.
+
+**Consequences implemented 22 Sep 2026:**
+
+*Only a person's choice governs.* `deal_fields.DECLARED_SOURCES` is
+`{search_records, deal_fields}`. The legacy reader reconstructs a phrase from
+TM_Text or the Deal name and pairs it with a `Similar To` nobody selected; a
+guess must never suppress the derived criteria.
+
+*The operator vocabulary was wrong in three ways.* `"Exact Match"` mapped to
+`"Exact"`, which nothing else in the system uses — `TMH_TO_SIGNA.get("Exact")`
+is `None`, so Signa received no operator, and `word_scoring` tests
+`stype == "exact match"`, so it fell through to contains+fuzzy. Declared one
+thing, scored another; the same class of defect as finding G. `"Sounds Like"`
+and `"Related Words"` were flattened to `"Similar To"` at the reader, which is
+right for recall and wrong for assessment — `TMH_TO_SIGNA` already degrades
+them at the Signa boundary, and the scorer has a real phonetic method that
+needs the true label. And `"Equals"` and `"Domain"` had no mapping at all, so
+both became `"Similar To"` through a `.get` default. Unknown operators are now
+recorded as warnings; nothing defaults in silence.
+
+*The canary had to learn the difference.* It held any run with no rows — "a
+clearance audit that finds nothing is more likely broken than clean". True
+against derived criteria, false against a declared one. Holding a correct empty
+result would have blocked the run and taught staff to broaden every order until
+something came back. The hold now applies only when nothing was declared.
+
+*The fallback is `Contains` on the WHOLE phrase, never the stem.*
+`criteria.contains_fallback()` is the single definition.
