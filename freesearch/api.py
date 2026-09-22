@@ -255,7 +255,17 @@ _EMBED_JS = """(function(){
     // in the path. Forwarding ?tool= means the four cards work against the
     // /class-builder/ page that is already live, with no new pages to publish
     // and therefore no 404 waiting on somebody remembering to publish them.
+    // 'class' and 'classes' (22 Sep): each of the 45 class pages wants a CTA
+    // reading "Build your class 3 specification", which needs the class
+    // preselected. BOTH are forwarded because the builder has always read
+    // `?classes=` (a comma list, used by the finder hand-off) while the class
+    // pages naturally want the singular `?class=3`. Forwarding only the
+    // singular would have been a no-op — nothing read it — and forwarding only
+    // the plural would make every class page write an odd-looking URL.
+    // Added deliberately, same as 'tool'; arbitrary params are still NOT
+    // forwarded.
     ['s','fs','screen','q','journey','searchbase','deal','tool',
+     'class','classes',
      'utm_source','utm_medium','utm_campaign'].forEach(function(k){
       var v=hp.get(k); if(v) q+='&'+(k==='fs'?'s':k)+'='+encodeURIComponent(v);
     });
