@@ -166,6 +166,48 @@ def _context_terms(class_source, class_no: int) -> list[str]:
     return found
 
 
+def _mark_terms(class_source, class_no: int) -> list[str]:
+    """A registered trademark's OWN terms for this class, verbatim.
+
+    Jonathan, 23 Sep 2026: "Trademark Search (the most accurate method) ...
+    only pulled the Class Descriptions, and not the specific descriptions."
+
+    Route 5 hands us a term_basket built from a REGISTERED mark
+    (source_type 'competitor_trademark', source_ref = its number). Every
+    phrase in it is wording the UKIPO has already accepted, on this exact
+    mark -- so the 19 Aug "verbatim from class_terms.csv" rule is satisfied
+    by construction, and filtering it through the corpus only destroys good
+    data. It did: KJ Beckett kept 52 of its own 78 terms, because the
+    corpus held the 300 most popular per class and "silk ties" was not
+    among them. Crossed-out terms (kept=False) stay out.
+    """
+    if not isinstance(class_source, dict):
+        return []
+    tb = class_source.get('term_basket')
+    if not isinstance(tb, dict) or tb.get('source_type') != 'competitor_trademark' \
+            or not str(tb.get('source_ref') or '').strip():
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for e in tb.get('entries') or []:
+        if not isinstance(e, dict):
+            continue
+        try:
+            if int(e.get('nice_class')) != class_no:
+                continue
+        except (TypeError, ValueError):
+            continue
+        for t in e.get('terms') or []:
+            if isinstance(t, dict):
+                if t.get('kept') is False:
+                    continue
+                t = t.get('text') or t.get('term') or ''
+            t = str(t).strip().rstrip('.').strip()
+            if t and t.lower() not in seen:
+                seen.add(t.lower()); out.append(t)
+    return out
+
+
 def _description_tokens(class_source) -> set[str]:
     """Tokens of the business description and the Q&A answers behind it."""
     if not isinstance(class_source, dict):
@@ -293,7 +335,15 @@ def build_application_scope(classes, class_source) -> list[dict]:
             continue
         if not 1 <= n <= 45:
             continue
-        tiers = _select_tiers(n, _context_terms(class_source, n), desc)
+        own = _mark_terms(class_source, n)
+        if own:
+            # The mark's own registered specification IS the answer; padding
+            # it with popularity tiers is the "huge list when it isn't
+            # appropriate" Jonathan ruled out.
+            tiers = {'definite': own, 'possible': [], 'unlikely': [],
+                     'source': 'registered_mark'}
+        else:
+            tiers = _select_tiers(n, _context_terms(class_source, n), desc)
         rows.append({
             'n': n,
             'heading': NICE_HEADINGS.get(n, ''),
