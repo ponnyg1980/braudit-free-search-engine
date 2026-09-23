@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trademark Audit — The Trademark Helpline</title>
+<title>Clearance Audit — The Trademark Helpline</title>
 <!-- Same two layers Free Search uses, in the same order: the shared design
      system, then the wizard styles copied verbatim from free-search.html.
      Anything below is audit-only. -->
@@ -114,15 +114,15 @@
   <!-- ============ 1 — CONTACT ============ -->
   <section class="card" data-screen="contact">
     <div class="ac-about">
-      <h4>About our Trademark Audit Service</h4>
-      <p><b>When do you need a trademark audit?</b><br>
-        Trademark Audits are most commonly used before making a trademark application, as a
+      <h4>About our Clearance Audit</h4>
+      <p><b>When do you need a Clearance Audit?</b><br>
+        Clearance Audits are most commonly used before making a trademark application, as a
         Trademark Healthcheck, when looking to make changes to an existing trademark (for
         example, adding or removing goods and services your trademark is registered for
         (Classes &amp; Terms), expanding into other territories &amp; jurisdictions) or when
         your trademark is coming up for renewal.</p>
       <p><b>How does it help you?</b><br>
-        The purpose of a Trademark Audit is to avoid wasting money on failed application fees
+        The purpose of a Clearance Audit is to avoid wasting money on failed application fees
         by giving you all the information you need to make educated choices about your
         trademark before committing to paying any official fees to trademark registers such as
         the UK Intellectual Property Office, as those fees are non-refundable.</p>
@@ -493,7 +493,7 @@
 
   <!-- ============ 8 — SUMMARY & PAYMENT ============ -->
   <section class="card hidden" data-screen="summary">
-    <h1>Your Trademark Audit</h1>
+    <h1>Your Clearance Audit</h1>
     <p class="lead">Check it all over &mdash; you can go back and change anything.</p>
     <div id="sum-body"></div>
     <div class="ac-totals" id="sum-totals"></div>
@@ -552,7 +552,7 @@
       <h3 style="margin-top:0">While you&rsquo;re here &mdash; a couple of quick questions</h3>
       <p class="sub" style="margin-top:0">These help our advisers prepare the right audit for you.</p>
 
-      <label class="fld">Who is this Trademark Audit for?</label>
+      <label class="fld">Who is this Clearance Audit for?</label>
       <select id="ff-who">
         <option value="">Please choose&hellip;</option>
         <option>For me</option>
@@ -1370,10 +1370,10 @@ function auditLines(){
   /* One line per TYPE (Jonathan, 9 Sep): Name, Logo, Tagline at £149 each.
      Billing lines, not search contexts — the tagline is billed as a line but
      travels inside the word search alongside the name. */
-  const lines=[{label:'Name search — '+state.name,price:CONFIG.PRICE_AUDIT}];
-  if(state.hasLogo)lines.push({label:'Logo search'+(state.logoLater?' (logo to follow)':''),
+  const lines=[{label:'Clearance Audit – Word mark "'+state.name+'"',price:CONFIG.PRICE_AUDIT}];
+  if(state.hasLogo)lines.push({label:'Clearance Audit – Logo'+(state.logoLater?' (to follow)':''),
     price:CONFIG.PRICE_AUDIT});
-  if(state.tagline)lines.push({label:'Tagline — '+state.tagline,price:CONFIG.PRICE_AUDIT});
+  if(state.tagline)lines.push({label:'Clearance Audit – Tagline "'+state.tagline+'"',price:CONFIG.PRICE_AUDIT});
   return lines;
 }
 function pricing(){
@@ -1438,8 +1438,8 @@ function renderSummary(){
 
   document.getElementById('sum-totals').innerHTML=
     pr.lines.map(l=>`<div class="tr"><span>${l.label}</span><span>${money(l.price)}</span></div>`).join('')+
-    (pr.consult?`<div class="tr"><span>Audit Consultation</span><span>${money(CONFIG.PRICE_CONSULT)}</span></div>`:'')+
-    `<div class="tr disc"><span>Audit Promotion</span><span>&minus;${money(pr.discount)}</span></div>`+
+    (pr.consult?`<div class="tr"><span>Clearance Consultation</span><span>${money(CONFIG.PRICE_CONSULT)}</span></div>`:'')+
+    `<div class="tr disc"><span>Clearance Audit Promotion</span><span>&minus;${money(pr.discount)}</span></div>`+
     `<div class="tr"><span>Net total</span><span>${money(pr.net)}</span></div>`+
     (pr.exempt
       ?`<div class="tr"><span>VAT — not applicable (outside the UK)</span><span>${money(0)}</span></div>`
