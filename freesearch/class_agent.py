@@ -75,6 +75,10 @@ class _Term:
 API_URL = 'https://api.anthropic.com/v1/messages'
 API_VERSION = '2023-06-01'
 DEFAULT_MODEL = os.environ.get('CLASS_AGENT_MODEL', 'claude-sonnet-5')
+# Stage 2 only picks from a numbered list. Sonnet (low effort) by default;
+# set CLASS_AGENT_TERMS_MODEL=claude-haiku-4-5-20251001 to trade a little
+# accuracy for cost. Compared on Charles, 23 Sep: near parity.
+TERMS_MODEL = os.environ.get('CLASS_AGENT_TERMS_MODEL') or None
 
 # How many candidate terms per class the model is shown. Caps tokens, and
 # frequency is evidence: a term 700 marks use is a safer suggestion than one
@@ -131,6 +135,7 @@ class AgentError(RuntimeError):
 
 
 def _call(system: str, user: str, *, cfg: dict, max_tokens: int = 1024,
+          model: str | None = None, effort: str | None = 'low',
           retries: int = 2) -> str:
     # .strip() is load-bearing. Pasting a key into a dashboard field very
     # easily carries a trailing newline, and a newline in a header value is
@@ -146,12 +151,22 @@ def _call(system: str, user: str, *, cfg: dict, max_tokens: int = 1024,
     # Determinism here comes from the task shape instead — the model picks
     # from a fixed numbered list, and everything is re-validated on the way
     # out, so a stray choice is caught rather than merely discouraged.
-    body = json.dumps({
-        'model': cfg.get('model') or DEFAULT_MODEL,
+    use_model = model or cfg.get('model') or DEFAULT_MODEL
+    payload = {
+        'model': use_model,
         'max_tokens': max_tokens,
         'system': system,
         'messages': [{'role': 'user', 'content': user}],
-    }).encode()
+    }
+    # 23 Sep 2026: current Sonnet/Opus think before answering by default, and
+    # the thinking comes out of max_tokens. Stage 2 had 500 tokens; the model
+    # spent all 500 thinking, returned NO text, and the class came back empty
+    # -- silently, because _one() swallows AgentError. Low effort keeps the
+    # thinking short (measured 49 output tokens, 1.4s, vs a truncated answer
+    # at 2,000). Haiku does not think by default and takes no effort flag.
+    if effort and not use_model.startswith('claude-haiku'):
+        payload['output_config'] = {'effort': effort}
+    body = json.dumps(payload).encode()
     last = None
     for attempt in range(retries + 1):
         req = urllib.request.Request(API_URL, data=body, method='POST', headers={
@@ -163,7 +178,12 @@ def _call(system: str, user: str, *, cfg: dict, max_tokens: int = 1024,
             r = json.loads(urllib.request.urlopen(req, timeout=45).read())
             parts = [b.get('text', '') for b in (r.get('content') or [])
                      if b.get('type') == 'text']
-            return ''.join(parts)
+            text = ''.join(parts)
+            if not text.strip() and r.get('stop_reason') == 'max_tokens':
+                # Never let "the model ran out of room" look like "the model
+                # found nothing" -- that is exactly how empty classes shipped.
+                raise AgentError('model used its whole token budget without answering')
+            return text
         except urllib.error.HTTPError as e:
             last = f'HTTP {e.code}'
             if e.code in (400, 401, 403):     # our fault — retrying won't help
@@ -219,7 +239,7 @@ def _stage1(text: str, provides: str | None, cfg: dict) -> tuple[list[int], dict
     elif provides == 'both':
         hint = '\n\nThe business has told us it provides BOTH goods and services.'
 
-    raw = _call(_S1, f'Business description:\n"""{text}"""{hint}', cfg=cfg, max_tokens=700)
+    raw = _call(_S1, f'Business description:\n"""{text}"""{hint}', cfg=cfg, max_tokens=1500)
     data = _json_from(raw)
 
     out, why = [], {}
@@ -270,7 +290,7 @@ def _stage2(text: str, cls: int, candidates: list[dict], cfg: dict) -> list[dict
     listing = '\n'.join(f'{i+1}. {c["term"]}' for i, c in enumerate(candidates))
     user = (f'Business description:\n"""{text}"""\n\n'
             f'Nice class {cls} ({class_label(cls)}). Candidate terms:\n{listing}')
-    raw = _call(_S2, user, cfg=cfg, max_tokens=500)
+    raw = _call(_S2, user, cfg=cfg, max_tokens=1500, model=TERMS_MODEL)
     data = _json_from(raw)
 
     picked, seen = [], set()
@@ -524,11 +544,17 @@ def suggest(text: str, *, provides: str | None = None, cfg: dict | None = None,
     # sockets at the model at once.
     pools = {c: candidate_pool(text, c, k=candidates_per_class) for c in classes}
 
+    failed: list[int] = []
+
     def _one(c):
         try:
             return c, _stage2(text, c, pools[c], cfg)
-        except AgentError:
-            return c, []           # one class failing must not lose the rest
+        except AgentError as exc:
+            # One class failing must not lose the rest -- but it must not look
+            # like "no terms fit" either. Record it; the response says so.
+            print(f'[class-agent] stage 2 class {c} failed: {exc}', flush=True)
+            failed.append(c)
+            return c, []
 
     picked_by_class = {}
     if len(classes) > 1:
@@ -555,4 +581,8 @@ def suggest(text: str, *, provides: str | None = None, cfg: dict | None = None,
 
     return {'ok': True, 'classes': out,
             'model': cfg.get('model') or DEFAULT_MODEL,
-            'verified': dropped == 0, 'dropped': dropped}
+            'terms_model': TERMS_MODEL or cfg.get('model') or DEFAULT_MODEL,
+            'verified': dropped == 0, 'dropped': dropped,
+            # Classes whose term pick FAILED (as opposed to legitimately
+            # finding nothing). Non-empty means retry, not "no terms".
+            'failed_classes': sorted(failed)}
