@@ -3263,6 +3263,47 @@ let SEEDED_BUILDER = false;
     history.replaceState({screen:'classes'},'','#classes');
   }
 })();
+
+/* OPENED FROM A DEAL: load what the Deal already has (Jonathan, 23 Sep 2026).
+   Laura opened the builder on KJ Beckett's Deal and it started blank, though
+   the Deal carried four classes and 78 terms in its scope asset -- so it
+   looked as if nothing had carried over. With ?deal= and a staff token (the
+   same one the staff forms keep in this origin's localStorage) we read the
+   Deal back through /staff-deal and open straight on the review screen with
+   those classes and terms, official headings beside them.
+   No token, no scope, or any failure: fall through to the normal builder.
+   It never writes -- sending is still the staff member's explicit click. */
+(async function loadDealScope(){
+  if(!BUILDER || !CONFIG.DEAL || SEEDED_BUILDER) return;
+  let tok='';
+  try{ tok=new URLSearchParams(location.search).get('k')||localStorage.getItem('tmh_staff_token')||''; }catch(e){}
+  if(!tok) return;
+  let d=null;
+  try{
+    const r=await fetch('/staff-deal',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({k:tok,deal_id:CONFIG.DEAL})});
+    d=await r.json();
+  }catch(e){ return; }
+  if(!d||!d.ok) return;
+  const existing={}, cls=[];
+  (d.scope||[]).forEach(sc=>(sc.terms||[]).forEach(t=>{
+    const n=parseInt(t.class_no,10); if(!(n>=1&&n<=45)) return;
+    if(cls.indexOf(n)<0) cls.push(n);
+    const list=existing[n]||(existing[n]=[]);
+    parseTerms(t.terms||'').forEach(x=>{ if(list.map(y=>y.toLowerCase()).indexOf(x.toLowerCase())<0) list.push(x); });
+  }));
+  if(!cls.length) return;               /* nothing on the Deal yet: normal builder */
+  const z=d.deal||{};
+  state.classes=cls.sort((a,b)=>a-b);
+  if(!state.name) state.name=String(z.Deal_Name||'').trim();
+  state.classSource={route:'deal', value:CONFIG.DEAL, existing_terms:existing};
+  renderBasket();
+  renderScreen('classes');
+  history.replaceState({screen:'classes'},'','#classes');
+  await goToReview();
+  const h=document.querySelector('[data-screen="review"] h1');
+  if(h) h.textContent='Classes and terms already on this Deal';
+})();
 (function resumeFromSearchBox(){
   if(SEEDED_BUILDER) return;                 // already positioned above
   const wanted = CONFIG.RESUME_SCREEN;
