@@ -80,6 +80,8 @@
 
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { accountFor, buildXeroLines, buildZohoOrder, isForbidden, isWorldwide,
+  type XeroInvoiceIn } from "./order_lines.ts";
 
 const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
   .split(",").map((s) => s.trim()).filter(Boolean);
@@ -358,6 +360,57 @@ function zohoPayload(recordType: "lead" | "brand_audit",
 //     really is stored with a doubled bracket. If the CRM value is ever
 //     fixed, this table must follow.
 //   * Data_Source is a Zoho system field; never write it.
+// Jonathan's official class descriptions (23 Sep 2026) -- what every scope row
+// stores in Class_Description_Snapshot. Mirrors freesearch/class_headings.py
+// and audit_engine/class_headings.py; change all three together.
+const TMH_HEADING: Record<number, string> = {
+  1: "Chemicals for industry, science, and photography.",
+  2: "Paints, varnishes, and lacquers.",
+  3: "Cleaning and bleaching preparations, cosmetics.",
+  4: "Industrial oils, greases, and fuels.",
+  5: "Pharmaceutical and veterinary preparations.",
+  6: "Common metals and alloys.",
+  7: "Machines and machine tools.",
+  8: "Hand tools and implements.",
+  9: "Nautical, scientific, electrical, and optical apparatus (including software and screens).",
+  10: "Medical and surgical apparatus.",
+  11: "Lighting, heating, cooking, and refrigerating equipment.",
+  12: "Vehicles and locomotion apparatus (land, air, or water).",
+  13: "Firearms, ammunition, and explosives.",
+  14: "Precious metals, jewellery, and horological instruments.",
+  15: "Musical instruments.",
+  16: "Paper, cardboard, stationery, and office requisites.",
+  17: "Rubber, gutta-percha, plastics, and packing materials.",
+  18: "Leather, hides, trunks, travelling bags, and umbrellas.",
+  19: "Non-metallic building materials.",
+  20: "Furniture, mirrors, and non-metallic storage containers.",
+  21: "Household or kitchen utensils and glassware.",
+  22: "Ropes, string, tents, padding, and raw fibrous textile materials.",
+  23: "Yarns and threads for textile use.",
+  24: "Textiles and bed/table covers.",
+  25: "Clothing, footwear, and headgear.",
+  26: "Lace, embroidery, ribbons, buttons, and artificial flowers.",
+  27: "Carpets, rugs, mats, and linoleum.",
+  28: "Games, toys, and sporting articles.",
+  29: "Meat, fish, poultry, preserved/cooked fruits, and dairy.",
+  30: "Coffee, tea, cocoa, sugar, rice, flour, bread, and spices.",
+  31: "Raw and unprocessed agricultural, aquacultural, horticultural, and forestry products.",
+  32: "Beers, mineral waters, and non-alcoholic beverages.",
+  33: "Alcoholic beverages (except beers).",
+  34: "Tobacco and smokers' articles.",
+  35: "Advertising, business management, and retail/wholesale services.",
+  36: "Insurance, financial affairs, monetary affairs, and real estate.",
+  37: "Construction, repair, and installation services.",
+  38: "Telecommunications.",
+  39: "Transport, packaging, storage of goods, and travel arrangement.",
+  40: "Treatment and processing of materials.",
+  41: "Education, training, entertainment, sporting, and cultural activities.",
+  42: "Scientific, technological services, and computer/software development.",
+  43: "Services for providing food, drink, and temporary accommodation.",
+  44: "Medical services, veterinary services, and hygienic/beauty care.",
+  45: "Legal services, security services, and personal/social services.",
+};
+
 const ZOHO_CLASS: Record<number, string> = {
   1: "1 (Chemicals)", 2: "2 (Colourants)", 3: "3 (Toiletries)", 4: "4 (Fuels)",
   5: "5 (Preparations)", 6: "6 (Metal)", 7: "7 (Machinery)", 8: "8 (Tools)",
@@ -540,7 +593,7 @@ function zohoScopeBlock(session: Record<string, unknown>) {
         additional_terms: extra || undefined,
         classes: rows.map((r, idx) => ({
           n: r.n,
-          label: r.heading || ZOHO_CLASS[r.n] || `Class ${r.n}`,
+          label: TMH_HEADING[r.n] || r.heading || `Class ${r.n}`,
           terms: r.terms,
           // "; "-joined, Capitalised, one line per class (17 Sep) -- see
           // fmtTerms. Uncapped by design; only Zoho's 32k textarea limit,
@@ -579,7 +632,7 @@ function zohoScopeBlock(session: Record<string, unknown>) {
   return {
     mark: session.name || "",
     classes: classes.map((n, idx) => ({
-      n, label: ZOHO_CLASS[n] || `Class ${n}`, terms: byClass[n] ?? [],
+      n, label: TMH_HEADING[n] || `Class ${n}`, terms: byClass[n] ?? [],
       // Same "; " rule as above (17 Sep). Formatted HERE, not in Deluge,
       // because Deluge string literals cannot express separators reliably.
       terms_text: fmtTerms(byClass[n] ?? []),
@@ -1415,7 +1468,7 @@ serve(async (req) => {
               .filter((r) => r.n >= 1 && r.n <= 45);
             if (rows.length) {
               return rows.map((r, idx) => ({
-                n: r.n, label: r.heading || ZOHO_CLASS[r.n] || `Class ${r.n}`,
+                n: r.n, label: TMH_HEADING[r.n] || r.heading || `Class ${r.n}`,
                 terms_text: fmtTerms(r.terms),
                 terms_source: r.src === "Custom Edited" ? "Custom Edited" : "Approved",
                 display_order: idx + 1,
@@ -1424,7 +1477,7 @@ serve(async (req) => {
             const flat = fmtTerms(Array.isArray(b.terms) ? b.terms : []);
             return (Array.isArray(b.classes) ? b.classes : []).map(Number)
               .filter((n) => n >= 1 && n <= 45)
-              .map((n, idx) => ({ n, label: ZOHO_CLASS[n] || `Class ${n}`,
+              .map((n, idx) => ({ n, label: TMH_HEADING[n] || `Class ${n}`,
                 terms_text: flat, terms_source: "Approved", display_order: idx + 1 }));
           })(),
           website_url: b.website_url, business_description: b.business_description,
@@ -1892,12 +1945,27 @@ serve(async (req) => {
     // negative line so the invoice SHOWS the value stack landing on £99;
     // staff lines already carry their per-line discount decision.
     // Dedicated nominal pair created 8 Sep — the VAT location decides it.
-    const acct = vatExempt
-      ? (Deno.env.get("XERO_SALES_ACCOUNT_NONUK") ?? "247").trim()
-      : (Deno.env.get("XERO_SALES_ACCOUNT_UK") ?? "227").trim();
-    const taxT = vatExempt
-      ? (Deno.env.get("XERO_TAX_NONUK") ?? "NONE").trim()
-      : (Deno.env.get("XERO_TAX_UK") ?? "OUTPUT2").trim();
+    //
+    // CODES (24 Sep 2026, handoff rule 4): account codes and tax types come
+    // from temmy-access/tmh_billing.py via billing.gen.ts, so this path and
+    // the Zoho-driven billing post to the same nominals. The two env vars
+    // must hold the same codes; if one has drifted we still post the shared
+    // code and say so, rather than silently splitting revenue across two.
+    const { code: acct } = accountFor(vatExempt);
+    {
+      const envCode = (Deno.env.get(vatExempt ? "XERO_SALES_ACCOUNT_NONUK"
+        : "XERO_SALES_ACCOUNT_UK") ?? "").trim();
+      if (envCode && envCode !== acct) {
+        await admin.from("journey_events").insert({ session_id: sid,
+          event_type: "xero_account_env_mismatch",
+          payload: { env: envCode, tmh_billing: acct, vat_exempt: vatExempt } });
+      }
+    }
+    if (isForbidden(acct)) {
+      await admin.from("journey_events").insert({ session_id: sid,
+        event_type: "xero_invoice_failed", payload: { kind, step: "forbidden_account", acct } });
+      return json({ ok: false, error: "forbidden account code" }, 500, origin);
+    }
     let pLines: { l: string; p: number }[] = [];
     try {
       const rawL = p.lines;
@@ -1908,26 +1976,22 @@ serve(async (req) => {
       }
     } catch (_e) { /* fall back below */ }
     const discountP = Number(p.discount_pence ?? 0) || 0;
-    const items: Record<string, unknown>[] = pLines.length
-      ? pLines.map((x) => ({
-          Description: x.l + " — Brand Audit",
-          Quantity: 1, UnitAmount: x.p / 100,
-          AccountCode: acct, TaxType: taxT,
-        }))
-      : [{
-          Description: "Trademark Audit" + (marks > 1 ? ` × ${marks} marks` : "")
-            + " — Audit Promotion applied"
-            + (vatExempt ? " (VAT not applicable — outside the UK)" : ""),
-          Quantity: marks, UnitAmount: 99.00,
-          AccountCode: acct, TaxType: taxT,
-        }];
-    if (pLines.length && discountP > 0) {
-      items.push({
-        Description: "Audit Promotion applied",
-        Quantity: 1, UnitAmount: -discountP / 100,
-        AccountCode: acct, TaxType: taxT,
-      });
-    }
+    // CLEARANCE AUDIT (24 Sep 2026). Line text is "UK Clearance Audit – Word
+    // mark "ACME"" etc.; the product (UK vs Worldwide audit, Consultation) is
+    // decided here and travels in `lineMeta` to the Zoho Deal_Items write.
+    // Worldwide = any territory beyond the UK: the staff discovery answers,
+    // else what the client wizard stored on the session. Prices CHARGED are
+    // unchanged -- they still come from the order event.
+    const discX = (enqX?.discovery ?? {}) as Record<string, unknown>;
+    const territories: unknown[] = enqX
+      ? [...(Array.isArray(discX.terrNow) ? discX.terrNow as unknown[] : []),
+         ...(Array.isArray(discX.terrPlan) ? discX.terrPlan as unknown[] : [])]
+      : [...(Array.isArray(sessX?.trading_now) ? sessX.trading_now as unknown[] : []),
+         ...(Array.isArray(sessX?.planning_to_trade) ? sessX.planning_to_trade as unknown[] : [])];
+    const built = buildXeroLines({ lines: pLines, discountPence: discountP, marks,
+      vatExempt, worldwide: isWorldwide(territories) });
+    const items = built.items as unknown as Record<string, unknown>[];
+    const lineMeta = built.meta;
 
     // TRACKING (21 Sep). Consultant = Web on a client-raised invoice, and the
     // Lead Source group carried across from the session. Xero puts tracking on
@@ -1967,8 +2031,7 @@ serve(async (req) => {
     if (theme) inv.BrandingThemeID = theme;
     const made = await xeroApi("/Invoices", "POST", { Invoices: [inv] },
                                `invoice_${kind}_${sid}`);
-    const invoice = (made.data as { Invoices?: { InvoiceID: string;
-      InvoiceNumber?: string; Total?: number }[] })?.Invoices?.[0];
+    const invoice = (made.data as { Invoices?: XeroInvoiceIn[] })?.Invoices?.[0];
     if (!made.ok || !invoice) {
       await admin.from("journey_events").insert({ session_id: sid,
         event_type: "xero_invoice_failed",
@@ -1977,6 +2040,7 @@ serve(async (req) => {
     }
 
     let paid = false;
+    let paidOn = "";
     if (kind === "paid") {
       // "Stripe GBP" bank account — it has no code in the chart, so the
       // payment references it by AccountID (confirmed with Jonathan, 8 Sep).
@@ -2002,6 +2066,7 @@ serve(async (req) => {
           Reference: String(p.payment_ref ?? p.payment_intent ?? p.stripe_session ?? ref),
         }] }, `payment_${sid}`);
         paid = pay.ok;
+        if (pay.ok) paidOn = payDate;
         if (!pay.ok) {
           await admin.from("journey_events").insert({ session_id: sid,
             event_type: "xero_payment_failed",
@@ -2024,6 +2089,62 @@ serve(async (req) => {
         invoice_number: invoice.InvoiceNumber, total: invoice.Total,
         marked_paid: paid, due_date: due, contact_id: contactId,
       } });
+
+    // ---- Zoho Orders + Deal_Items (handoff 23 Sep 2026, Jonathan) ---------
+    // One Order per Xero invoice, one Deal_Items row per Xero line INCLUDING
+    // the negative promotion line, so the Zoho lines always add up to the
+    // invoice. Built from what Xero RETURNED. Written by the Deluge stage
+    // `order_lines` (this function holds no Zoho credentials; the checkout
+    // function does), awaited so the Order exists BEFORE order_complete.
+    // Idempotent on Xero_Invoice_ID / Xero_Line_ID inside the Deluge.
+    // A failure here NEVER fails the checkout: the Xero invoice is the legal
+    // record. It is logged and order_complete still runs.
+    let zohoOrderId = "";
+    if (ZOHO_CHECKOUT_URL) {
+      try {
+        const zo = buildZohoOrder({
+          invoice, meta: lineMeta, sent: built.items, vatExempt, paid,
+          paidDate: paidOn, today,
+          stripeId: String(p.payment_intent ?? p.stripe_session ?? ""),
+          syncNote: `${kind} via Search Journey; session ${sid}`
+            + (kind === "paid" && !paid ? "; PAYMENT NOT APPLIED IN XERO" : "")
+            + (p.source === "quick_audit_recorded" && p.payment_ref
+              ? `; payment ref ${String(p.payment_ref)}` : ""),
+          nowIso: new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00"),
+        });
+        const zids0 = (lrX.zoho ?? {}) as Record<string, unknown>;
+        const link0 = ((enqX?.link ?? {}) as Record<string, unknown>);
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 30_000);
+        const r = await fetch(ZOHO_CHECKOUT_URL, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          signal: ctl.signal,
+          body: JSON.stringify({ stage: "order_lines", session_id: sid,
+            zoho_deal_id: String(zids0.deal_id ?? ""),
+            zoho_contact_id: String(zids0.contact_id ?? link0.contact_id ?? ""),
+            zoho_account_id: String(zids0.account_id ?? billX.account_id ?? ""),
+            order: zo.order, items: zo.items }),
+        });
+        clearTimeout(timer);
+        const text = await r.text();
+        let out: Record<string, unknown> | null = null;
+        try {
+          const env = JSON.parse(text);
+          const o = env?.details?.output;
+          out = typeof o === "string" ? JSON.parse(o) : env;
+        } catch (_e) { out = null; }
+        zohoOrderId = String(out?.zoho_order_id ?? "");
+        await admin.from("journey_events").insert({ session_id: sid,
+          event_type: zohoOrderId ? "zoho_order_written" : "zoho_order_failed",
+          payload: { invoice_number: invoice.InvoiceNumber, order_id: zohoOrderId || null,
+                     lines: zo.items.length, warnings: zo.warnings,
+                     result: out ?? text.slice(0, 500) } });
+      } catch (e) {
+        await admin.from("journey_events").insert({ session_id: sid,
+          event_type: "zoho_order_failed",
+          payload: { invoice_number: invoice.InvoiceNumber, error: String(e).slice(0, 300) } });
+      }
+    }
 
     // ---- drive the Zoho Deal (Jonathan, 8 Sep, points 2-9) ----------------
     // Stage/Invoice_Number/Deadline/Next-Action fields move HERE, off the
@@ -2149,6 +2270,10 @@ serve(async (req) => {
           phone: String(contact2.phone ?? sess2?.phone ?? ""),
           mark: String(sess2?.name ?? ""),
           invoice_number: invoice.InvoiceNumber ?? "",
+          // The Order written just above. order_complete links it to the
+          // Deal it resolves or creates (staff orders arrive with no Deal):
+          // Deals.Order, and Deal on every Deal_Items row of that Order.
+          zoho_order_id: zohoOrderId || undefined,
           deadline: deadline || undefined,
           pay_date: kind === "invoice" ? String(p.pay_date ?? "") : undefined,
           staff_email: String(p.staff_email ?? ""),
@@ -2171,7 +2296,7 @@ serve(async (req) => {
             const src = (enq2.scopeSource ?? {}) as Record<string, unknown>;
             return nums.map((n, idx) => {
               const txt = fmtTerms(sc[String(n)] ?? "");
-              return { n, label: ZOHO_CLASS[n] || `Class ${n}`, terms_text: txt,
+              return { n, label: TMH_HEADING[n] || `Class ${n}`, terms_text: txt,
                 terms_source: (txt && src[String(n)] !== "tool") ? "Custom Edited" : "Approved",
                 display_order: idx + 1 };
             });
