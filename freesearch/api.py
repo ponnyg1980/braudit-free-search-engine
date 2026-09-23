@@ -656,6 +656,32 @@ def _staff_gate(enq: dict) -> list:
     return bad
 
 
+def _clearance_label(label: str) -> str:
+    """Customer-facing text for a carried audit line (24 Sep 2026: "Audit" is
+    now "Clearance Audit" everywhere). The carrier strings ('Name search — X',
+    'Logo — X', 'Audit Consultation…') are unchanged, because the journey's
+    Xero step classifies lines from them; only what the client READS changes.
+    Mirrors classify() in supabase/functions/journey/order_lines.ts."""
+    raw = str(label or '').strip()
+    if 'consultation' in raw.lower():
+        return 'Clearance Consultation' + (' – discounted to £0'
+                                           if 'discounted to £0' in raw else '')
+    m = re.match(r'^([^—–-]+?)\s*[—–-]\s*(.+)$', raw)
+    kind = (m.group(1) if m else raw).strip().lower()
+    text = m.group(2).strip() if m else ''
+    if kind.startswith('logo'):
+        what = 'Logo' + (' (to follow)' if 'to follow' in raw else '')
+    elif kind.startswith('tagline'):
+        what = f'Tagline "{text}"'
+    elif kind.startswith('product'):
+        what = f'Product name "{text}"'
+    elif kind.startswith('name'):
+        what = f'Word mark "{text}"'
+    else:
+        what = f'Mark "{text}"' if text else ''
+    return 'Clearance Audit' + (' – ' + what if what else '')
+
+
 def _audit_pay(payload: dict) -> dict:
     """Create a Stripe Checkout session for an audit order.
 
@@ -857,8 +883,8 @@ def _audit_pay(payload: dict) -> dict:
                 'url': ('https://braudit-free-search.onrender.com/audit-thanks?s='
                         + session_id + '&paid=1&demo=1'),
                 'status': 200}
-    name = ('Trademark Audit & Consultation' if consult else 'Trademark Audit')
-    desc = ('Audit Promotion applied'
+    name = ('Clearance Audit & Clearance Consultation' if consult else 'Clearance Audit')
+    desc = ('Clearance Audit Promotion applied'
             + (' — VAT not applicable (outside UK)' if vat_exempt
                else ' — includes VAT @ 20%'))
     # Land on OUR thank-you page, personalised from the session — never the
@@ -879,7 +905,7 @@ def _audit_pay(payload: dict) -> dict:
         form[f'line_items[{i}][price_data][currency]'] = 'gbp'
         form[f'line_items[{i}][price_data][unit_amount]'] = str(
             int(round(ln['p'] * mult)))
-        form[f'line_items[{i}][price_data][product_data][name]'] = ln['l'][:100]
+        form[f'line_items[{i}][price_data][product_data][name]'] = _clearance_label(ln['l'])[:100]
     form[f'line_items[0][price_data][product_data][description]'] = (name + ' — ' + desc)[:300]
     form.update({
         'metadata[invoice_ref]': ref,
@@ -900,7 +926,7 @@ def _audit_pay(payload: dict) -> dict:
         cf = urllib.parse.urlencode({
             'amount_off': str(int(round(discount_p * mult))),
             'currency': 'gbp', 'duration': 'once',
-            'name': 'Audit Promotion'}).encode()
+            'name': 'Clearance Audit Promotion'}).encode()
         creq = urllib.request.Request('https://api.stripe.com/v1/coupons',
             data=cf, headers={'Authorization': 'Bearer ' + sk,
                               'Content-Type': 'application/x-www-form-urlencoded'})
