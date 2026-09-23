@@ -54,7 +54,7 @@
 
   <div class="card" id="head">
     <h1 id="h-title">Payment received — thank you</h1>
-    <p class="lead" id="h-lead">Your Trademark Audit is booked in with our team.</p>
+    <p class="lead" id="h-lead">Your Clearance Audit is booked in with our team.</p>
     <div class="amount" id="h-amount"></div>
   </div>
 
@@ -133,7 +133,7 @@
           return a+(m.price!=null?Number(m.price):149);},0)||99;
         var total=(netSum*(vatEx?1:1.2)).toFixed(2);
         document.getElementById('h-amount').innerHTML=
-          '<b>£'+total+'</b> — Trademark Audit'+(n>1?' × '+n+' marks':'')
+          '<b>£'+total+'</b> — Clearance Audit'+(n>1?' × '+n+' marks':'')
           +(marks.length?': '+marks.map(function(m){return m.text;}).join(', '):'')
           +(vatEx?' (no VAT — outside the UK)':' including VAT');
         var dd=pretty((enq.recommend||{}).auditDate);
