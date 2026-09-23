@@ -67,6 +67,11 @@ try:
 except Exception:  # pragma: no cover
     NICE_HEADINGS = {}
 
+try:
+    from .class_headings import heading as _tmh_heading
+except ImportError:  # bare-script context
+    from class_headings import heading as _tmh_heading  # type: ignore
+
 _DATA = Path(__file__).resolve().parent / 'data'
 # Same file as class_agent.VOCAB_CSV -- see the note there. Ordered by
 # n_marks within each class, which is what _token_stats / SCAN_N rely on.
@@ -362,7 +367,9 @@ def build_application_scope(classes, class_source) -> list[dict]:
             tiers = _select_tiers(n, _context_terms(class_source, n), desc)
         rows.append({
             'n': n,
-            'heading': NICE_HEADINGS.get(n, ''),
+            # Jonathan's official descriptions (23 Sep), not the long Nice
+            # wording -- this is what lands in Class_Description_Snapshot.
+            'heading': _tmh_heading(n) or NICE_HEADINGS.get(n, ''),
             'terms': tiers['definite'] + tiers['possible'] + tiers['unlikely'],
             'term_tiers': tiers,
             # True when the class was picked with no description to work
