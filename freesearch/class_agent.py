@@ -38,6 +38,7 @@ from concurrent import futures
 MAX_PARALLEL = 6
 
 import csv
+import math
 import json
 import os
 import re
@@ -56,7 +57,8 @@ DEFAULT_MODEL = os.environ.get('CLASS_AGENT_MODEL', 'claude-sonnet-5')
 # How many candidate terms per class the model is shown. Caps tokens, and
 # frequency is evidence: a term 700 marks use is a safer suggestion than one
 # used twice. 40 is plenty for a human to review.
-CANDIDATES_PER_CLASS = 40
+CANDIDATES_PER_CLASS = 60
+ANCHORS_PER_CLASS = 8     # broad most-registered terms always shown
 MAX_CLASSES = 8               # more than this and it isn't a suggestion
 MAX_TEXT = 2000               # chars of description accepted
 
@@ -263,6 +265,122 @@ def _stage2(text: str, cls: int, candidates: list[dict], cfg: dict) -> list[dict
     return picked
 
 
+# --------------------------------------------------------- candidate pool --
+#
+# Jonathan, 23 Sep 2026: "The most important thing is that we find the
+# closest matches to what the client has said they do ... That's the value
+# of the AI builder."
+#
+# The pool used to be vocab[:40] -- the forty MOST REGISTERED terms in the
+# class, whatever the business does. For an FX/payments firm the class 36
+# pool was "real estate affairs; insurance; charitable fundraising ..." and
+# "payment processing services" (rank 42, 1,338 marks) missed the cut by
+# two places. The model can only pick what it is shown, so the AI route was
+# behaving like the popularity route with extra steps.
+#
+# Now the pool is chosen by FIT to the description: every term in the class
+# is scored on the description words it contains, rarer words in that class
+# counting for more (in class 36 "financial" says little, "exchange" a lot).
+# A handful of broad anchors are always included so a sparse description
+# still gets the obvious headline terms. Popularity is only a tiebreak.
+
+_POOL_STOP = {'and', 'or', 'the', 'a', 'an', 'of', 'for', 'to', 'in', 'on',
+              'with', 'by', 'via', 'as', 'at', 'is', 'are', 'be', 'our', 'we',
+              'us', 'it', 'its', 'that', 'this', 'from', 'into', 'all', 'any',
+              'other', 'such', 'namely', 'relating', 'related', 'connected',
+              'relation', 'provide', 'providing', 'provision', 'offer',
+              'offering', 'business', 'businesses', 'company', 'services',
+              'service', 'products', 'product', 'goods'}
+
+
+def _stem(w: str) -> str:
+    for suf in ('ies', 'es', 's'):
+        if len(w) > 4 and w.endswith(suf):
+            return w[:-len(suf)] + ('y' if suf == 'ies' else '')
+    return w
+
+
+# Abbreviations people actually type, expanded to the words the register uses.
+_EXPAND = {'ai': 'artificial intelligence', 'saas': 'software as a service',
+           'paas': 'platform as a service', 'fx': 'foreign exchange',
+           'it': 'information technology', 'app': 'application software',
+           'apps': 'application software', 'crm': 'customer relationship management',
+           'hr': 'human resources', 'pr': 'public relations', 'seo': 'search engine optimisation',
+           'ecommerce': 'online retail', 'e-commerce': 'online retail', 'fintech': 'financial technology'}
+
+
+def _ptoks(text: str, *, expand: bool = False) -> set[str]:
+    words = re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)?", (text or '').lower())
+    if expand:
+        words = words + [x for w in words for x in _EXPAND.get(w, '').split()]
+    return {_stem(w) for w in words if len(w) > 2 and w not in _POOL_STOP}
+
+
+_df_cache: dict[int, dict[str, int]] = {}
+
+
+def _class_df(cls: int, terms: list[dict]) -> dict[str, int]:
+    df = _df_cache.get(cls)
+    if df is None:
+        df = {}
+        for t in terms:
+            for w in _ptoks(t['term']):
+                df[w] = df.get(w, 0) + 1
+        _df_cache[cls] = df
+    return df
+
+
+def candidate_pool(text: str, cls: int, *, k: int = CANDIDATES_PER_CLASS,
+                   anchors: int = ANCHORS_PER_CLASS) -> list[dict]:
+    """The terms the model is allowed to choose from, best-fitting first."""
+    terms = load_vocab().get(cls, [])
+    if not terms:
+        return []
+    want = _ptoks(text, expand=True)
+    df = _class_df(cls, terms)
+    n = max(1, len(terms))
+    # Words in a quarter or more of the class's terms ("software" in 42,
+    # "financial" in 36) say nothing about fit there; matching one alone
+    # does not earn a place.
+    generic = {w for w, c in df.items() if c >= 0.25 * n}
+    idf = lambda w: math.log(1 + n / df.get(w, 1))
+    scored = []
+    for i, t in enumerate(terms):
+        tt = _ptoks(t['term'])
+        hit = (tt & want) - generic
+        if not hit:
+            continue
+        # Reward what the description covers, and charge for distinctive
+        # words it does NOT mention -- that is what keeps "software platforms
+        # for electronic gaming" out of a fintech's pool on the word platform.
+        # Generic words are no evidence FOR a term, but an unmentioned one is
+        # still evidence against it: "real estate" is so common in class 36
+        # that it counts as generic there, and waiving it let "real estate
+        # management" in on the word "management".
+        miss = tt - want
+        s = sum(idf(w) for w in hit) - 0.9 * sum(idf(w) for w in miss)
+        if s <= 0:
+            continue
+        scored.append((s, t['n_marks'], i, t))
+    scored.sort(key=lambda x: (-x[0], -x[1], x[2]))
+    pool, seen = [], set()
+    for *_, t in scored:
+        if len(pool) >= k:
+            break
+        if t['term'] not in seen:
+            pool.append(t); seen.add(t['term'])
+    # Popular headline terms only when the description gave us too little to
+    # go on -- never as a standing block. Standing anchors are how "real
+    # estate affairs" reached an FX firm's class 36 in the first place.
+    if len(pool) < anchors * 2:
+        for t in terms:
+            if len(pool) >= anchors * 2:
+                break
+            if t['term'] not in seen:
+                pool.append(t); seen.add(t['term'])
+    return pool
+
+
 # ---------------------------------------------------------------- public API --
 
 _SA = """You read a company's website and fill in a short form about them.
@@ -374,7 +492,7 @@ def suggest(text: str, *, provides: str | None = None, cfg: dict | None = None,
     # Same pattern, and the same reasoning, as _fill_details in lookup.py.
     # Capped at MAX_PARALLEL so a nine-class description doesn't open nine
     # sockets at the model at once.
-    pools = {c: vocab.get(c, [])[:candidates_per_class] for c in classes}
+    pools = {c: candidate_pool(text, c, k=candidates_per_class) for c in classes}
 
     def _one(c):
         try:
