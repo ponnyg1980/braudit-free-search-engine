@@ -189,12 +189,21 @@ def _mark_terms(class_source, class_no: int) -> list[str]:
     """
     if not isinstance(class_source, dict):
         return []
+    out: list[str] = []
+    seen: set[str] = set()
+    # Terms ALREADY ON THE DEAL (the Class Builder opened from a Deal loads
+    # them, 23 Sep 2026). Staff or the client chose these; the builder's job
+    # is to show them for amending, not to re-filter them away.
+    ex = class_source.get('existing_terms')
+    if isinstance(ex, dict):
+        for t in ex.get(str(class_no)) or ex.get(class_no) or []:
+            t = str(t).strip().rstrip('.').strip()
+            if t and t.lower() not in seen:
+                seen.add(t.lower()); out.append(t)
     tb = class_source.get('term_basket')
     if not isinstance(tb, dict) or tb.get('source_type') != 'competitor_trademark' \
             or not str(tb.get('source_ref') or '').strip():
-        return []
-    out: list[str] = []
-    seen: set[str] = set()
+        return out
     for e in tb.get('entries') or []:
         if not isinstance(e, dict):
             continue
@@ -347,7 +356,8 @@ def build_application_scope(classes, class_source) -> list[dict]:
             # it with popularity tiers is the "huge list when it isn't
             # appropriate" Jonathan ruled out.
             tiers = {'definite': own, 'possible': [], 'unlikely': [],
-                     'source': 'registered_mark'}
+                     'source': ('deal_scope' if isinstance(class_source, dict)
+                                and class_source.get('existing_terms') else 'registered_mark')}
         else:
             tiers = _select_tiers(n, _context_terms(class_source, n), desc)
         rows.append({
