@@ -2687,7 +2687,14 @@ function rvToggleAdvanced(){
 function renderReview(){
   const host=document.getElementById('rv-list');
   const esc=s=>String(s||'').replace(/</g,'&lt;');
-  const adv=!!state.rvAdvanced;
+  /* Staff surfaces open the term editors by default (Jonathan, 23 Sep). The
+     heading above is read-only, so on a staff screen the terms are the only
+     thing there is to edit -- and collapsing them is what sent a staff
+     member's whole specification into the heading box instead, where nothing
+     scores it. Client surfaces stay collapsed: the full term list is too
+     much on a client-facing audit view. */
+  const adv = (state.rvAdvanced===undefined)
+    ? (CONFIG.RETURN==='staff') : !!state.rvAdvanced;
   const ta=(id,list,minR)=>`<textarea id="${id}" rows="${Math.min(8,Math.max(2,Math.ceil(fmtTerms(list).length/90)))}">${esc(fmtTerms(list))}</textarea>`;
   host.innerHTML=(state.review||[]).map((r,i)=>{
     const tt=r.term_tiers;
@@ -2710,8 +2717,10 @@ function renderReview(){
     <div class="rv-block" data-rv="${r.n}">
       <div class="rv-head"><h3>Class ${r.n} &middot; ${classLabel(r.n)}</h3>
         <button class="rv-x" onclick="rvRemove(${r.n})">Remove class</button></div>
-      <label>Class description</label>
-      <textarea id="rv-h-${r.n}" rows="2">${esc(r.heading)}</textarea>
+      <label>Official class heading &mdash; fixed wording, not editable</label>
+      <textarea id="rv-h-${r.n}" rows="2" readonly aria-readonly="true"
+        title="The IPO's own wording for this class. Your goods and services go in the terms below."
+        style="background:#F7F8FA;color:#617383;cursor:default">${esc(r.heading)}</textarea>
       ${summary}
       <div class="rv-terms"${adv?'':' style="display:none"'}>${termsHtml}</div>
     </div>`;}).join('');
