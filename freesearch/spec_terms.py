@@ -67,7 +67,11 @@ try:
 except Exception:  # pragma: no cover
     NICE_HEADINGS = {}
 
-_CSV = Path(__file__).resolve().parent / 'data' / 'class_terms.csv'
+_DATA = Path(__file__).resolve().parent / 'data'
+# Same file as class_agent.VOCAB_CSV -- see the note there. Ordered by
+# n_marks within each class, which is what _token_stats / SCAN_N rely on.
+_CSV = next((p for p in (_DATA / 'class_terms_full.csv.gz', _DATA / 'class_terms_full.csv',
+                          _DATA / 'class_terms.csv') if p.exists()), _DATA / 'class_terms.csv')
 
 _STOP = {'and', 'or', 'of', 'the', 'for', 'in', 'to', 'with', 'a', 'an',
          'on', 'by', 'via', 'as', 'at', 'its', 'is', 'are', 'be', 'it',
@@ -103,7 +107,9 @@ def _vocab() -> dict[int, list[str]]:
     """
     out: dict[int, list[str]] = {}
     try:
-        with _CSV.open(newline='', encoding='utf-8') as fh:
+        import gzip
+        opener = gzip.open if _CSV.suffix == '.gz' else open
+        with opener(_CSV, 'rt', newline='', encoding='utf-8') as fh:
             for row in csv.DictReader(fh):
                 try:
                     n = int(row['nice_class'])
