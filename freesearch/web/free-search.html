@@ -2693,8 +2693,11 @@ function renderReview(){
      member's whole specification into the heading box instead, where nothing
      scores it. Client surfaces stay collapsed: the full term list is too
      much on a client-facing audit view. */
+  /* Staff = opened from a Deal button (?deal=) or a staff form (?return=staff).
+     NOT any ?return= -- the client wizard and Brand Audit embed this page
+     with return=<token> too, and they must stay collapsed. */
   const adv = (state.rvAdvanced===undefined)
-    ? (CONFIG.RETURN==='staff') : !!state.rvAdvanced;
+    ? (CONFIG.RETURN==='staff' || !!CONFIG.DEAL) : !!state.rvAdvanced;
   const ta=(id,list,minR)=>`<textarea id="${id}" rows="${Math.min(8,Math.max(2,Math.ceil(fmtTerms(list).length/90)))}">${esc(fmtTerms(list))}</textarea>`;
   host.innerHTML=(state.review||[]).map((r,i)=>{
     const tt=r.term_tiers;
