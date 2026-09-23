@@ -74,7 +74,10 @@ class _Term:
 
 API_URL = 'https://api.anthropic.com/v1/messages'
 API_VERSION = '2023-06-01'
-DEFAULT_MODEL = os.environ.get('CLASS_AGENT_MODEL', 'claude-sonnet-5')
+# Opus 5.5 (Jonathan, 23 Sep 2026): "Accuracy is the most important thing or we
+# will end up doing trademarks in the wrong class." Measured ~1.9c per builder
+# run vs ~0.9c on Sonnet 5. CLASS_AGENT_MODEL overrides.
+DEFAULT_MODEL = os.environ.get('CLASS_AGENT_MODEL', 'claude-opus-5-5')
 # Stage 2 only picks from a numbered list. Sonnet (low effort) by default;
 # set CLASS_AGENT_TERMS_MODEL=claude-haiku-4-5-20251001 to trade a little
 # accuracy for cost. Compared on Charles, 23 Sep: near parity.
@@ -276,6 +279,12 @@ Return the numbers of the terms that accurately describe what this business \
 does. Prefer terms that are clearly true of the business over terms that are \
 merely possible. It is better to return five right terms than twenty loose ones.
 
+Return AT MOST 15 numbers. Where several listed terms say the same thing in \
+different words, pick the one that is plainest and most standard, not all of \
+them. Never pick a term for goods or services the description does not mention \
+(for example, do not add cryptocurrency, gaming or real estate to a business that \
+has not said it does those things).
+
 RETURN NUMBERS ONLY. Do not write, edit, reword, translate, combine or invent \
 terms. You are choosing from the list, not composing.
 
@@ -303,7 +312,9 @@ def _stage2(text: str, cls: int, candidates: list[dict], cfg: dict) -> list[dict
             continue
         seen.add(idx)
         picked.append(candidates[idx])
-    return picked
+    # Backstop for the prompt's cap: a list staff must prune is the "huge
+    # list" Jonathan ruled out. The model lists best-first.
+    return picked[:15]
 
 
 # --------------------------------------------------------- candidate pool --
