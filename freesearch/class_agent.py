@@ -48,7 +48,29 @@ import urllib.request
 from pathlib import Path
 
 DATA = Path(__file__).resolve().parent / 'data'
-VOCAB_CSV = DATA / 'class_terms.csv'
+# The FULL vocabulary (every term >= 3 registered marks, ~330k rows, built by
+# build_class_terms_floor.py) when present; the old top-300-per-class file
+# otherwise. spec_terms.py reads the same file -- it must, or a term the AI
+# picks from the full pool is dropped at /class-scope for not being in 300.
+VOCAB_CSV = next((p for p in (DATA / 'class_terms_full.csv.gz', DATA / 'class_terms_full.csv',
+                               DATA / 'class_terms.csv') if p.exists()), DATA / 'class_terms.csv')
+
+
+class _Term:
+    """One vocabulary row. Slotted, not a dict: at 330k rows on a 512 MB
+    Render instance the difference is roughly 100 MB vs 35 MB. Indexable by
+    key so every existing t['term'] still works."""
+    __slots__ = ('term', 'n_marks', 'share', 'band')
+
+    def __init__(self, term, n_marks, share, band):
+        self.term, self.n_marks, self.share, self.band = term, n_marks, share, band
+
+    def __getitem__(self, k):
+        return getattr(self, k)
+
+    def as_dict(self) -> dict:
+        return {'term': self.term, 'n_marks': self.n_marks,
+                'share': self.share, 'band': self.band}
 
 API_URL = 'https://api.anthropic.com/v1/messages'
 API_VERSION = '2023-06-01'
@@ -74,20 +96,19 @@ def load_vocab() -> dict[int, list[dict]]:
         return _vocab
     v: dict[int, list[dict]] = {}
     if VOCAB_CSV.exists():
-        with VOCAB_CSV.open(encoding='utf-8') as f:
+        import gzip
+        opener = gzip.open if VOCAB_CSV.suffix == '.gz' else open
+        with opener(VOCAB_CSV, 'rt', encoding='utf-8', newline='') as f:
             for r in csv.DictReader(f):
                 try:
                     c = int(r['nice_class'])
                 except (TypeError, ValueError):
                     continue
-                v.setdefault(c, []).append({
-                    'term': r['term'],
-                    'n_marks': int(r.get('n_marks') or 0),
-                    'share': float(r.get('share') or 0),
-                    'band': r.get('band') or '',
-                })
+                v.setdefault(c, []).append(_Term(
+                    r['term'], int(r.get('n_marks') or 0),
+                    float(r.get('share') or 0), r.get('band') or ''))
     for c in v:
-        v[c].sort(key=lambda x: -x['n_marks'])
+        v[c].sort(key=lambda x: -x.n_marks)
     _vocab = v
     return v
 
@@ -363,12 +384,21 @@ def candidate_pool(text: str, cls: int, *, k: int = CANDIDATES_PER_CLASS,
             continue
         scored.append((s, t['n_marks'], i, t))
     scored.sort(key=lambda x: (-x[0], -x[1], x[2]))
-    pool, seen = [], set()
+    pool, seen, shapes = [], set(), set()
     for *_, t in scored:
         if len(pool) >= k:
             break
-        if t['term'] not in seen:
-            pool.append(t); seen.add(t['term'])
+        term = t['term']
+        # A fragment that only makes sense after the previous phrase.
+        if term.startswith(('and ', 'or ', 'including ', 'namely ')):
+            continue
+        # Near-duplicates ("platforms for artificial intelligence as software
+        # as a service" in five punctuations) waste the model's shortlist.
+        # scored is best-first, so the first spelling kept is the strongest.
+        shape = frozenset(_ptoks(term))
+        if term in seen or shape in shapes:
+            continue
+        pool.append(t); seen.add(term); shapes.add(shape)
     # Popular headline terms only when the description gave us too little to
     # go on -- never as a standing block. Standing anchors are how "real
     # estate affairs" reached an FX firm's class 36 in the first place.
@@ -517,7 +547,8 @@ def suggest(text: str, *, provides: str | None = None, cfg: dict | None = None,
         # pool, re-check identity against the vocabulary before it leaves —
         # cheap, and it means no future refactor can quietly open a hole.
         allowed = {p['term'] for p in pools[c]}
-        clean = [p for p in picked if p['term'] in allowed]
+        clean = [p.as_dict() if isinstance(p, _Term) else p
+                 for p in picked if p['term'] in allowed]
         dropped += len(picked) - len(clean)
         out.append({'n': c, 'label': class_label(c), 'why': why.get(c, ''),
                     'terms': clean})
