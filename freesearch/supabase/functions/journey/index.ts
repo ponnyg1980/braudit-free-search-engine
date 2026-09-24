@@ -1414,7 +1414,11 @@ serve(async (req) => {
     if (error) return json({ ok: false, error: "could not submit" }, 500, origin);
 
     await admin.from("journey_events").insert({
-      request_id, event_type: "audit_submitted", payload: {},
+      // GA4 handoff §6: the visit context (GA client id, landing page, tool
+      // page, tool, placement) is KEPT here until Jonathan approves the Zoho
+      // field names; nothing writes it to Zoho yet.
+      request_id, event_type: "audit_submitted",
+      payload: (body.visit && typeof body.visit === "object") ? { visit: body.visit } : {},
     });
 
     // Full record now exists — pull it (+ brands, with their term_basket
