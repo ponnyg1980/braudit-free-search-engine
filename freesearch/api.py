@@ -166,7 +166,11 @@ def _staff_user(token: str) -> dict | None:
             for u in json.loads(raw):
                 if hmac.compare_digest(tok, str(u.get('t', ''))):
                     return {'name': str(u.get('n', 'Staff')),
-                            'email': str(u.get('e', ''))}
+                            'email': str(u.get('e', '')),
+                            # "r": "super_admin" in STAFF_TOKENS allows a line
+                            # below the order's floor (handoff §9). Nobody has
+                            # it until Jonathan sets it.
+                            'role': str(u.get('r', ''))}
         except (ValueError, TypeError):
             pass
     legacy = os.environ.get('STAFF_TOKEN', '')
@@ -269,6 +273,13 @@ _EMBED_JS = """(function(){
      'utm_source','utm_medium','utm_campaign'].forEach(function(k){
       var v=hp.get(k); if(v) q+='&'+(k==='fs'?'s':k)+'='+encodeURIComponent(v);
     });
+    // 'ref' (24 Sep, handoff §9 / PARTNER_ATTRIBUTION_WORDPRESS step 1): the
+    // partner ref code, from ?ref= or the tmh_ref cookie the WordPress plugin
+    // sets. Passed through RAW -- never validated in the browser; the journey
+    // records it (first touch wins) and Zoho resolves it.
+    var rf=hp.get('ref');
+    if(!rf){var mc=document.cookie.match(/(?:^|;\s*)tmh_ref=([^;]+)/); if(mc) rf=decodeURIComponent(mc[1]);}
+    if(rf && /^[A-Za-z0-9_-]{2,40}$/.test(rf)) q+='&ref='+encodeURIComponent(rf);
   }catch(e){}
   var minH = page==='search-box' ? (s.dataset.style==='bar'?'70px':'200px') : '760px';
   // Change spec 22 Aug (section 3): reserve space immediately so the WP page
@@ -514,6 +525,50 @@ def _journey_event(session_id: str, event_type: str, payload: dict) -> None:
         pass
 
 
+# ---------------------------------------------------------------- pricing ----
+# FINAL PRICING RULES (handoff §9, Jonathan 24 Sep 2026). Prices come from
+# billing_gen.py, generated from the hub catalogue by
+# supabase/functions/journey/gen_billing.py -- never typed here. The TIER is
+# resolved by the journey (/pricing/tier -> Deluge pricing_tier), which the
+# invoice step reuses, so the charge and the invoice cannot disagree.
+try:
+    from .billing_gen import CATALOGUE as _CAT       # package context (Render)
+except ImportError:                                  # bare-script context
+    from billing_gen import CATALOGUE as _CAT        # type: ignore
+_TIERS = ('RRP', 'Discounted', 'Baseline')
+WEB_ORDER_PENCE = int(_CAT['AUDIT_UK']['baseline'] * 100)   # Exception 1: £99 per web order
+
+
+def _tier_price_pence(sku: str, tier: str) -> int:
+    c = _CAT[sku]
+    key = {'RRP': 'rrp', 'Discounted': 'discounted'}.get(tier, 'baseline')
+    return int(round(c[key] * 100))
+
+
+def _pricing_tier(session_id: str, staff: bool) -> dict:
+    """Ask the journey which tier this order is on. If it cannot answer, fall
+    back to the §9 defaults (client Baseline + the web £99 exception; staff
+    Discounted) rather than refuse the order -- the lookup is advisory to the
+    customer, never a reason their checkout fails."""
+    import urllib.request
+    key = (os.environ.get('XERO_PROCESS_KEY') or '').strip()
+    if key and session_id:
+        try:
+            req = urllib.request.Request(
+                _JOURNEY_URL.rstrip('/') + '/pricing/tier',
+                data=json.dumps({'key': key, 'session_id': session_id}).encode(),
+                headers={'Content-Type': 'application/json'})
+            with urllib.request.urlopen(req, timeout=25) as r:
+                d = json.loads(r.read().decode())
+            if d.get('ok') and d.get('tier') in _TIERS:
+                return d
+        except Exception:
+            pass
+    return {'tier': 'Discounted' if staff else 'Baseline', 'source': 'default',
+            'webException': not staff, 'staff': staff, 'refCode': '',
+            'worldwide': False, 'fallback': True}
+
+
 def _staff_gate(enq: dict) -> list:
     """Server-side mirror of the eleven gate rules in staff-enquiry.html.
 
@@ -682,6 +737,35 @@ def _clearance_label(label: str) -> str:
     return 'Clearance Audit' + (' – ' + what if what else '')
 
 
+def _client_quote(sess: dict | None, session_id: str) -> dict:
+    """The client wizard's price, from the STORED session and the resolved
+    tier (§9). ONE function feeds the Stripe charge AND the summary screen
+    (/audit-quote), so what the client is shown is what they are charged.
+
+    Exception 1 (direct web, not introduced): every element at its RRP, one
+    promotion taking the audits to £99 for the whole order. Introduced client
+    (a live partner's tier): each element at that tier's price, no promotion.
+    The consultation is always included (the invoice shows £RRP then -£RRP)."""
+    tr = _pricing_tier(session_id, False)
+    ww = bool(tr.get('worldwide'))
+    sku = 'AUDIT_WORLDWIDE' if ww else 'AUDIT_UK'
+    web = bool(tr.get('webException'))
+    each = _tier_price_pence(sku, 'RRP' if web else tr['tier'])
+    nm = str((sess or {}).get('name') or 'your brand')[:60]
+    lines = [{'l': 'Name search — ' + nm, 'p': each}]
+    if (sess or {}).get('has_logo'):
+        lines.append({'l': 'Logo search', 'p': each})
+    if (sess or {}).get('tagline'):
+        lines.append({'l': 'Tagline — ' + str(sess.get('tagline'))[:50], 'p': each})
+    gross = sum(x['p'] for x in lines)
+    discount = max(0, gross - WEB_ORDER_PENCE) if web else 0
+    return {'lines': lines, 'discount_pence': discount,
+            'rrp_each_pence': _tier_price_pence(sku, 'RRP'), 'sku': sku,
+            'consult_rrp_pence': _tier_price_pence('CONSULT_CLEARANCE', 'RRP'),
+            'tier_meta': {'tier': tr['tier'], 'tier_source': tr.get('source', ''),
+                          'web_exception': web, 'worldwide': ww}}
+
+
 def _audit_pay(payload: dict) -> dict:
     """Create a Stripe Checkout session for an audit order.
 
@@ -748,44 +832,73 @@ def _audit_pay(payload: dict) -> dict:
             _journey_event(session_id, 'audit_pay_refused', {'unmet': unmet})
             return {'ok': False, 'error': 'enquiry is not ready for payment',
                     'unmet': unmet, 'status': 200}
-        # Staff line items: each mark row is a line the staff member priced
-        # (£0–£149 each, order floor £99 net) — their discount decision,
-        # validated here against the STORED enquiry, never the request.
+        # Staff line items (handoff §9, 24 Sep 2026): each mark row is a line
+        # the staff member priced, validated HERE against the STORED enquiry
+        # and the order's tier, never the request. Staff may raise any price;
+        # the FLOOR is the tier price for that product (default Discounted,
+        # which staff may drop to Baseline for a direct client). Below the
+        # floor only with the super_admin role -- the preferred route is to
+        # invoice at the floor and give the reduction as a credit note.
+        tr = _pricing_tier(session_id, True)
+        tier = tr['tier']
+        ww = bool(tr.get('worldwide'))
+        a_sku = 'AUDIT_WORLDWIDE' if ww else 'AUDIT_UK'
+        floor_p = _tier_price_pence(a_sku, tier)
+        override = (su or {}).get('role') == 'super_admin'
         rows = [m for m in (enq.get('marks') or [])
                 if isinstance(m, dict) and str(m.get('text') or '').strip()]
         kl = {'word': 'Name', 'logo': 'Logo', 'tagline': 'Tagline',
               'product': 'Product name', 'other': 'Mark'}
         lines = []
         for m in rows:
+            # A line the staff member never touched is at the tier price --
+            # the same rule the form shows (linePrice), so the two agree.
             try:
-                gbp = float(m.get('price', 149))
+                gbp = float(m.get('price')) if m.get('priceSet') is True else floor_p / 100
             except (TypeError, ValueError):
-                gbp = 149.0
+                gbp = floor_p / 100
             pence = int(round(gbp * 100))
-            if pence < 0 or pence > AUDIT_LINE_PENCE:
+            if pence < 0 or pence > 10 * _tier_price_pence(a_sku, 'RRP'):
                 return {'ok': False, 'error': 'line price out of bounds',
                         'status': 200}
+            if pence < floor_p and not override:
+                _journey_event(session_id, 'audit_pay_refused',
+                               {'unmet': ['G-13'], 'tier': tier,
+                                'floor_pence': floor_p, 'line_pence': pence})
+                return {'ok': False, 'unmet': ['G-13'], 'status': 200,
+                        'error': (f'a line is below the £{floor_p / 100:.0f} floor for '
+                                  f'{tier} pricing -- invoice at the floor and give '
+                                  'the reduction as a credit note on the account')}
             lines.append({'l': (kl.get(str(m.get('kind')), 'Mark') + ' — '
                                 + str(m.get('text'))[:60]), 'p': pence})
         if len(lines) > 6:
             return {'ok': False, 'error': 'six lines maximum — the search '
                     'contract carries five word phrases plus a logo',
                     'status': 200}
-        # Point 13: the consultation is always a line — £149 with its £149
-        # discount on by default (£0), removable to charge. Declined
-        # consultations carry no line at all.
+        # The consultation is always offered INCLUDED (§9): a £RRP line that
+        # the invoice takes to £0. Staff may remove the discount to charge it
+        # (at no less than the tier price). Quick Audit orders carry it too;
+        # only a consultation the client DECLINED carries no line.
         consult_block = enq.get('consult') or {}
         quick = bool(enq.get('quick'))
-        if not quick and not consult_block.get('declined'):
-            waived = consult_block.get('feeWaived', True)
+        if quick or not consult_block.get('declined'):
+            waived = consult_block.get('feeWaived', True) or quick
+            c_floor = _tier_price_pence('CONSULT_CLEARANCE', tier)
+            try:
+                c_p = int(round(float(consult_block.get('price')) * 100))
+            except (TypeError, ValueError):
+                c_p = c_floor
+            if not waived and c_p < c_floor and not override:
+                return {'ok': False, 'unmet': ['G-13'], 'status': 200,
+                        'error': 'the consultation is below the floor for this tier'}
             lines.append({'l': 'Audit Consultation'
                           + (' — discounted to £0' if waived else ''),
-                          'p': 0 if waived else AUDIT_LINE_PENCE})
-        if not lines or sum(x['p'] for x in lines) < AUDIT_MIN_PENCE:
-            _journey_event(session_id, 'audit_pay_refused',
-                           {'unmet': ['G-13']})
-            return {'ok': False, 'error': 'order total below the £99 minimum',
+                          'p': 0 if waived else c_p})
+        if not rows:
+            return {'ok': False, 'error': 'no brand lines to price',
                     'unmet': ['G-13'], 'status': 200}
+        tier_meta = {'tier': tier, 'tier_source': tr.get('source', ''),
+                     'web_exception': False, 'worldwide': ww}
         discount_p = 0
         qty = len(lines)
         billing = enq.get('billing') or {}
@@ -817,7 +930,7 @@ def _audit_pay(payload: dict) -> dict:
                 'payment_ref': str(billing.get('paidRef') or '')[:60],
                 'billing_entity': str(billing.get('entity') or '')[:200],
                 'billing_email': email, 'invoice_ref': ref,
-                'staff_email': staff_email,
+                'staff_email': staff_email, **tier_meta,
             })
             _xero_process(session_id, 'paid')
             return {'ok': True, 'paid': 'recorded', 'marks': qty,
@@ -838,6 +951,7 @@ def _audit_pay(payload: dict) -> dict:
                 'billing_entity': str(billing.get('entity') or '')[:200],
                 'billing_email': email, 'invoice_ref': ref,
                 'source': 'staff_enquiry', 'staff_email': staff_email,
+                **tier_meta,
             })
             # Scenario 2's second half: raise the AUTHORISED invoice in Xero
             # with the agreed due date, emailed from Xero so the client pays
@@ -853,15 +967,11 @@ def _audit_pay(payload: dict) -> dict:
         # total on £99 (Jonathan, 9 Sep). The value stack is the point.
         if sess is None and session_id:
             sess = _journey_session(session_id)
-        nm = str((sess or {}).get('name') or 'your brand')[:60]
-        lines = [{'l': 'Name search — ' + nm, 'p': AUDIT_LINE_PENCE}]
-        if (sess or {}).get('has_logo'):
-            lines.append({'l': 'Logo search', 'p': AUDIT_LINE_PENCE})
-        if (sess or {}).get('tagline'):
-            lines.append({'l': 'Tagline — '
-                          + str(sess.get('tagline'))[:50], 'p': AUDIT_LINE_PENCE})
+        q = _client_quote(sess, session_id)
+        lines, discount_p = q['lines'], q['discount_pence']
+        tier_meta = q['tier_meta']
+        consult = True          # §9: the consultation is always included
         qty = len(lines)
-        discount_p = sum(x['p'] for x in lines) - AUDIT_MIN_PENCE
 
     mult = 1.0 if vat_exempt else 1.20
     net_total = sum(x['p'] for x in lines) - discount_p
@@ -922,6 +1032,9 @@ def _audit_pay(payload: dict) -> dict:
         # Consultation booked (client wizard). The journey adds it to the Xero
         # invoice at RRP with its own line taking it to £0 (Jonathan, 24 Sep).
         'metadata[consult]': '1' if consult else '0',
+        'metadata[tier]': tier_meta.get('tier', ''),
+        'metadata[web_exception]': '1' if tier_meta.get('web_exception') else '0',
+        'metadata[worldwide]': '1' if tier_meta.get('worldwide') else '0',
     })
     # The client promotion is a real Stripe discount, so the checkout page
     # itself shows the £149 lines and the promotion taking it to £99.
@@ -1041,6 +1154,9 @@ def _stripe_webhook(raw: bytes, sig_header: str) -> dict:
         'lines': meta.get('lines') or '',
         'discount_pence': meta.get('discount_pence') or '0',
         'consult': meta.get('consult') == '1',
+        'tier': meta.get('tier') or None,
+        'web_exception': (meta.get('web_exception') == '1') if meta.get('tier') else None,
+        'worldwide': (meta.get('worldwide') == '1') if meta.get('tier') else None,
         'customer_email': cd.get('email'),
     })
     # Scenario 1's second half: raise the Xero invoice and mark it paid
@@ -1448,6 +1564,47 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.rstrip('/')
+        if path in ('/staff-tier', '/audit-quote'):
+            # §9 pricing, read-only. /staff-tier (staff token): the order's
+            # tier, where it came from, and the per-product floors the form
+            # enforces. /audit-quote (client wizard): the exact lines and
+            # totals the Stripe charge will use, so the summary cannot differ.
+            try:
+                length = int(self.headers.get('Content-Length', 0) or 0)
+                payload = json.loads(self.rfile.read(length) or b'{}')
+            except (ValueError, json.JSONDecodeError):
+                self._send({'ok': False, 'error': 'invalid JSON'}, 400)
+                return
+            sid = str(payload.get('session_id') or '')[:60]
+            if path == '/staff-tier':
+                su = _staff_user(str(payload.get('k') or ''))
+                if not su:
+                    self._send({'ok': False, 'error': 'forbidden'}, 403)
+                    return
+                tr = _pricing_tier(sid, True)
+                tier = tr['tier']
+                self._send({'ok': True, 'tier': tier, 'source': tr.get('source'),
+                            'worldwide': bool(tr.get('worldwide')),
+                            'can_choose': tr.get('source') in ('default', 'staff_choice'),
+                            'super_admin': su.get('role') == 'super_admin',
+                            'prices': {k: {t: _tier_price_pence(k, t) / 100 for t in _TIERS}
+                                       for k in _CAT},
+                            'fallback': bool(tr.get('fallback'))})
+                return
+            q = _client_quote(_journey_session(sid), sid)
+            vat_exempt = bool(payload.get('vat_exempt'))
+            net_p = sum(x['p'] for x in q['lines']) - q['discount_pence']
+            self._send({'ok': True, **q['tier_meta'],
+                        'lines': [{'label': _clearance_label(x['l']).replace(
+                                       'Clearance Audit', _CAT[q['sku']]['name'], 1),
+                                   'rrp': q['rrp_each_pence'] / 100, 'price': x['p'] / 100}
+                                  for x in q['lines']],
+                        'promotion': q['discount_pence'] / 100,
+                        'consult_rrp': q['consult_rrp_pence'] / 100,
+                        'net': net_p / 100,
+                        'vat': 0 if vat_exempt else round(net_p * 0.2) / 100,
+                        'total': (net_p if vat_exempt else round(net_p * 1.2)) / 100})
+            return
         if path == '/staff-lookup':
             # Typed Zoho lookups for the staff form (points 2 & 10, 9 Sep).
             # Staff token in, candidates out — relayed via the journey so the
