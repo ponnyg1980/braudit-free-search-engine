@@ -1989,7 +1989,8 @@ serve(async (req) => {
       : [...(Array.isArray(sessX?.trading_now) ? sessX.trading_now as unknown[] : []),
          ...(Array.isArray(sessX?.planning_to_trade) ? sessX.planning_to_trade as unknown[] : [])];
     const built = buildXeroLines({ lines: pLines, discountPence: discountP, marks,
-      vatExempt, worldwide: isWorldwide(territories) });
+      vatExempt, worldwide: isWorldwide(territories),
+      consult: p.consult === true || p.consult === "1" || p.consult === "true" });
     const items = built.items as unknown as Record<string, unknown>[];
     const lineMeta = built.meta;
 
