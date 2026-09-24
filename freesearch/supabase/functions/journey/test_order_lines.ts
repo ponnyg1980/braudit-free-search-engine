@@ -44,11 +44,31 @@ const xb = { InvoiceID: "X2", InvoiceNumber: "INV-2", SubTotal: 149, TotalTax: 0
   LineItems: b.items.map((s, i) => ({ LineItemID: "M" + i, Description: s.Description, Quantity: 1, LineAmount: s.UnitAmount, TaxAmount: 0, AccountCode: s.AccountCode, TaxType: s.TaxType })) };
 const zb = buildZohoOrder({ invoice: xb, meta: b.meta, sent: b.items, vatExempt: true, paid: false,
   paidDate: "", today: "2026-09-24", stripeId: "", syncNote: "", nowIso: "2026-09-24T10:00:00+00:00" });
-eq("staff items", zb.items.map((i) => [i.product_code, i.List_Price, i.Price_Point, i.Xero_Account_Code, i.Xero_Tax_Type]), [
+eq("staff consult pair", b.items.slice(2).map((i) => [i.Description, i.UnitAmount]), [
+  ["Clearance Consultation", 149], ["Clearance Consultation – included, discounted to £0", -149]]);
+eq("staff items", zb.items.map((i) => [i.product_code, i.List_Price, i.Price_Point ?? null, i.Xero_Account_Code, i.Xero_Tax_Type]), [
   ["UKTM-AUD-WW-INTL", 199, "Baseline", "247", "NONE"],
   ["UKTM-AUD-WW-INTL", 199, "Below Baseline", "247", "NONE"],
-  ["UKTM-CONS-INTL", 149, "Below Baseline", "247", "NONE"]]);
+  ["UKTM-CONS-INTL", 149, "Below Baseline", "247", "NONE"],
+  ["UKTM-CONS-INTL", 0, null, "247", "NONE"]]);
 eq("staff order", [zb.order.Status, zb.order.Total, zb.order.Paid_Date ?? null], ["Invoiced", 149, null]);
+
+// Client wizard with consultation booked: name £149, promo -£50, consult pair.
+const c = buildXeroLines({ lines: [{ l: "Name search — ACME", p: 14900 }], discountPence: 5000,
+  marks: 1, vatExempt: false, worldwide: false, consult: true });
+eq("client consult lines", c.items.map((i) => [i.Description, i.UnitAmount]), [
+  ['UK Clearance Audit – Word mark "ACME"', 149], ["Clearance Audit Promotion applied", -50],
+  ["Clearance Consultation", 149], ["Clearance Consultation – included, discounted to £0", -149]]);
+eq("client consult net", c.items.reduce((a, i) => a + i.UnitAmount, 0), 99);
+const xc = { InvoiceID: "X3", SubTotal: 99, TotalTax: 19.8, Total: 118.8,
+  LineItems: c.items.map((s, i) => ({ LineItemID: "C" + i, Description: s.Description, Quantity: 1,
+    LineAmount: s.UnitAmount, TaxAmount: Math.round(s.UnitAmount * 20) / 100, AccountCode: s.AccountCode, TaxType: s.TaxType })) };
+const zc = buildZohoOrder({ invoice: xc, meta: c.meta, sent: c.items, vatExempt: false, paid: true,
+  paidDate: "2026-09-24", today: "2026-09-24", stripeId: "", syncNote: "", nowIso: "x" });
+eq("client consult pp", zc.items.map((i) => [i.product_code, i.Line_Type, i.Price_Point ?? null]), [
+  ["UKTM-AUD-UK-DOM", "TMH Fee", "Baseline"], ["UKTM-AUD-UK-DOM", "Discount", null],
+  ["UKTM-CONS-DOM", "TMH Fee", "Below Baseline"], ["UKTM-CONS-DOM", "Discount", null]]);
+eq("client consult total", [zc.order.Total, zc.warnings], [118.8, []]);
 
 console.log(fails ? `${fails} FAILED` : "ALL PASS");
 if (fails) throw new Error("tests failed");
