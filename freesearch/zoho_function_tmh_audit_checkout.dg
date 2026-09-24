@@ -1093,6 +1093,107 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		if(dealId != "")
 		{
+			// ORDER LINK (24 Sep 2026): stage order_lines wrote the Xero invoice
+			// as an Order + Deal_Items BEFORE this call. A staff order had no
+			// Deal then, so link them now that the Deal is resolved or created.
+			if(p.get("zoho_order_id") != null)
+			{
+				ocOrd = p.get("zoho_order_id").toString();
+				if(ocOrd != "")
+				{
+					ocDm = Map();
+					ocDm.put("Order",ocOrd);
+					zoho.crm.updateRecord("Deals",dealId.toLong(),ocDm);
+					ocRel = zoho.crm.getRelatedRecords("Order_Lines","Orders",ocOrd.toLong());
+					for each  ocr in ocRel
+					{
+						if(ocr.get("Deal") == null)
+						{
+							ocLm = Map();
+							ocLm.put("Deal",dealId);
+							zoho.crm.updateRecord("Deal_Items",ocr.get("id").toLong(),ocLm);
+						}
+					}
+					ocDeal = zoho.crm.getRecordById("Deals",dealId.toLong());
+					ocOm = Map();
+					if(ocDeal.get("Account_Name") != null)
+					{
+						ocOm.put("Account_Name",ocDeal.get("Account_Name").get("id").toString());
+					}
+					if(ocDeal.get("Contact_Name") != null)
+					{
+						ocOm.put("Contact_Name",ocDeal.get("Contact_Name").get("id").toString());
+					}
+					if(ocOm.size() > 0)
+					{
+						zoho.crm.updateRecord("Orders",ocOrd.toLong(),ocOm);
+					}
+				ocAcc = "";
+				if(ocDeal.get("Account_Name") != null)
+				{
+					ocAcc = ocDeal.get("Account_Name").get("id").toString();
+				}
+				// ---- §9 extras (24 Sep 2026): Deal money fields + frozen tier, and
+				// the invoiced Account's Pricing_Tier / Xero contact / Billing tag.
+				ocExtra = 0;
+				if(p.get("deal_fields") != null)
+				{
+					ocDf = p.get("deal_fields").toString().toMap();
+					if(ocDf.size() > 0)
+					{
+						zoho.crm.updateRecord("Deals",dealId.toLong(),ocDf);
+						res.put("deal_fields_set",true);
+					}
+				}
+				if(ocAcc != "" && p.get("account_updates") != null)
+				{
+					cuU = p.get("account_updates").toString().toMap();
+					cuRec = zoho.crm.getRecordById("Accounts",ocAcc.toLong());
+					cuM = Map();
+					cuPt = "";
+					if(cuRec.get("Pricing_Tier") != null)
+					{
+						cuPt = cuRec.get("Pricing_Tier").toString();
+					}
+					if(cuU.get("Pricing_Tier") != null && (cuPt == "" || cuPt == "-None-"))
+					{
+						cuM.put("Pricing_Tier",cuU.get("Pricing_Tier").toString());
+					}
+					cuXc = "";
+					if(cuRec.get("Xero_Contact_ID") != null)
+					{
+						cuXc = cuRec.get("Xero_Contact_ID").toString();
+					}
+					if(cuU.get("Xero_Contact_ID") != null && cuXc == "")
+					{
+						cuM.put("Xero_Contact_ID",cuU.get("Xero_Contact_ID").toString());
+					}
+					if(cuU.get("billing_account_tag") != null && cuU.get("billing_account_tag").toString() == "true")
+					{
+						cuTy = List();
+						if(cuRec.get("Account_Type_2") != null)
+						{
+							cuL = cuRec.get("Account_Type_2").toList();
+							for each  cut in cuL
+							{
+								cuTy.add(cut.toString());
+							}
+						}
+						if(cuTy.contains("Billing Account") == false)
+						{
+							cuTy.add("Billing Account");
+							cuM.put("Account_Type_2",cuTy);
+						}
+					}
+					if(cuM.size() > 0)
+					{
+						zoho.crm.updateRecord("Accounts",ocAcc.toLong(),cuM);
+						res.put("account_updated",cuM.keys());
+					}
+				}
+					res.put("order_linked",ocOrd);
+				}
+			}
 			// Staff orders arrive with their classes & terms HERE (17 Sep):
 			// the client wizard wrote them at the 'scope' stage, the staff
 			// forms had nowhere to -- so the gate below failed every staff
@@ -1871,6 +1972,353 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			}
 		}
 		res.put("ok",true);
+	}
+	else if(stg == "pricing_tier")
+	{
+		//
+		// ------------------------------------------- stage: pricing_tier
+		//
+		// 24 Sep 2026 (handoff §9, Jonathan). Which price an order is on.
+		// First answer wins:
+		//   1. the Deal's Referral_Terms (the order's frozen copy)
+		//   2. the invoiced Account's Pricing_Tier, else its Parent_Account's
+		//   3. a live partner's ref code -> that partner's Partner_Comm_Structure
+		//   4. nothing -> source "default"; the CALLER applies the default
+		//      (client app Baseline, staff app Discounted).
+		// Read-only: writing Referral_Terms / Pricing_Tier happens when the
+		// order is written (stage order_lines / order_complete ORDER LINK).
+		ptTier = "";
+		ptSrc = "default";
+		ptPartner = "";
+		ptAcc = accountId;
+		if(dealId != "")
+		{
+			ptDeal = zoho.crm.getRecordById("Deals",dealId.toLong());
+			if(ptDeal.get("Referral_Terms") != null)
+			{
+				ptRt = ptDeal.get("Referral_Terms").toString();
+				if(ptRt == "RRP" || ptRt == "Discounted" || ptRt == "Baseline")
+				{
+					ptTier = ptRt;
+					ptSrc = "deal";
+				}
+			}
+			if(ptAcc == "" && ptDeal.get("Account_Name") != null)
+			{
+				ptAcc = ptDeal.get("Account_Name").get("id").toString();
+			}
+		}
+		if(ptTier == "" && ptAcc != "")
+		{
+			ptA = zoho.crm.getRecordById("Accounts",ptAcc.toLong());
+			if(ptA.get("Pricing_Tier") != null)
+			{
+				ptV = ptA.get("Pricing_Tier").toString();
+				if(ptV == "RRP" || ptV == "Discounted" || ptV == "Baseline")
+				{
+					ptTier = ptV;
+					ptSrc = "account";
+				}
+			}
+			if(ptTier == "" && ptA.get("Parent_Account") != null)
+			{
+				ptP = zoho.crm.getRecordById("Accounts",ptA.get("Parent_Account").get("id").toLong());
+				if(ptP.get("Pricing_Tier") != null)
+				{
+					ptV = ptP.get("Pricing_Tier").toString();
+					if(ptV == "RRP" || ptV == "Discounted" || ptV == "Baseline")
+					{
+						ptTier = ptV;
+						ptSrc = "parent_account";
+					}
+				}
+			}
+		}
+		ptRef = "";
+		if(p.get("ref_code") != null)
+		{
+			ptRef = p.get("ref_code").toString().trim();
+		}
+		if(ptTier == "" && ptRef != "")
+		{
+			ptFind = zoho.crm.searchRecords("Accounts","(Partner_Ref_Code:equals:" + ptRef + ")");
+			if(ptFind.toString().contains("id"))
+			{
+				for each  ptr in ptFind
+				{
+					ptSt = "";
+					if(ptr.get("Partner_Status") != null)
+					{
+						ptSt = ptr.get("Partner_Status").toString();
+					}
+					if(ptTier == "" && (ptSt == "Agreement Signed" || ptSt == "Active"))
+					{
+						ptCs = "";
+						if(ptr.get("Partner_Comm_Structure") != null)
+						{
+							ptCs = ptr.get("Partner_Comm_Structure").toString();
+						}
+						if(ptCs.startsWith("RRP"))
+						{
+							ptTier = "RRP";
+						}
+						else if(ptCs.startsWith("Discounted"))
+						{
+							ptTier = "Discounted";
+						}
+						else if(ptCs.startsWith("Baseline"))
+						{
+							ptTier = "Baseline";
+						}
+						if(ptTier != "")
+						{
+							ptSrc = "partner";
+							ptPartner = ptr.get("id").toString();
+						}
+					}
+				}
+			}
+		}
+		res.put("tier",ptTier);
+		res.put("source",ptSrc);
+		res.put("partner_account_id",ptPartner);
+		res.put("account_id",ptAcc);
+		res.put("ok",true);
+	}
+	else if(stg == "order_lines")
+	{
+		//
+		// ------------------------------------------- stage: order_lines
+		//
+		// 24 Sep 2026 (billing-build handoff, authorised by Jonathan). The
+		// journey /xero/process sends the Xero invoice it has just raised:
+		// ONE Orders record per invoice, ONE Deal_Items row per Xero line
+		// (the negative promotion line included), the values being what Xero
+		// RETURNED. Idempotent: the Order is found by Xero_Invoice_ID, its
+		// lines through the Order's own related list (Order_Lines) by
+		// Xero_Line_ID -- a related list does not lag the way searchRecords
+		// does. No Deal yet (a staff order) = written unlinked; order_complete
+		// links the Order and its lines once it has resolved/created the Deal.
+		olOrd = p.get("order").toString().toMap();
+		olItems = p.get("items").toList();
+		olErr = List();
+		olAcc = accountId;
+		olCon = contactId;
+		if(dealId != "")
+		{
+			olDeal = zoho.crm.getRecordById("Deals",dealId.toLong());
+			if(olDeal.get("Account_Name") != null)
+			{
+				olAcc = olDeal.get("Account_Name").get("id").toString();
+			}
+			if(olDeal.get("Contact_Name") != null)
+			{
+				olCon = olDeal.get("Contact_Name").get("id").toString();
+			}
+		}
+		if(olAcc != "")
+		{
+			olOrd.put("Account_Name",olAcc);
+		}
+		if(olCon != "")
+		{
+			olOrd.put("Contact_Name",olCon);
+		}
+		orderId = "";
+		olXid = "";
+		if(olOrd.get("Xero_Invoice_ID") != null)
+		{
+			olXid = olOrd.get("Xero_Invoice_ID").toString();
+		}
+		if(olXid != "")
+		{
+			olFind = zoho.crm.searchRecords("Orders","(Xero_Invoice_ID:equals:" + olXid + ")");
+			if(olFind.toString().contains("id"))
+			{
+				orderId = olFind.get(0).get("id").toString();
+			}
+		}
+		if(orderId != "")
+		{
+			zoho.crm.updateRecord("Orders",orderId.toLong(),olOrd);
+			res.put("order_action","updated");
+		}
+		else
+		{
+			olCr = zoho.crm.createRecord("Orders",olOrd);
+			if(olCr.get("id") != null)
+			{
+				orderId = olCr.get("id").toString();
+				res.put("order_action","created");
+			}
+			else
+			{
+				olErr.add("order: " + olCr.toString());
+			}
+		}
+		olMade = 0;
+		olUpd = 0;
+		if(orderId != "")
+		{
+			res.put("zoho_order_id",orderId);
+			olHave = Map();
+			olRel = zoho.crm.getRelatedRecords("Order_Lines","Orders",orderId.toLong());
+			for each  olr in olRel
+			{
+				if(olr.get("Xero_Line_ID") != null)
+				{
+					olHave.put(olr.get("Xero_Line_ID").toString(),olr.get("id").toString());
+				}
+			}
+			olProd = Map();
+			olTxt = {"Description","Line_Type","Price_Point","Xero_Account_Code","Xero_Tax_Type","Xero_Line_ID","Currency"};
+			olNum = {"List_Price","Amount","Discount","Tax","Total"};
+			for each  oli in olItems
+			{
+				olm = oli.toMap();
+				olCode = "";
+				if(olm.get("product_code") != null)
+				{
+					olCode = olm.get("product_code").toString();
+				}
+				if(olCode != "" && olProd.get(olCode) == null)
+				{
+					olPs = zoho.crm.searchRecords("Products","(Product_Code:equals:" + olCode + ")");
+					if(olPs.toString().contains("id"))
+					{
+						olProd.put(olCode,olPs.get(0).get("id").toString());
+					}
+				}
+				olRec = Map();
+				olRec.put("Order",orderId);
+				if(dealId != "")
+				{
+					olRec.put("Deal",dealId);
+				}
+				if(olProd.get(olCode) != null)
+				{
+					olRec.put("Product",olProd.get(olCode));
+				}
+				else
+				{
+					olErr.add("no product for code " + olCode);
+				}
+				for each  olk in olTxt
+				{
+					if(olm.get(olk) != null)
+					{
+						olRec.put(olk,olm.get(olk).toString());
+					}
+				}
+				for each  oln in olNum
+				{
+					if(olm.get(oln) != null)
+					{
+						olRec.put(oln,olm.get(oln).toString().toDecimal());
+					}
+				}
+				if(olm.get("Quantity") != null)
+				{
+					olRec.put("Quantity",olm.get("Quantity").toString().toLong());
+				}
+				olLid = "";
+				if(olm.get("Xero_Line_ID") != null)
+				{
+					olLid = olm.get("Xero_Line_ID").toString();
+				}
+				if(olLid != "" && olHave.get(olLid) != null)
+				{
+					zoho.crm.updateRecord("Deal_Items",olHave.get(olLid).toLong(),olRec);
+					olUpd = olUpd + 1;
+				}
+				else
+				{
+					olLc = zoho.crm.createRecord("Deal_Items",olRec);
+					if(olLc.get("id") != null)
+					{
+						olMade = olMade + 1;
+					}
+					else
+					{
+						olErr.add("line " + olLid + ": " + olLc.toString());
+					}
+				}
+			}
+			if(dealId != "")
+			{
+				olDm = Map();
+				olDm.put("Order",orderId);
+				zoho.crm.updateRecord("Deals",dealId.toLong(),olDm);
+				res.put("deal_order_set",true);
+			}
+		}
+		// ---- §9 extras (24 Sep 2026): Deal money fields + frozen tier, and
+		// the invoiced Account's Pricing_Tier / Xero contact / Billing tag.
+		olExtra = 0;
+		if(dealId != "" && p.get("deal_fields") != null)
+		{
+			olDf = p.get("deal_fields").toString().toMap();
+			if(olDf.size() > 0)
+			{
+				zoho.crm.updateRecord("Deals",dealId.toLong(),olDf);
+				res.put("deal_fields_set",true);
+			}
+		}
+		if(olAcc != "" && p.get("account_updates") != null)
+		{
+			auU = p.get("account_updates").toString().toMap();
+			auRec = zoho.crm.getRecordById("Accounts",olAcc.toLong());
+			auM = Map();
+			auPt = "";
+			if(auRec.get("Pricing_Tier") != null)
+			{
+				auPt = auRec.get("Pricing_Tier").toString();
+			}
+			if(auU.get("Pricing_Tier") != null && (auPt == "" || auPt == "-None-"))
+			{
+				auM.put("Pricing_Tier",auU.get("Pricing_Tier").toString());
+			}
+			auXc = "";
+			if(auRec.get("Xero_Contact_ID") != null)
+			{
+				auXc = auRec.get("Xero_Contact_ID").toString();
+			}
+			if(auU.get("Xero_Contact_ID") != null && auXc == "")
+			{
+				auM.put("Xero_Contact_ID",auU.get("Xero_Contact_ID").toString());
+			}
+			if(auU.get("billing_account_tag") != null && auU.get("billing_account_tag").toString() == "true")
+			{
+				auTy = List();
+				if(auRec.get("Account_Type_2") != null)
+				{
+					auL = auRec.get("Account_Type_2").toList();
+					for each  aut in auL
+					{
+						auTy.add(aut.toString());
+					}
+				}
+				if(auTy.contains("Billing Account") == false)
+				{
+					auTy.add("Billing Account");
+					auM.put("Account_Type_2",auTy);
+				}
+			}
+			if(auM.size() > 0)
+			{
+				zoho.crm.updateRecord("Accounts",olAcc.toLong(),auM);
+				res.put("account_updated",auM.keys());
+			}
+		}
+		res.put("lines_created",olMade);
+		res.put("lines_updated",olUpd);
+		res.put("errors",olErr);
+		olOk = false;
+		if(orderId != "" && olErr.size() == 0)
+		{
+			olOk = true;
+		}
+		res.put("ok",olOk);
 	}
 	else if(stg == "fast_track_decision")
 	{
