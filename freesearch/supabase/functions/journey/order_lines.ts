@@ -73,13 +73,36 @@ export function classify(label: string, worldwide: boolean): { sku: Sku; desc: s
 export function buildXeroLines(opts: {
   lines: InLine[]; discountPence: number; marks: number;
   vatExempt: boolean; worldwide: boolean;
+  /** Client wizard: consultation booked. Staff orders carry it as a line. */
+  consult?: boolean;
 }): { items: XeroLineOut[]; meta: LineMeta[] } {
   const { code, tax } = accountFor(opts.vatExempt);
   const items: XeroLineOut[] = [];
   const meta: LineMeta[] = [];
+  // CONSULTATION (Jonathan, 24 Sep 2026): "Included at RRP, discounted to
+  // £0." Always its own line at the catalogue RRP, followed by its own
+  // negative line taking it to nil -- so the client sees the value, the
+  // net is unchanged, and Zoho carries it as a Product row.
+  const consultPair = () => {
+    const c = CATALOGUE.CONSULT_CLEARANCE;
+    items.push({ Description: "Clearance Consultation", Quantity: 1,
+                 UnitAmount: c.rrp, AccountCode: code, TaxType: tax });
+    meta.push({ sku: "CONSULT_CLEARANCE", lineType: "TMH Fee" });
+    items.push({ Description: "Clearance Consultation – included, discounted to £0",
+                 Quantity: 1, UnitAmount: -c.rrp, AccountCode: code, TaxType: tax });
+    meta.push({ sku: "CONSULT_CLEARANCE", lineType: "Discount" });
+  };
   if (opts.lines.length) {
+    // Each discount sits under the line it discounts: audit lines, then the
+    // audit promotion, then the consultation and its own nil-ing line.
+    let hadConsult = false;
+    let waivedConsult = false;
     for (const x of opts.lines) {
       const c = classify(x.l, opts.worldwide);
+      if (c.sku === "CONSULT_CLEARANCE") {
+        hadConsult = true;
+        if (x.p === 0) { waivedConsult = true; continue; }
+      }
       items.push({ Description: c.desc, Quantity: 1, UnitAmount: x.p / 100,
                    AccountCode: code, TaxType: tax });
       meta.push({ sku: c.sku, lineType: "TMH Fee" });
@@ -91,6 +114,7 @@ export function buildXeroLines(opts: {
                    UnitAmount: -opts.discountPence / 100, AccountCode: code, TaxType: tax });
       meta.push({ sku: first.sku, lineType: "Discount" });
     }
+    if (waivedConsult || (opts.consult && !hadConsult)) consultPair();
   } else {
     // Legacy event with no line list: the old single £99-per-mark line.
     const sku: Sku = opts.worldwide ? "AUDIT_WORLDWIDE" : "AUDIT_UK";
@@ -102,6 +126,7 @@ export function buildXeroLines(opts: {
       Quantity: marks, UnitAmount: CATALOGUE.AUDIT_UK.baseline,
       AccountCode: code, TaxType: tax });
     meta.push({ sku, lineType: "TMH Fee" });
+    if (opts.consult) consultPair();
   }
   return { items, meta };
 }
@@ -161,6 +186,11 @@ export function buildZohoOrder(opts: {
   const feeSum = fees.reduce((a, p) => a + Number(p.l.LineAmount ?? 0), 0);
   const promo = pairs.filter((p) => p.m.lineType === "Discount")
     .reduce((a, p) => a + Number(p.l.LineAmount ?? 0), 0);          // negative
+  // Discounts are shared only among fee lines of the SAME product: the audit
+  // promotion never lowers the consultation's price point, nor vice versa.
+  const bySku = (t: LineType, sku: Sku) => pairs
+    .filter((p) => p.m.lineType === t && p.m.sku === sku)
+    .reduce((a, p) => a + Number(p.l.LineAmount ?? 0), 0);
   const items = pairs.map(({ l, m }) => {
     const amount = r2(Number(l.LineAmount ?? 0));
     const tax = r2(Number(l.TaxAmount ?? 0));
@@ -181,7 +211,8 @@ export function buildZohoOrder(opts: {
     if (m.lineType === "TMH Fee") {
       // The promotion is one negative line across all fee lines: share it
       // in proportion to each line's value, then price per unit.
-      const share = feeSum > 0 ? promo * (amount / feeSum) : 0;
+      const skuFees = bySku("TMH Fee", m.sku);
+      const share = skuFees > 0 ? bySku("Discount", m.sku) * (amount / skuFees) : 0;
       rec.Price_Point = pricePoint(m.sku, (amount + share) / qty);
     }
     return rec;
