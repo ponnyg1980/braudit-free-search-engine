@@ -9,6 +9,7 @@
      Anything below is audit-only. -->
 <link rel="stylesheet" href="/braudit.css">
 <script src="/demo-banner.js" defer></script>
+<script src="/tool-events.js"></script>
 <link rel="stylesheet" href="/wizard.css">
 <style>
   /* ---------- audit-only additions (prefixed ac- where they could clash) ---------- */
@@ -802,12 +803,16 @@ function submitContact(){
     return showErr('c-err','That email address doesn’t look right.');
   clearErr('c-err');
   state.contact=c;
-  logEvent('lead_captured','audit_contact',{via:'audit_checkout'},
+  logEvent('lead_captured','audit_contact',{via:'audit_checkout',
+    visit:(window.tmhTool?tmhTool.context():null)},
     {first_name:c.first,last_name:c.last,email:c.email,phone:c.phone,
      email_source:'report_form',current_screen:'audit_contact'});
   /* Past the contact step -> Lead, converted to Contact + Deal at Prospect. */
   crm('contact',{first_name:c.first,last_name:c.last,email:c.email,
-    phone:c.phone,mark:state.name||''});
+    phone:c.phone,mark:state.name||''}).then(res=>{
+    /* GA4 tool_lead: only once Zoho has answered with the record. */
+    if(res&&(res.zoho_contact_id||res.zoho_deal_id)&&window.tmhTool) tmhTool.step('lead_submitted');
+  });
   go('searches');
 }
 
@@ -829,6 +834,7 @@ function logoLater(on){
 function submitSearches(){
   state.name=document.getElementById('s-name').value.trim();
   if(!state.name) return showErr('s-err','We need the name to audit.');
+  if(window.tmhTool) tmhTool.step('search_submitted');
   clearErr('s-err');
   state.hasLogo=document.getElementById('tick-logo').classList.contains('on');
   state.logoUrl=state.hasLogo&&!state.logoLater
@@ -1031,6 +1037,7 @@ function collectTermEdits(){
 }
 function submitClasses(){
   const resp=state.scopeResp||'client';
+  if(window.tmhTool&&state.classes.length) tmhTool.step('selection_made',{classes:state.classes.map(c=>c.n||c)});
   /* The gate stands ONLY for a client who is choosing them. Asking us to pick
      is a valid answer, not an empty one — and it never blocks checkout,
      because order_complete gates the research after payment regardless. */
