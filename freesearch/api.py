@@ -281,6 +281,22 @@ _EMBED_JS = """(function(){
     if(!rf){var mc=document.cookie.match(/(?:^|;\s*)tmh_ref=([^;]+)/); if(mc) rf=decodeURIComponent(mc[1]);}
     if(rf && /^[A-Za-z0-9_-]{2,40}$/.test(rf)) q+='&ref='+encodeURIComponent(rf);
   }catch(e){}
+  // GA4 (handoff SEARCH_JOURNEY_GA4_TRACKING, 24 Sep): where the widget sits
+  // (data-placement), and the visit context the Zoho lead carries -- the GA
+  // client id from this page's _ga cookie, the session's landing page and
+  // this page. Paths only, never query strings (they can carry personal data).
+  var WIDGET_ORIGIN=''; try{ WIDGET_ORIGIN=new URL(s.src).origin; }catch(e){}
+  try{
+    q+='&placement='+encodeURIComponent((s.dataset.placement||'inline').replace(/[^a-z_]/gi,'').slice(0,20));
+    var gm=document.cookie.match(/(?:^|;\s*)_ga=GA\d+\.\d+\.(\d+\.\d+)/);
+    if(gm) q+='&gcid='+encodeURIComponent(gm[1]);
+    var lp=null; try{ lp=sessionStorage.getItem('tmh_lp'); if(!lp){ lp=location.pathname; sessionStorage.setItem('tmh_lp',lp); } }catch(e){ lp=location.pathname; }
+    q+='&lp='+encodeURIComponent(String(lp).slice(0,200))+'&tp='+encodeURIComponent(location.pathname.slice(0,200));
+  }catch(e){}
+  function refFromCookie(){
+    try{ var m=document.cookie.match(/(?:^|;\s*)tmh_ref=([^;]+)/); var v=m?decodeURIComponent(m[1]):'';
+      return /^[A-Za-z0-9_-]{2,40}$/.test(v)?v:undefined; }catch(e){ return undefined; }
+  }
   var minH = page==='search-box' ? (s.dataset.style==='bar'?'70px':'200px') : '760px';
   // Change spec 22 Aug (section 3): reserve space immediately so the WP page
   // never looks empty and the footer never jumps; show a branded loading
@@ -368,6 +384,25 @@ _EMBED_JS = """(function(){
     // navigate the host page itself from inside a cross-origin iframe, so it
     // asks us to. Only ever a navigation, never arbitrary script.
     if(e.data.brauditNavigate) window.location.href = e.data.brauditNavigate;
+    // GA4 tool steps. The iframe never loads Google Analytics; it posts the
+    // step here and we hand it to THIS page's own tag, so the event is
+    // credited to the page the visitor is on and inherits the site's consent
+    // state. We never load or configure GA. No tag on the page (a partner's
+    // site, or GA blocked) -> nothing happens, and nothing throws.
+    if(e.data.brauditEvent && (!WIDGET_ORIGIN || e.origin===WIDGET_ORIGIN)){
+      try{
+        var ev=e.data.brauditEvent, ok={tool_step:1,tool_lead:1};
+        var name=ok[ev.name]?ev.name:(ev.step==='lead_submitted'?'tool_lead':'tool_step');
+        var params={tool:String(ev.tool||'').slice(0,40), step:String(ev.step||'').slice(0,40),
+          step_no:Number(ev.step_no)||0,
+          placement:ev.placement||s.dataset.placement||'inline'};
+        if(ev.result_band) params.result_band=String(ev.result_band).slice(0,12);
+        if(ev.classes) params.classes=String(ev.classes).replace(/[^0-9,]/g,'').slice(0,100);
+        var pr=ev.partner_ref||refFromCookie(); if(pr) params.partner_ref=pr;
+        if(typeof window.gtag==='function') window.gtag('event', name, params);
+        else if(Array.isArray(window.dataLayer)) window.dataLayer.push(Object.assign({event:name}, params));
+      }catch(_e){}
+    }
   });
 })();"""
 
@@ -457,7 +492,9 @@ def _static(path: str):
     # enquiry, Book a free 15 minute consultation") that every customer-facing
     # tool mounts. Shared file so the number, the booking URL and the wording
     # cannot drift apart across six pages.
-    if path in ('/braudit.css', '/wizard.css', '/demo-banner.js', '/help-line.js'):
+    # tool-events.js: GA4 step messages to the host page (handoff 24 Sep).
+    if path in ('/braudit.css', '/wizard.css', '/demo-banner.js', '/help-line.js',
+                '/tool-events.js'):
         rel = path.lstrip('/')
     elif path.startswith('/brand/') or path.startswith('/fonts/'):
         rel = path.lstrip('/')
