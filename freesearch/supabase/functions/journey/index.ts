@@ -80,8 +80,8 @@
 
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { accountFor, buildXeroLines, buildZohoOrder, isForbidden, isWorldwide,
-  type XeroInvoiceIn } from "./order_lines.ts";
+import { accountFor, asTier, buildXeroLines, buildZohoOrder, isForbidden, isWorldwide,
+  type Tier, type XeroInvoiceIn } from "./order_lines.ts";
 
 const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
   .split(",").map((s) => s.trim()).filter(Boolean);
@@ -1791,6 +1791,88 @@ serve(async (req) => {
     return { ok: res.ok, data };
   }
 
+  // ======================= PRICING TIER (handoff §9, 24 Sep 2026) ==========
+  // Which price an order is on. First answer wins: the Deal's Referral_Terms,
+  // the invoiced Account's Pricing_Tier (or its parent's), a live partner's
+  // ref code -- all read by the Deluge stage `pricing_tier` -- else the
+  // default: client-facing Baseline (Exception 1: £99 per web order),
+  // staff-facing Discounted, which staff may drop to Baseline (their choice
+  // is stored on the enquiry as `pricingTier`, never on the Account).
+  // Worldwide = any territory beyond GB: staff discovery answers, else the
+  // Quick Audit's register layers, else the client wizard's trading answers.
+  // api.py prices the charge with THIS answer and the invoice reuses it, so
+  // what is charged and what is invoiced cannot disagree.
+  async function earliestRef(sid: string): Promise<string> {
+    try {
+      const { data } = await admin.from("journey_events").select("payload")
+        .eq("session_id", sid).eq("event_type", "partner_ref_captured")
+        .order("created_at", { ascending: true }).limit(1);
+      const code = String((data?.[0]?.payload as Record<string, unknown>)?.code ?? "").trim();
+      return /^[A-Za-z0-9_-]{2,40}$/.test(code) ? code : "";
+    } catch (_e) { return ""; }
+  }
+  function orderWorldwide(sess: Record<string, unknown> | null,
+                          enq: Record<string, unknown> | null): boolean {
+    if (enq) {
+      const d = (enq.discovery ?? {}) as Record<string, unknown>;
+      const t = [...(Array.isArray(d.terrNow) ? d.terrNow as unknown[] : []),
+                 ...(Array.isArray(d.terrPlan) ? d.terrPlan as unknown[] : [])];
+      if (t.length) return isWorldwide(t);
+      const ps = (enq.platform_scope ?? {}) as Record<string, unknown>;
+      const layers = Array.isArray(ps.search_layers) ? ps.search_layers as unknown[] : [];
+      return layers.some((l) => /EUIPO|USPTO|WIPO|CIPO|IP Australia|Other IPO/i.test(String(l)));
+    }
+    return isWorldwide([
+      ...(Array.isArray(sess?.trading_now) ? sess!.trading_now as unknown[] : []),
+      ...(Array.isArray(sess?.planning_to_trade) ? sess!.planning_to_trade as unknown[] : [])]);
+  }
+  async function resolveTier(sid: string): Promise<{ tier: Tier; source: string;
+      webException: boolean; staff: boolean; refCode: string; partnerAccountId: string;
+      worldwide: boolean; accountId: string }> {
+    const sess = await currentSession(sid);
+    const lr = (sess?.last_result ?? {}) as Record<string, unknown>;
+    const enq = (lr.staff_enquiry ?? null) as Record<string, unknown> | null;
+    const z = (lr.zoho ?? {}) as Record<string, unknown>;
+    const staff = !!enq;
+    const accountId = String(staff ? ((enq!.billing ?? {}) as Record<string, unknown>).account_id ?? ""
+                                   : z.account_id ?? "");
+    const refCode = await earliestRef(sid);
+    let tier: Tier | null = null, source = "default", partnerAccountId = "";
+    if (ZOHO_CHECKOUT_URL && String(sess?.tenant_id) !== "demo") {
+      try {
+        const ctl = new AbortController();
+        const t = setTimeout(() => ctl.abort(), 20_000);
+        const r = await fetch(ZOHO_CHECKOUT_URL, { method: "POST", signal: ctl.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stage: "pricing_tier", session_id: sid,
+            zoho_deal_id: String(z.deal_id ?? ""), zoho_account_id: accountId, ref_code: refCode }) });
+        clearTimeout(t);
+        const env = JSON.parse(await r.text());
+        const o = typeof env?.details?.output === "string" ? JSON.parse(env.details.output) : env;
+        tier = asTier(o?.tier);
+        if (tier) { source = String(o?.source ?? "account"); partnerAccountId = String(o?.partner_account_id ?? ""); }
+      } catch (_e) { /* fall through to the default -- never block an order on a lookup */ }
+    }
+    if (!tier) {
+      const chosen = asTier(enq?.pricingTier);
+      tier = staff ? (chosen === "Baseline" ? "Baseline" : "Discounted") : "Baseline";
+      source = staff && chosen === "Baseline" ? "staff_choice" : "default";
+    }
+    const webException = !staff && source !== "partner" && tier === "Baseline";
+    return { tier, source, webException, staff, refCode, partnerAccountId,
+             worldwide: orderWorldwide(sess as Record<string, unknown> | null, enq), accountId };
+  }
+
+  // POST /pricing/tier -- engine-authenticated (shared key). api.py calls this
+  // to price a Stripe charge or to show staff the order's tier and floor.
+  if (req.method === "POST" && path === "/pricing/tier") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    const sid = String(body?.session_id ?? "").trim();
+    if (!sid) return json({ ok: false, error: "session_id required" }, 400, origin);
+    return json({ ok: true, ...(await resolveTier(sid)) }, 200, origin);
+  }
+
   // POST /xero/connect — health probe. The custom connection needs no
   // consent, so "connect" just proves the credentials mint a token and the
   // API answers. Guarded by the shared key.
@@ -1866,6 +1948,7 @@ serve(async (req) => {
     // Contact: match on email first (a client's entity name drifts, their
     // billing address doesn't), fall back to entity name, else create.
     let contactId: string | null = null;
+    let contactCreated = false;     // §8: a NEW Xero contact tags the Account
     if (email) {
       const q = await xeroApi(
         `/Contacts?where=${encodeURIComponent(`EmailAddress=="${email}"`)}`, "GET");
@@ -1925,7 +2008,7 @@ serve(async (req) => {
           Addresses: xAddr }] },
         `contact_${sid}`);
       const made = (c.data as { Contacts?: { ContactID: string }[] })?.Contacts;
-      if (c.ok && made?.length) contactId = made[0].ContactID;
+      if (c.ok && made?.length) { contactId = made[0].ContactID; contactCreated = true; }
       else {
         // Name collision: Xero names are unique. Reuse the existing one.
         const q2 = await xeroApi(
@@ -1976,21 +2059,22 @@ serve(async (req) => {
       }
     } catch (_e) { /* fall back below */ }
     const discountP = Number(p.discount_pence ?? 0) || 0;
-    // CLEARANCE AUDIT (24 Sep 2026). Line text is "UK Clearance Audit – Word
-    // mark "ACME"" etc.; the product (UK vs Worldwide audit, Consultation) is
-    // decided here and travels in `lineMeta` to the Zoho Deal_Items write.
-    // Worldwide = any territory beyond the UK: the staff discovery answers,
-    // else what the client wizard stored on the session. Prices CHARGED are
-    // unchanged -- they still come from the order event.
-    const discX = (enqX?.discovery ?? {}) as Record<string, unknown>;
-    const territories: unknown[] = enqX
-      ? [...(Array.isArray(discX.terrNow) ? discX.terrNow as unknown[] : []),
-         ...(Array.isArray(discX.terrPlan) ? discX.terrPlan as unknown[] : [])]
-      : [...(Array.isArray(sessX?.trading_now) ? sessX.trading_now as unknown[] : []),
-         ...(Array.isArray(sessX?.planning_to_trade) ? sessX.planning_to_trade as unknown[] : [])];
+    // FINAL PRICING RULES (handoff §9, 24 Sep 2026). The tier the charge was
+    // priced at travels on the order event (api.py); older events resolve it
+    // now. Every fee line is invoiced at RRP with a discount line down to what
+    // was charged; a direct web order's audits total £99 whatever the count;
+    // the consultation is always a line, included at RRP unless staff charge it.
+    const pr = await resolveTier(sid);
+    const orderTier: Tier = asTier(p.tier) ?? pr.tier;
+    const webEx = p.web_exception !== undefined
+      ? (p.web_exception === true || p.web_exception === "1" || p.web_exception === "true")
+      : (!enqX && pr.webException);
+    const worldwideX = p.worldwide !== undefined
+      ? (p.worldwide === true || p.worldwide === "1" || p.worldwide === "true") : pr.worldwide;
     const built = buildXeroLines({ lines: pLines, discountPence: discountP, marks,
-      vatExempt, worldwide: isWorldwide(territories),
-      consult: p.consult === true || p.consult === "1" || p.consult === "true" });
+      vatExempt, worldwide: worldwideX, tier: orderTier, webException: webEx,
+      // Client orders: the consultation is always included (§9 Exception 1).
+      consult: !enqX });
     const items = built.items as unknown as Record<string, unknown>[];
     const lineMeta = built.meta;
 
@@ -2101,6 +2185,8 @@ serve(async (req) => {
     // A failure here NEVER fails the checkout: the Xero invoice is the legal
     // record. It is logged and order_complete still runs.
     let zohoOrderId = "";
+    let dealFieldsX: Record<string, unknown> = {};
+    let accountUpdatesX: Record<string, unknown> = {};
     if (ZOHO_CHECKOUT_URL) {
       try {
         const zo = buildZohoOrder({
@@ -2112,7 +2198,15 @@ serve(async (req) => {
             + (p.source === "quick_audit_recorded" && p.payment_ref
               ? `; payment ref ${String(p.payment_ref)}` : ""),
           nowIso: new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00"),
+          tier: orderTier, webException: webEx,
         });
+        dealFieldsX = { ...zo.dealMoney, Referral_Terms: orderTier,
+          ...(pr.refCode ? { Partner_Ref_Code_Used: pr.refCode } : {}) };
+        accountUpdatesX = {
+          ...(pr.source === "partner" ? { Pricing_Tier: orderTier } : {}),
+          ...(contactId ? { Xero_Contact_ID: contactId } : {}),
+          ...(contactCreated ? { billing_account_tag: "true" } : {}),
+        };
         const zids0 = (lrX.zoho ?? {}) as Record<string, unknown>;
         const link0 = ((enqX?.link ?? {}) as Record<string, unknown>);
         const ctl = new AbortController();
@@ -2124,7 +2218,8 @@ serve(async (req) => {
             zoho_deal_id: String(zids0.deal_id ?? ""),
             zoho_contact_id: String(zids0.contact_id ?? link0.contact_id ?? ""),
             zoho_account_id: String(zids0.account_id ?? billX.account_id ?? ""),
-            order: zo.order, items: zo.items }),
+            order: zo.order, items: zo.items,
+            deal_fields: dealFieldsX, account_updates: accountUpdatesX }),
         });
         clearTimeout(timer);
         const text = await r.text();
@@ -2275,6 +2370,11 @@ serve(async (req) => {
           // Deal it resolves or creates (staff orders arrive with no Deal):
           // Deals.Order, and Deal on every Deal_Items row of that Order.
           zoho_order_id: zohoOrderId || undefined,
+          // §9: the Deal's frozen tier + money figures, and the Account's
+          // tier / Xero contact / Billing tag -- written by the ORDER LINK
+          // block once order_complete has the Deal (staff orders).
+          deal_fields: Object.keys(dealFieldsX).length ? dealFieldsX : undefined,
+          account_updates: Object.keys(accountUpdatesX).length ? accountUpdatesX : undefined,
           deadline: deadline || undefined,
           pay_date: kind === "invoice" ? String(p.pay_date ?? "") : undefined,
           staff_email: String(p.staff_email ?? ""),
