@@ -48,6 +48,7 @@
        anything below overrides it — page-specific rules stay local. -->
   <link rel="stylesheet" href="/braudit.css">
 <script src="/demo-banner.js" defer></script>
+<script src="/tool-events.js"></script>
 <style>
   /* TMH brand tokens — kept in sync with free-search.html / brand_tokens.py */
   *{box-sizing:border-box}
@@ -179,9 +180,17 @@ const CONFIG = {
   SCREEN:    VARIANT === 'quick' ? 'classes'
              : VARIANT === 'audit' ? 'contact' : 'marks',
   // Where the full journey lives. Defaults to this host's own copy.
-  TARGET:    P.get('target') || (location.origin +
-             (VARIANT === 'quick' ? '/uk-trademark-quick-search'
-              : VARIANT === 'audit' ? '/audit' : '/free-search')),
+  // GA4 handoff §7 (24 Sep 2026): an embedded TMH box with no data-target
+  // used to send the whole browser tab to THIS host (onrender), which GA then
+  // reported as a self-referral. The TMH-hosted wizard pages are the default
+  // now; only the audit has no WordPress page yet, so it still uses this host.
+  TARGET:    P.get('target') || (
+             (P.get('embed') && (P.get('tenant') || 'tmh') === 'tmh' && VARIANT !== 'audit')
+               ? ('https://www.thetrademarkhelpline.com' +
+                  (VARIANT === 'quick' ? '/uk-trademark-quick-search/' : '/free-search/'))
+               : (location.origin +
+                  (VARIANT === 'quick' ? '/uk-trademark-quick-search'
+                   : VARIANT === 'audit' ? '/audit' : '/free-search'))),
   // The journey Edge Function. Defaults to production so an embedded box
   // logs the search term even when the embedding page passes nothing.
   JOURNEY:   P.get('journey') || 'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey'
@@ -243,6 +252,7 @@ function submit(){
 
   // Log FIRST, navigate second. If the session call fails we still hand the
   // visitor over — a lost log is annoying, a dead search box is worse.
+  if(window.tmhTool) tmhTool.step('search_submitted');
   const done = function(sid){
     const u = new URL(CONFIG.TARGET, location.href);
     u.searchParams.set('tenant', CONFIG.TENANT_ID);
@@ -254,6 +264,11 @@ function submit(){
     // accepts fs directly.
     if(sid) u.searchParams.set('fs', sid);
     else    u.searchParams.set('q', name);          // no session? at least carry the name
+    // Campaign tracking (10 Sep): carry UTMs so the wizard's own lead pushes
+    // (report form) also see them, not just the session-start push.
+    ['utm_source','utm_medium','utm_campaign','ref'].forEach(function(k){
+      var v=P.get(k); if(v) u.searchParams.set(k, v);
+    });
     handOff(u.toString());
   };
 
@@ -265,7 +280,10 @@ function submit(){
   try{
     fetch(journeyBase() + '/session/start', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({tenant_id: CONFIG.TENANT_ID, source: CONFIG.SOURCE, name: name})
+      body: JSON.stringify({tenant_id: CONFIG.TENANT_ID, source: CONFIG.SOURCE, name: name,
+        utm_source: (P.get('utm_source')||undefined),
+        utm_medium: (P.get('utm_medium')||undefined),
+        utm_campaign: (P.get('utm_campaign')||undefined)})
     }).then(r=>r.json()).then(function(d){
       if(!(d && d.ok && d.session_id)) return finish(null);
       const sid = d.session_id;
