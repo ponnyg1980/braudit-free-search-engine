@@ -8,6 +8,7 @@
        anything below overrides it — page-specific rules stay local. -->
   <link rel="stylesheet" href="/braudit.css">
 <script src="/demo-banner.js" defer></script>
+<script src="/tool-events.js"></script>
 <style>
   /* ---- TMH brand tokens (from brand_tokens.py) ---- */
   /* ---- TMH hexagon pulse loader (Jonathan's spec, 10 Aug 2026) ----
@@ -1369,8 +1370,14 @@ function sendRef(id){
     body:JSON.stringify({session_id:id,event_type:'partner_ref_captured',screen:null,
       payload:{code:REF_CODE}}),keepalive:true}).catch(()=>{});}catch(e){}
 }
+/* GA4 steps (tool-events.js). Mapped from the journey events this page already
+   logs, so the two funnels cannot disagree about where a visitor got to. */
+const GA_STEP={search_run:'search_submitted',class_context_given:'search_submitted',
+  class_source_applied:'results_shown',class_added:'selection_made'};
 function logEvent(type,screen,payload,includeSnapshot){
   payload = payload||{};
+  try{ if(GA_STEP[type]&&window.tmhTool) tmhTool.step(GA_STEP[type],
+    {classes:payload.classes||payload.nice_class||state.classes}); }catch(e){}
   if(CONFIG.DEAL) payload.zoho_deal_id = CONFIG.DEAL;
   ensureSession().then(function(id){
     if(!id) return; // dev/mock mode or the function is unreachable — never block the UI over it
@@ -2855,14 +2862,16 @@ function sendClassTools(){
     fetch(journeyBase()+'/session/event',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({session_id:id,event_type:'lead_captured',screen:'review',
-        payload:{sent_from:'class_builder',additional_terms:additionalTerms()},
+        payload:{sent_from:'class_builder',additional_terms:additionalTerms(),
+                 visit:(window.tmhTool?tmhTool.context():null)},
         snapshot:{name:state.name,classes:rows.map(r=>r.n),class_source:state.classSource,
                   first_name:first,last_name:last,email:email,phone:phone,
                   business_name:company||'',email_source:'class_tools',
                   last_result:{application_scope:rows,additional_terms:additionalTerms()},
                   status:'class_builder_sent'}})})
       .then(r=>r.json())
-      .then(d=>{ if(d&&d.ok) rvDone('Done — your classes and terms are on their way to '+email+' as a CSV.');
+      .then(d=>{ if(d&&d.ok){ if(window.tmhTool) tmhTool.step('lead_submitted',{classes:rows.map(r=>r.n)});
+                   rvDone('Done — your classes and terms are on their way to '+email+' as a CSV.'); }
                  else rvErr('The send failed — please try again.'); })
       .catch(()=>rvErr('The send failed — please try again.'));
   });
@@ -2922,6 +2931,8 @@ const OUTCOME_COPY={
     'Part of the register search did not finish, so these results are incomplete and no risk score is shown. Please go back and run the search again, or call us on 0161 833 5400.']};
 function renderResults(r){const s=r.summary;
   const outcome=resultOutcome(s);
+  try{ window.tmhTool&&tmhTool.step('results_shown',{classes:state.classes,
+    result_band:{high:'conflict',medium:'similar',clean:'clear',none:'clear'}[outcome]||'n/a'}); }catch(e){}
   const oc=OUTCOME_COPY[outcome];
   document.getElementById('res-head').textContent=oc[0];
   document.getElementById('res-sub').textContent=
@@ -3137,10 +3148,14 @@ function sendReport(){
   logEvent('lead_captured','results',{email:email},false);
   ensureSession().then(function(id){ if(!id)return;
     fetch(journeyBase()+'/session/event',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({session_id:id,event_type:'lead_captured',screen:'results',payload:{},
+      body:JSON.stringify({session_id:id,event_type:'lead_captured',screen:'results',
+        payload:{visit:(window.tmhTool?tmhTool.context():null)},
         snapshot:{first_name:first,last_name:last,email:email,phone:phone,
                   business_name:biz,status:'lead_captured'}}),
-      keepalive:true}).catch(()=>{});
+      keepalive:true}).then(r=>r.json()).then(d=>{
+        /* tool_lead fires only on the server's OK, and only once. */
+        if(d&&d.ok&&window.tmhTool) tmhTool.step('lead_submitted',{classes:state.classes});
+      }).catch(()=>{});
   });
   /* The Zoho push is NOT done here — it happens server-side. The journey's
      /session/event handler sees `lead_captured` with an email on the session
