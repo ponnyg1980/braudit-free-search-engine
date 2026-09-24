@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- GA4 steps (tool-events.js). The finder fetches before it can draw, so it
+     announces tool_shown itself from signalReady(), not on load. -->
+<script>window.TMH_TOOL_MANUAL_SHOWN=true;</script>
+<script src="/tool-events.js"></script>
 <title>Find your trademark class &mdash; The Trademark Helpline</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -259,6 +263,7 @@ async function showClass(n){
 function toggle(n){
   const i = basket.indexOf(n);
   if(i >= 0) basket.splice(i, 1); else basket.push(n);
+  if(i < 0 && window.tmhTool) tmhTool.step('selection_made', {classes: basket.concat([n])});
   basket.sort((a,b) => a - b);
   syncFoot(); renderList();
 }
@@ -300,9 +305,12 @@ async function run(q){
     return;
   }
   try{
+    if(window.tmhTool) tmhTool.step('search_submitted');
     const r = await api('q=' + encodeURIComponent(q) + '&kind=' + kind);
     if(mine !== seq) return;                 // a newer keystroke already answered
     shown = r.classes || [];
+    if(shown.length && window.tmhTool)
+      tmhTool.step('results_shown', {classes: shown.slice(0, 5).map(c => c.n)});
     sel = shown.length ? shown[0].n : null;
     $('note').textContent = !shown.length ? 'No match yet'
       : (r.total_classes > shown.length
@@ -411,6 +419,7 @@ $('q').addEventListener('input', onType);
 let FINDER_READY = false;
 function signalReady(){
   FINDER_READY = true;
+  if(window.tmhTool) tmhTool.step('tool_shown');
   if(window.parent === window) return;
   try{ window.parent.postMessage({brauditReady:true}, '*'); }catch(e){}
   window.dispatchEvent(new Event('resize'));   // first real height, now
