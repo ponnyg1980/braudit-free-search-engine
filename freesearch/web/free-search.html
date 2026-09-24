@@ -1355,11 +1355,26 @@ function goToBooking(ev){
   beaconExit('booking_clicked');
   window.open(exitUrl(CONFIG.BOOK_URL,'fs'),'_blank','noopener');
 }
+/* PARTNER REF (handoff §9, 24 Sep 2026): ?ref= arrives via embed.js (from
+   the host page's ?ref= or its tmh_ref cookie). Recorded once per page load as
+   a partner_ref_captured event; the EARLIEST one on the session wins (first
+   touch), and Zoho decides whether it is a live partner. Never validated here
+   beyond its shape, and the partner list is never sent to the browser. */
+const REF_CODE=(()=>{try{const v=new URLSearchParams(location.search).get('ref');
+  return v&&/^[A-Za-z0-9_-]{2,40}$/.test(v)?v:'';}catch(e){return '';}})();
+let refSent=false;
+function sendRef(id){
+  if(!id||!REF_CODE||refSent) return; refSent=true;
+  try{fetch(journeyBase()+'/session/event',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({session_id:id,event_type:'partner_ref_captured',screen:null,
+      payload:{code:REF_CODE}}),keepalive:true}).catch(()=>{});}catch(e){}
+}
 function logEvent(type,screen,payload,includeSnapshot){
   payload = payload||{};
   if(CONFIG.DEAL) payload.zoho_deal_id = CONFIG.DEAL;
   ensureSession().then(function(id){
     if(!id) return; // dev/mock mode or the function is unreachable — never block the UI over it
+    sendRef(id);
     try{
       fetch(journeyBase()+'/session/event',{method:'POST',
         headers:{'Content-Type':'application/json'},
