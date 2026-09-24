@@ -389,7 +389,11 @@ _EMBED_JS = """(function(){
     // credited to the page the visitor is on and inherits the site's consent
     // state. We never load or configure GA. No tag on the page (a partner's
     // site, or GA blocked) -> nothing happens, and nothing throws.
-    if(e.data.brauditEvent && (!WIDGET_ORIGIN || e.origin===WIDGET_ORIGIN)){
+    // M1 (review 24 Sep): BOTH checks are mandatory. The source check above
+    // already drops anything not from this embed's own iframe; the origin
+    // must also match the host embed.js was loaded from. If that origin could
+    // not be worked out, nothing is forwarded -- fail closed, never open.
+    if(e.data.brauditEvent && WIDGET_ORIGIN && e.origin===WIDGET_ORIGIN){
       try{
         var ev=e.data.brauditEvent, ok={tool_step:1,tool_lead:1};
         var name=ok[ev.name]?ev.name:(ev.step==='lead_submitted'?'tool_lead':'tool_step');
@@ -400,7 +404,16 @@ _EMBED_JS = """(function(){
         if(ev.classes) params.classes=String(ev.classes).replace(/[^0-9,]/g,'').slice(0,100);
         var pr=ev.partner_ref||refFromCookie(); if(pr) params.partner_ref=pr;
         if(typeof window.gtag==='function') window.gtag('event', name, params);
-        else if(Array.isArray(window.dataLayer)) window.dataLayer.push(Object.assign({event:name}, params));
+        else if(Array.isArray(window.dataLayer)){
+          // R1 (review 24 Sep): Tag Manager merges every push into ONE
+          // persistent model, so a key left out keeps the PREVIOUS event's
+          // value (a later tool_shown would report the last search's classes).
+          // Every push therefore carries all seven keys, undefined when absent.
+          window.dataLayer.push({event:name, tool:params.tool, step:params.step,
+            step_no:params.step_no, placement:params.placement,
+            result_band:params.result_band, classes:params.classes,
+            partner_ref:params.partner_ref});
+        }
       }catch(_e){}
     }
   });
