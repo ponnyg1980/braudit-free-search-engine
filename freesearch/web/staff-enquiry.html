@@ -562,8 +562,9 @@
          its £149 discount on by default — remove it to charge. -->
     <div id="f-priceblock">
     <h3 style="margin:26px 0 4px;font-size:16px;color:var(--navy)">Pricing</h3>
-    <p class="sf-hint" style="margin-bottom:12px">RRP £149 a line. Your discounts, on
-      the record. The order total can never go below £99 net.</p>
+    <p class="sf-hint" style="margin-bottom:12px">Each line starts at the order's tier
+      price. You can raise any price; nothing goes below the tier price. The invoice shows RRP
+      and the discount, so the client sees the saving.</p>
     <div id="f-pricing"></div>
     <div class="sf-price" id="f-pricebox"></div>
     </div>
@@ -1040,7 +1041,7 @@ function gateRules(){
      why:'Confirm with the client whether they are UK-based — it changes the total.'},
     {id:'G-13',sec:'recommend',label:'Prices within bounds',
      ok:priceFloorOk(),
-     why:'Each line is £0–£149 and the order total cannot go below £99 net.'},
+     why:'No line below the order\u2019s tier price (the floor). For less, invoice at the floor and give a credit note on the account.'},
     {id:'G-11',sec:'readback',label:'Read back and accepted',
      ok:state.readback.confirmed,
      why:'Read the summary back, then tick.'}
@@ -1185,76 +1186,129 @@ function markChanged(){renderPrice();touch();}
 function liveLines(){return state.marks.filter(m=>nonEmpty(m.text));}
 function markCount(){return Math.max(1,liveLines().length);}
 function vatExempt(){return state.billing.location==='nonuk';}
-/* Point 13: the consultation is ALWAYS a £149 line with a £149 discount on
-   by default — visible value, zero charge — removable to charge it. */
+/* PRICING (handoff §9, Jonathan 24 Sep 2026). The order's tier comes from
+   the server (/staff-tier): the Deal's frozen Referral_Terms, else the billing
+   account's Pricing_Tier (or its parent's), else a live partner's ref code,
+   else the staff default -- Discounted, which staff may drop to Baseline for
+   a direct client (saved on the enquiry as pricingTier, never on the Account).
+   Each line starts at the tier price for its product (UK or Worldwide audit);
+   staff may raise any price, and nothing goes below the tier price -- the
+   preferred route for less is to invoice at the floor and give a credit note
+   on the account. The consultation is always offered included: RRP then its
+   own discount to £0; untick to charge it (at the tier price). The server
+   re-checks every rule in _audit_pay. */
+const TIER_FALLBACK={AUDIT_UK:{RRP:149,Discounted:119,Baseline:99},
+  AUDIT_WORLDWIDE:{RRP:199,Discounted:169,Baseline:149},
+  CONSULT_CLEARANCE:{RRP:149,Discounted:119,Baseline:99}};
+function tierInfo(){return state.tierInfo||{tier:state.pricingTier||'Discounted',source:'default',
+  can_choose:true,worldwide:isWorldwideOrder(),prices:TIER_FALLBACK,fallback:true};}
+function isWorldwideOrder(){
+  const d=state.discovery||{};
+  const t=[...(d.terrNow||[]),...(d.terrPlan||[])];
+  if(t.length) return t.some(c=>c&&!['GB','UK'].includes(String(c).toUpperCase()));
+  const ps=(typeof platformScope==='function')?platformScope():{};
+  return (ps.search_layers||[]).some(l=>/EUIPO|USPTO|WIPO|CIPO|IP Australia|Other IPO/i.test(String(l)));
+}
+function auditSku(){return isWorldwideOrder()?'AUDIT_WORLDWIDE':'AUDIT_UK';}
+function tierPrice(sku,tier){const p=(tierInfo().prices||TIER_FALLBACK)[sku]||TIER_FALLBACK[sku];
+  return p[tier||tierInfo().tier];}
+function lineFloor(){return tierPrice(auditSku());}
+function lineRrp(){return tierPrice(auditSku(),'RRP');}
+function linePrice(m){return (m.price!=null&&m.priceSet)?m.price:lineFloor();}
 function consultLine(){
-  /* Quick Audit has no consultation step -- no line, no RRP for it. Mirrors
-     _audit_pay(quick) server-side. */
-  if(CONFIG.QUICK||state.consult.declined) return null;
-  return {label:'Audit Consultation',price:state.consult.feeWaived?0:149};
+  /* Offered included on every staff order, Quick Audit too; only a
+     consultation the client DECLINED carries no line. */
+  if(!CONFIG.QUICK&&state.consult.declined) return null;
+  const waived=CONFIG.QUICK||state.consult.feeWaived;
+  return {label:'Clearance Consultation',rrp:tierPrice('CONSULT_CLEARANCE','RRP'),
+    price:waived?0:(state.consult.price!=null?state.consult.price:tierPrice('CONSULT_CLEARANCE'))};
 }
 function net(){
   const c=consultLine();
-  return liveLines().reduce((a,m)=>a+(m.price!=null?m.price:149),0)+(c?c.price:0);
+  return liveLines().reduce((a,m)=>a+linePrice(m),0)+(c?c.price:0);
 }
-function rrp(){return liveLines().length*149+(consultLine()?149:0);}
+function rrp(){return liveLines().length*lineRrp()+(consultLine()?consultLine().rrp:0);}
 function total(){return vatExempt()?net():net()*(1+CONFIG.VAT);}
 function priceFloorOk(){
+  const sa=tierInfo().super_admin, f=lineFloor(), c=consultLine();
   return liveLines().length<=6 &&
-    liveLines().every(m=>{const p=(m.price!=null?m.price:149);
-      return p>=0&&p<=149;}) && (liveLines().length===0||net()>=CONFIG.MIN_TOTAL);
+    liveLines().every(m=>{const p=linePrice(m);return p>=0&&(sa||p>=f-0.004);}) &&
+    (!c||c.price===0||sa||c.price>=tierPrice('CONSULT_CLEARANCE')-0.004);
 }
+let tierKey='';
+async function fetchTier(){
+  if(!state.sessionId||!CONFIG.TOKEN) return;
+  const key=[state.sessionId,state.billing&&state.billing.account_id,state.deal&&state.deal.id,
+    state.pricingTier,JSON.stringify((state.discovery||{}).terrNow||[]),
+    JSON.stringify((state.discovery||{}).terrPlan||[])].join('|');
+  if(key===tierKey) return; tierKey=key;
+  try{
+    const r=await fetch('/staff-tier',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({k:CONFIG.TOKEN,session_id:state.sessionId})});
+    const d=await r.json();
+    if(d&&d.ok){state.tierInfo=d;renderPrice();renderGate&&renderGate();}
+  }catch(e){}
+}
+function setTierChoice(v){state.pricingTier=v;state.tierInfo=null;tierKey='';
+  liveLines().forEach(m=>{if(!m.priceSet)m.price=null;});touch();}
 function renderPrice(){
-  const lines=liveLines();
+  const lines=liveLines(), ti=tierInfo(), f=lineFloor(), r=lineRrp();
   const KL={word:'Name',logo:'Logo',tagline:'Tagline',product:'Product name',other:'Mark'};
-  /* Editable per-line pricing (point 12) — each mark line at RRP £149 with a
-     discount box; the charge is what's left. */
+  const SRC={deal:'this Deal (frozen)',account:'the billing account',parent_account:'the parent account',
+    partner:'the introducing partner',staff_choice:'your choice',default:'the staff default'};
   const pr=document.getElementById('f-pricing');
   if(pr){
-    pr.innerHTML=lines.length?lines.map((m,li)=>{
-      const i=state.marks.indexOf(m);
-      const p=m.price!=null?m.price:149;
-      return `<div class="sf-mark" style="display:grid;grid-template-columns:1fr 90px 110px 90px;
+    const head=`<div class="sf-hint" style="margin:0 0 10px">
+      Pricing tier: <b>${esc(ti.tier)}</b> (from ${esc(SRC[ti.source]||ti.source)})
+      ${ti.can_choose?` &middot; <label>direct client:
+        <select onchange="setTierChoice(this.value)">
+          <option value="Discounted"${ti.tier==='Discounted'?' selected':''}>Discounted</option>
+          <option value="Baseline"${ti.tier==='Baseline'?' selected':''}>Baseline</option></select></label>`:''}
+      &middot; ${esc(auditSku()==='AUDIT_WORLDWIDE'?'Worldwide':'UK')} Clearance Audit, floor £${f.toFixed(0)} a line
+      ${ti.fallback?' <span style="color:#b5372a">(tier lookup unavailable — using the default)</span>':''}</div>`;
+    pr.innerHTML=lines.length?head+lines.map(m=>{
+      const i=state.marks.indexOf(m), p=linePrice(m), low=p<f-0.004&&!ti.super_admin;
+      return `<div class="sf-mark" style="display:grid;grid-template-columns:1fr 90px 120px 90px;
         gap:10px;align-items:center;padding:12px 16px">
         <div><b style="color:var(--navy);font-size:14px">${esc(KL[m.kind]||'Mark')}</b>
           <span style="font-size:13px;color:var(--quiet)"> — ${esc(m.text)}</span></div>
-        <div style="font-size:13px;color:var(--quiet)">RRP £149</div>
+        <div style="font-size:13px;color:var(--quiet)">RRP £${r.toFixed(0)}</div>
         <div style="display:flex;align-items:center;gap:5px">
-          <span style="font-size:12.5px;font-weight:700;color:var(--navy)">−£</span>
-          <input type="number" min="0" max="149" step="1" value="${(149-p).toFixed(0)}"
-            style="width:70px" oninput="setLineDiscount(${i},this.value)"></div>
-        <div style="font-weight:800;color:var(--navy);text-align:right">£${p.toFixed(2)}</div>
+          <span style="font-size:12.5px;font-weight:700;color:var(--navy)">£</span>
+          <input type="number" min="${ti.super_admin?0:f}" step="1" value="${p.toFixed(0)}"
+            style="width:80px${low?';border-color:#b5372a':''}" onchange="setLinePrice(${i},this.value)"></div>
+        <div style="font-weight:800;color:${low?'#b5372a':'var(--navy)'};text-align:right">£${p.toFixed(2)}</div>
       </div>`;
     }).join('')+(consultLine()?(()=>{const c=consultLine();return `
-      <div class="sf-mark" style="display:grid;grid-template-columns:1fr 90px 110px 90px;
+      <div class="sf-mark" style="display:grid;grid-template-columns:1fr 90px 120px 90px;
         gap:10px;align-items:center;padding:12px 16px;background:var(--pink-tint)">
         <div><b style="color:var(--navy);font-size:14px">Clearance Consultation</b>
           <span style="font-size:13px;color:var(--quiet)"> — up to one hour with an expert</span></div>
-        <div style="font-size:13px;color:var(--quiet)">RRP £149</div>
-        <div style="font-size:12.5px">
+        <div style="font-size:13px;color:var(--quiet)">RRP £${c.rrp.toFixed(0)}</div>
+        <div style="font-size:12.5px">${CONFIG.QUICK?'Included':`
           <label style="display:flex;gap:6px;align-items:center;cursor:pointer">
             <input type="checkbox" ${state.consult.feeWaived?'checked':''}
               onchange="state.consult.feeWaived=this.checked;renderPrice();touch()"
               style="accent-color:var(--pink)">
-            −£149 discount</label></div>
+            Included</label>`}</div>
         <div style="font-weight:800;color:var(--navy);text-align:right">£${c.price.toFixed(2)}</div>
       </div>`;})():'')
     :'<div class="sf-hint">Add the brand lines in Marks &amp; scope first.</div>';
   }
-  const under=lines.length&&net()<CONFIG.MIN_TOTAL;
+  const under=lines.length&&!priceFloorOk();
   const pbx=document.getElementById('f-pricebox'); if(!pbx) return;
   pbx.innerHTML=
     `${under?`<div class="tr" style="color:#b5372a;font-weight:700">
-       <span>Below the £${CONFIG.MIN_TOTAL} order minimum</span><span></span></div>`:''}
+       <span>A line is below the ${esc(ti.tier)} floor — invoice at the floor and give a credit note</span><span></span></div>`:''}
     <div class="tr"><span>Net total${net()<rrp()?` <span style="color:var(--quiet);font-size:12.5px">(RRP £${rrp().toFixed(2)})</span>`:''}</span><span>£${net().toFixed(2)}</span></div>
     ${vatExempt()
       ?'<div class="tr"><span>VAT — not applicable (outside the UK)</span><span>£0.00</span></div>'
       :`<div class="tr"><span>VAT at 20%</span><span>£${(net()*CONFIG.VAT).toFixed(2)}</span></div>`}
     <div class="tr grand"><span>Total</span><span>£${total().toFixed(2)}</span></div>`;
 }
-function setLineDiscount(i,v){
-  const d=Math.max(0,Math.min(149,parseFloat(v)||0));
-  state.marks[i].price=149-d;renderPrice();touch();
+function setLinePrice(i,v){
+  const p=Math.max(0,parseFloat(v)||0);
+  state.marks[i].price=p;state.marks[i].priceSet=true;renderPrice();touch();
 }
 
 /* ---------- shared class scope ---------- */
@@ -1404,7 +1458,7 @@ function renderReadback(){
     row('Scope',r.scope)+
     row('Audit delivered by',pretty(r.auditDate))+
     row('Consultation fee',state.consult.declined?'—'
-      :(state.consult.feeWaived?'£149, discounted to £0':'£149 charged'))+
+      :(state.consult.feeWaived?'Included (RRP £'+(consultLine()?consultLine().rrp:149)+')':'£'+(consultLine()?consultLine().price:'').toString()+' charged'))+
     row('Consultation',cn.declined
       ?('Declined — '+(cn.declineReason||'no reason recorded'))
       :(cn.date?(pretty(cn.date)+' at '+(cn.time||'—')+' with '+(cn.adviser||'—')):'')):'')+
@@ -1750,7 +1804,7 @@ function touch(){
   dirty=true;setSaveState('Saving…');
   renderAll();
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>saveNow(false),900);
+  saveTimer=setTimeout(async()=>{await saveNow(false);fetchTier();},900);
 }
 async function ensureSession(){
   if(state.sessionId) return state.sessionId;
@@ -2433,6 +2487,8 @@ async function toPayment(){
   const d=await r.json();
   if(d&&d.ok){state.staff=d.name;state.staffEmail=d.email;renderGate();}
 }catch(e){}})();
+/* §9: a resumed enquiry already has a session -- fetch its tier once loaded. */
+setTimeout(()=>{fetchTier();},2500);
 function chPick(c){
   const set=(id,v)=>{const el=document.getElementById(id);
     if(el&&v){el.value=v;}};
