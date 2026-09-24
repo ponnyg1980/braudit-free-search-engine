@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Request a Brand Audit — The Trademark Helpline</title>
+<script src="/tool-events.js"></script>
   <!-- Shared design layer. Loads BEFORE this page's own <style>, so
        anything below overrides it — page-specific rules stay local. -->
   <link rel="stylesheet" href="/braudit.css">
@@ -794,9 +795,10 @@ function submitAudit(){
     body:JSON.stringify({request_id:state.requestId,first_name:d.first_name,last_name:d.last_name,
       email:d.email,phone:d.phone,business_name:d.business_name||null,
       business_website:d.business_website||null,consent_marketing:d.consent,
-      audit_variant:auditVariant(),
+      audit_variant:auditVariant(),visit:(window.tmhTool?tmhTool.context():null),
       trading_now:nowCodes(),planning_to_trade:planCodes()})})
     .then(r=>r.json()).then(function(res){
+      if(res&&res.ok!==false&&window.tmhTool) tmhTool.step('lead_submitted');
       document.getElementById('done-msg').textContent=
         `Thanks, ${d.first_name} — we've got your request for ${state.brands.length} brand`+
         (state.brands.length===1?'':'s')+`. A specialist will be in touch at ${d.email} shortly.`;
