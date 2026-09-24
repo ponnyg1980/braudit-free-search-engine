@@ -610,7 +610,7 @@ const CONFIG=(function(){
     NAME:q.get('q')||'',
     JOURNEY:q.get('journey')||'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey',
     /* Pricing — the Audit Promotion discount is whatever brings the net to £99. */
-    PRICE_AUDIT:149, PRICE_CONSULT:149, NET_TOTAL:99, VAT_RATE:0.20,
+    PRICE_AUDIT:149, PRICE_AUDIT_WW:199, PRICE_CONSULT:149, NET_TOTAL:99, VAT_RATE:0.20,
     /* Zoho Bookings. These pages send X-Frame-Options: SAMEORIGIN, so they
        CANNOT be iframed — the booking opens in a new tab (checked 27 Aug). */
     BOOK_PHONE_URL:q.get('bookphone')||'https://bookings.thetrademarkhelpline.com/Audit-Phone',
@@ -744,8 +744,22 @@ async function crm(stage,extra){
     return res;
   }catch(e){return null;}
 }
+/* PARTNER REF (handoff §9, 24 Sep 2026): ?ref= arrives via embed.js (from
+   the host page's ?ref= or its tmh_ref cookie). Recorded once per page load as
+   a partner_ref_captured event; the EARLIEST one on the session wins (first
+   touch), and Zoho decides whether it is a live partner. Never validated here
+   beyond its shape, and the partner list is never sent to the browser. */
+const REF_CODE=(()=>{try{const v=new URLSearchParams(location.search).get('ref');
+  return v&&/^[A-Za-z0-9_-]{2,40}$/.test(v)?v:'';}catch(e){return '';}})();
+let refSent=false;
+function sendRef(id){
+  if(!id||!REF_CODE||refSent) return; refSent=true;
+  try{fetch(journeyBase()+'/session/event',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({session_id:id,event_type:'partner_ref_captured',screen:null,
+      payload:{code:REF_CODE}}),keepalive:true}).catch(()=>{});}catch(e){}
+}
 function logEvent(type,screen,payload,snapshot){
-  const send=id=>{ if(!id) return;
+  const send=id=>{ if(!id) return; sendRef(id);
     try{fetch(journeyBase()+'/session/event',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({session_id:id,event_type:type,screen:screen||null,
@@ -1366,27 +1380,58 @@ function requestFastTrack(){
 /* ================= 8 — SUMMARY & PAYMENT ================= */
 function money(n){return '£'+n.toFixed(2);}
 function vatExempt(){return state.applicant.kind==='nonuk_org'||state.applicant.kind==='nonuk_ind';}
+/* PRICING (handoff §9, Jonathan 24 Sep 2026). The server decides the price:
+   /audit-quote returns the SAME lines the Stripe charge uses (a direct web
+   order: every element at RRP -- Worldwide £199 -- and one promotion to £99
+   for the whole order; an introduced client: each element at their tier).
+   The consultation is always included: £149 then -£149. Until the quote
+   arrives (or if it cannot be fetched) the page shows the direct-web
+   calculation, which is what the server falls back to as well. */
+function isWorldwideOrder(){
+  return [...(state.now||[]),...(state.plan||[])].some(c=>c&&!['GB','UK'].includes(String(c).toUpperCase()));
+}
 function auditLines(){
-  /* One line per TYPE (Jonathan, 9 Sep): Name, Logo, Tagline at £149 each.
-     Billing lines, not search contexts — the tagline is billed as a line but
-     travels inside the word search alongside the name. */
-  const lines=[{label:'Clearance Audit – Word mark "'+state.name+'"',price:CONFIG.PRICE_AUDIT}];
-  if(state.hasLogo)lines.push({label:'Clearance Audit – Logo'+(state.logoLater?' (to follow)':''),
-    price:CONFIG.PRICE_AUDIT});
-  if(state.tagline)lines.push({label:'Clearance Audit – Tagline "'+state.tagline+'"',price:CONFIG.PRICE_AUDIT});
+  const head=isWorldwideOrder()?'Worldwide Clearance Audit':'UK Clearance Audit';
+  const rrp=isWorldwideOrder()?CONFIG.PRICE_AUDIT_WW:CONFIG.PRICE_AUDIT;
+  const lines=[{label:head+' – Word mark "'+state.name+'"',rrp,price:rrp}];
+  if(state.hasLogo)lines.push({label:head+' – Logo'+(state.logoLater?' (to follow)':''),rrp,price:rrp});
+  if(state.tagline)lines.push({label:head+' – Tagline "'+state.tagline+'"',rrp,price:rrp});
   return lines;
 }
 function pricing(){
-  const consult=state.consult.taken===true;
-  const lines=auditLines();
-  const linesum=lines.reduce((a,l)=>a+l.price,0);
-  const gross=linesum+(consult?CONFIG.PRICE_CONSULT:0);
-  /* The client-facing promotion ALWAYS lands the net total on £99, however
-     many lines the brand carries. The value stack is the point. */
-  const discount=gross-CONFIG.NET_TOTAL;
-  const net=CONFIG.NET_TOTAL, exempt=vatExempt();
-  const vat=exempt?0:net*CONFIG.VAT_RATE;
-  return {consult,lines,gross,discount,net,vat,exempt,total:net+vat};
+  const q=state.quote, exempt=vatExempt();
+  const lines=q?q.lines:auditLines();
+  const web=q?q.web_exception:true;
+  const rrpSum=lines.reduce((a,l)=>a+l.rrp,0);
+  const charged=web?CONFIG.NET_TOTAL:lines.reduce((a,l)=>a+l.price,0);
+  const net=q?q.net:charged;
+  const vat=exempt?0:Math.round(net*CONFIG.VAT_RATE*100)/100;
+  return {consult:true,lines,web,rrpSum,discount:rrpSum-charged,net,vat,exempt,total:net+vat};
+}
+function fetchQuote(){
+  const key=[state.sessionId,vatExempt(),state.name,state.hasLogo,state.tagline,
+    (state.now||[]).join(),(state.plan||[]).join()].join('|');
+  if(state.quoteKey===key) return;
+  state.quoteKey=key; state.quote=null;
+  fetch('/audit-quote',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({session_id:state.sessionId,vat_exempt:vatExempt()})})
+    .then(r=>r.json()).then(d=>{
+      if(d&&d.ok&&Array.isArray(d.lines)&&state.quoteKey===key){state.quote=d;renderTotals();}
+    }).catch(()=>{});
+}
+function renderTotals(){
+  const pr=pricing(), el=document.getElementById('sum-totals'); if(!el) return;
+  const cRrp=(state.quote&&state.quote.consult_rrp)||CONFIG.PRICE_CONSULT;
+  el.innerHTML=
+    pr.lines.map(l=>`<div class="tr"><span>${esc(l.label)}</span><span>${money(l.rrp)}</span></div>`).join('')+
+    (pr.discount>0.004?`<div class="tr disc"><span>${pr.web?'Clearance Audit Promotion':'Clearance Audit – discount applied'}</span><span>&minus;${money(pr.discount)}</span></div>`:'')+
+    `<div class="tr"><span>Clearance Consultation</span><span>${money(cRrp)}</span></div>`+
+    `<div class="tr disc"><span>Clearance Consultation – included</span><span>&minus;${money(cRrp)}</span></div>`+
+    `<div class="tr"><span>Net total</span><span>${money(pr.net)}</span></div>`+
+    (pr.exempt
+      ?`<div class="tr"><span>VAT — not applicable (outside the UK)</span><span>${money(0)}</span></div>`
+      :`<div class="tr"><span>VAT @ ${Math.round(CONFIG.VAT_RATE*100)}%</span><span>${money(pr.vat)}</span></div>`)+
+    `<div class="tr grand"><span>Total payable</span><span>${money(pr.total)}</span></div>`;
 }
 function invoiceRef(){return 'AUD-'+(state.sessionId||'').replace(/-/g,'').slice(0,8).toUpperCase();}
 function renderSummary(){
@@ -1436,18 +1481,7 @@ function renderSummary(){
       [state.applicant.addr1,state.applicant.addr2,state.applicant.addr3,
        state.applicant.postcode].filter(Boolean).join(', '));
 
-  document.getElementById('sum-totals').innerHTML=
-    pr.lines.map(l=>`<div class="tr"><span>${l.label}</span><span>${money(l.price)}</span></div>`).join('')+
-    `<div class="tr disc"><span>Clearance Audit Promotion</span><span>&minus;${money(pr.discount-(pr.consult?CONFIG.PRICE_CONSULT:0))}</span></div>`+
-    /* Consultation: included at RRP, discounted to £0 (Jonathan, 24 Sep) --
-       the same two lines the Xero invoice carries. */
-    (pr.consult?`<div class="tr"><span>Clearance Consultation</span><span>${money(CONFIG.PRICE_CONSULT)}</span></div>`+
-      `<div class="tr disc"><span>Clearance Consultation – included, discounted to £0</span><span>&minus;${money(CONFIG.PRICE_CONSULT)}</span></div>`:'')+
-    `<div class="tr"><span>Net total</span><span>${money(pr.net)}</span></div>`+
-    (pr.exempt
-      ?`<div class="tr"><span>VAT — not applicable (outside the UK)</span><span>${money(0)}</span></div>`
-      :`<div class="tr"><span>VAT @ ${Math.round(CONFIG.VAT_RATE*100)}%</span><span>${money(pr.vat)}</span></div>`)+
-    `<div class="tr grand"><span>Total payable</span><span>${money(pr.total)}</span></div>`;
+  renderTotals(); fetchQuote();
 
   /* Phone payment is only offered inside office hours. */
   const openNow=officeOpenNow();
