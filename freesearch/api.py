@@ -919,6 +919,9 @@ def _audit_pay(payload: dict) -> dict:
         'metadata[lines]': json.dumps(
             [{'l': x['l'][:38], 'p': x['p']} for x in lines])[:490],
         'metadata[discount_pence]': str(discount_p),
+        # Consultation booked (client wizard). The journey adds it to the Xero
+        # invoice at RRP with its own line taking it to £0 (Jonathan, 24 Sep).
+        'metadata[consult]': '1' if consult else '0',
     })
     # The client promotion is a real Stripe discount, so the checkout page
     # itself shows the £149 lines and the promotion taking it to £99.
@@ -1037,6 +1040,7 @@ def _stripe_webhook(raw: bytes, sig_header: str) -> dict:
         'staff_email': meta.get('staff_email') or '',
         'lines': meta.get('lines') or '',
         'discount_pence': meta.get('discount_pence') or '0',
+        'consult': meta.get('consult') == '1',
         'customer_email': cd.get('email'),
     })
     # Scenario 1's second half: raise the Xero invoice and mark it paid
