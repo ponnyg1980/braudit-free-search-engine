@@ -1438,8 +1438,11 @@ function renderSummary(){
 
   document.getElementById('sum-totals').innerHTML=
     pr.lines.map(l=>`<div class="tr"><span>${l.label}</span><span>${money(l.price)}</span></div>`).join('')+
-    (pr.consult?`<div class="tr"><span>Clearance Consultation</span><span>${money(CONFIG.PRICE_CONSULT)}</span></div>`:'')+
-    `<div class="tr disc"><span>Clearance Audit Promotion</span><span>&minus;${money(pr.discount)}</span></div>`+
+    `<div class="tr disc"><span>Clearance Audit Promotion</span><span>&minus;${money(pr.discount-(pr.consult?CONFIG.PRICE_CONSULT:0))}</span></div>`+
+    /* Consultation: included at RRP, discounted to £0 (Jonathan, 24 Sep) --
+       the same two lines the Xero invoice carries. */
+    (pr.consult?`<div class="tr"><span>Clearance Consultation</span><span>${money(CONFIG.PRICE_CONSULT)}</span></div>`+
+      `<div class="tr disc"><span>Clearance Consultation – included, discounted to £0</span><span>&minus;${money(CONFIG.PRICE_CONSULT)}</span></div>`:'')+
     `<div class="tr"><span>Net total</span><span>${money(pr.net)}</span></div>`+
     (pr.exempt
       ?`<div class="tr"><span>VAT — not applicable (outside the UK)</span><span>${money(0)}</span></div>`
@@ -1539,7 +1542,7 @@ function submitOrder(){
   if(state.payment.method==='invoice'){
     logEvent('audit_invoice_requested','audit_summary',{
       marks:1,total_pence:Math.round(pr.total*100),vat_exempt:pr.exempt,
-      pay_date:state.payment.payDate,invoice_ref:invoiceRef(),
+      pay_date:state.payment.payDate,invoice_ref:invoiceRef(),consult:pr.consult,
       billing_entity:state.applicant.name||'',source:'client_checkout',
       xero_invoice:'pending_credentials'});
   }
