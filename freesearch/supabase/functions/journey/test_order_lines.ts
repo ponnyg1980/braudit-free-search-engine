@@ -1,6 +1,8 @@
 // Run:  deno run test_order_lines.ts
-//   or: node --experimental-strip-types test_order_lines.ts  (copies needed; see README note)
-import { buildXeroLines, buildZohoOrder, classify, isWorldwide, pricePoint } from "./order_lines.ts";
+//   or: copy order_lines.ts, billing.gen.ts and this file to a folder with a
+//       {"type":"module"} package.json, then: node --experimental-strip-types test_order_lines.ts
+import { buildXeroLines, buildZohoOrder, classify, isWorldwide, pricePoint,
+  type LineMeta, type Tier, type XeroLineOut } from "./order_lines.ts";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -8,67 +10,81 @@ const eq = (name: string, got: unknown, want: unknown) => {
   if (!ok) fails++;
   console.log((ok ? "PASS " : "FAIL ") + name + (ok ? "" : `\n   got  ${JSON.stringify(got)}\n   want ${JSON.stringify(want)}`));
 };
+const rows = (b: { items: XeroLineOut[] }) => b.items.map((i) => [i.Description, i.UnitAmount]);
+const net = (b: { items: XeroLineOut[] }) => Math.round(b.items.reduce((a, i) => a + i.UnitAmount, 0) * 100) / 100;
+// Echo what we sent as if Xero returned it (20% VAT unless exempt).
+const echo = (b: { items: XeroLineOut[]; meta: LineMeta[] }, exempt: boolean, tier: Tier, web: boolean) => {
+  const li = b.items.map((s, i) => ({ LineItemID: "L" + i, Description: s.Description, Quantity: s.Quantity,
+    LineAmount: s.UnitAmount * s.Quantity, TaxAmount: exempt ? 0 : Math.round(s.UnitAmount * s.Quantity * 20) / 100,
+    AccountCode: s.AccountCode, TaxType: s.TaxType }));
+  const sub = li.reduce((a, l) => a + l.LineAmount, 0), tax = li.reduce((a, l) => a + l.TaxAmount, 0);
+  return buildZohoOrder({ invoice: { InvoiceID: "X", InvoiceNumber: "INV-T", SubTotal: sub, TotalTax: tax,
+    Total: Math.round((sub + tax) * 100) / 100, LineItems: li }, meta: b.meta, sent: b.items, vatExempt: exempt,
+    paid: true, paidDate: "2026-09-24", today: "2026-09-24", stripeId: "", syncNote: "", nowIso: "x", tier, webException: web });
+};
 
 eq("word", classify("Name search — ACME", false).desc, 'UK Clearance Audit – Word mark "ACME"');
 eq("hyphen name", classify("Name — Coca-Cola", false).desc, 'UK Clearance Audit – Word mark "Coca-Cola"');
-eq("logo", classify("Logo search (logo to follow)", false).desc, "UK Clearance Audit – Logo (to follow)");
-eq("tagline ww", classify("Tagline — Just do", true), { sku: "AUDIT_WORLDWIDE", desc: 'Worldwide Clearance Audit – Tagline "Just do"' });
-eq("consult waived", classify("Audit Consultation — discounted to £0", false), { sku: "CONSULT_CLEARANCE", desc: "Clearance Consultation – discounted to £0" });
 eq("ww", [isWorldwide(["GB"]), isWorldwide(["GB", "EU"]), isWorldwide([])], [false, true, false]);
-eq("bands uk", ["149", "130", "119", "99", "33"].map((v) => pricePoint("AUDIT_UK", Number(v))),
-   ["RRP", "Discounted", "Discounted", "Baseline", "Below Baseline"]);
 eq("bands ww", [199, 169, 149, 99].map((v) => pricePoint("AUDIT_WORLDWIDE", v)),
    ["RRP", "Discounted", "Baseline", "Below Baseline"]);
 
-// Client wizard, one name, UK, VAT: £149 - £50 promo = £99 net, £118.80 gross.
-const a = buildXeroLines({ lines: [{ l: "Name search — ACME", p: 14900 }], discountPence: 5000,
-  marks: 1, vatExempt: false, worldwide: false });
-eq("client lines", a.items.map((i) => [i.Description, i.UnitAmount, i.AccountCode, i.TaxType]), [
-  ['UK Clearance Audit – Word mark "ACME"', 149, "227", "OUTPUT2"],
-  ["Clearance Audit Promotion applied", -50, "227", "OUTPUT2"]]);
-const xa = { InvoiceID: "X1", InvoiceNumber: "INV-1", Date: "/Date(1790208000000+0000)/",
-  SubTotal: 99, TotalTax: 19.8, Total: 118.8, LineItems: [
-    { LineItemID: "L1", Description: a.items[0].Description, Quantity: 1, LineAmount: 149, TaxAmount: 29.8, AccountCode: "227", TaxType: "OUTPUT2" },
-    { LineItemID: "L2", Description: a.items[1].Description, Quantity: 1, LineAmount: -50, TaxAmount: -10, AccountCode: "227", TaxType: "OUTPUT2" }] };
-const za = buildZohoOrder({ invoice: xa, meta: a.meta, sent: a.items, vatExempt: false, paid: true,
-  paidDate: "2026-09-24", today: "2026-09-24", stripeId: "pi_1", syncNote: "ok", nowIso: "2026-09-24T10:00:00+00:00" });
-eq("client items", za.items.map((i) => [i.product_code, i.List_Price, i.Amount, i.Tax, i.Total, i.Line_Type, i.Price_Point ?? null]), [
-  ["UKTM-AUD-UK-DOM", 149, 149, 29.8, 178.8, "TMH Fee", "Baseline"],
-  ["UKTM-AUD-UK-DOM", 0, -50, -10, -60, "Discount", null]]);
-eq("client order", [za.order.Status, za.order.Subtotal, za.order.Discount, za.order.VAT, za.order.Total, za.order.Service_Fees, za.order.Invoice_Date, za.warnings], ["Paid", 99, 50, 19.8, 118.8, 149, "2026-09-24", []]);
+// 1. Exception 1: direct web, name + logo + tagline, Worldwide, VAT. RRP 3x199,
+//    ONE promotion to £99, consultation included.
+const w = buildXeroLines({ lines: [{ l: "Name search — ACME", p: 19900 }, { l: "Logo search", p: 19900 },
+  { l: "Tagline — Go", p: 19900 }], marks: 3, vatExempt: false, worldwide: true, tier: "Baseline",
+  webException: true, consult: true });
+eq("web rows", rows(w), [
+  ['Worldwide Clearance Audit – Word mark "ACME"', 199], ["Worldwide Clearance Audit – Logo", 199],
+  ['Worldwide Clearance Audit – Tagline "Go"', 199], ["Clearance Audit Promotion applied", -498],
+  ["Clearance Consultation", 149], ["Clearance Consultation – included", -149]]);
+eq("web net", net(w), 99);
+const wz = echo(w, false, "Baseline", true);
+eq("web price points", wz.items.map((i) => i.Price_Point ?? null),
+   ["Baseline", "Baseline", "Baseline", null, "Included", null]);
+eq("web deal money", wz.dealMoney, { RRP_Total_Fee_Amount: 746, Collecting_Fee_Invoiced: 99, Gross_Profit: 99 });
+eq("web totals tie", [wz.order.Total, wz.warnings], [118.8, []]);
 
-// Staff, overseas, worldwide, name at £149 + logo at £0 + consultation waived.
-const b = buildXeroLines({ lines: [{ l: "Name — Hailaflo", p: 14900 }, { l: "Logo — Hailaflo logo", p: 0 },
-  { l: "Audit Consultation — discounted to £0", p: 0 }], discountPence: 0, marks: 3, vatExempt: true, worldwide: true });
-const xb = { InvoiceID: "X2", InvoiceNumber: "INV-2", SubTotal: 149, TotalTax: 0, Total: 149,
-  LineItems: b.items.map((s, i) => ({ LineItemID: "M" + i, Description: s.Description, Quantity: 1, LineAmount: s.UnitAmount, TaxAmount: 0, AccountCode: s.AccountCode, TaxType: s.TaxType })) };
-const zb = buildZohoOrder({ invoice: xb, meta: b.meta, sent: b.items, vatExempt: true, paid: false,
-  paidDate: "", today: "2026-09-24", stripeId: "", syncNote: "", nowIso: "2026-09-24T10:00:00+00:00" });
-eq("staff consult pair", b.items.slice(2).map((i) => [i.Description, i.UnitAmount]), [
-  ["Clearance Consultation", 149], ["Clearance Consultation – included, discounted to £0", -149]]);
-eq("staff items", zb.items.map((i) => [i.product_code, i.List_Price, i.Price_Point ?? null, i.Xero_Account_Code, i.Xero_Tax_Type]), [
-  ["UKTM-AUD-WW-INTL", 199, "Baseline", "247", "NONE"],
-  ["UKTM-AUD-WW-INTL", 199, "Below Baseline", "247", "NONE"],
-  ["UKTM-CONS-INTL", 149, "Below Baseline", "247", "NONE"],
-  ["UKTM-CONS-INTL", 0, null, "247", "NONE"]]);
-eq("staff order", [zb.order.Status, zb.order.Total, zb.order.Paid_Date ?? null], ["Invoiced", 149, null]);
+// 2. Introduced client on Discounted (UK): each element at £119.
+const d = buildXeroLines({ lines: [{ l: "Name search — ACME", p: 11900 }, { l: "Logo search", p: 11900 }],
+  marks: 2, vatExempt: false, worldwide: false, tier: "Discounted", webException: false, consult: true });
+eq("introduced rows", rows(d), [
+  ['UK Clearance Audit – Word mark "ACME"', 149], ["UK Clearance Audit – Logo", 149],
+  ["Clearance Audit – discount applied", -60], ["Clearance Consultation", 149], ["Clearance Consultation – included", -149]]);
+const dz = echo(d, false, "Discounted", false);
+eq("introduced pp", dz.items.map((i) => i.Price_Point ?? null), ["Discounted", "Discounted", null, "Included", null]);
+eq("introduced money", dz.dealMoney, { RRP_Total_Fee_Amount: 447, Collecting_Fee_Invoiced: 238, Gross_Profit: 202.3 });
 
-// Client wizard with consultation booked: name £149, promo -£50, consult pair.
-const c = buildXeroLines({ lines: [{ l: "Name search — ACME", p: 14900 }], discountPence: 5000,
-  marks: 1, vatExempt: false, worldwide: false, consult: true });
-eq("client consult lines", c.items.map((i) => [i.Description, i.UnitAmount]), [
-  ['UK Clearance Audit – Word mark "ACME"', 149], ["Clearance Audit Promotion applied", -50],
-  ["Clearance Consultation", 149], ["Clearance Consultation – included, discounted to £0", -149]]);
-eq("client consult net", c.items.reduce((a, i) => a + i.UnitAmount, 0), 99);
-const xc = { InvoiceID: "X3", SubTotal: 99, TotalTax: 19.8, Total: 118.8,
-  LineItems: c.items.map((s, i) => ({ LineItemID: "C" + i, Description: s.Description, Quantity: 1,
-    LineAmount: s.UnitAmount, TaxAmount: Math.round(s.UnitAmount * 20) / 100, AccountCode: s.AccountCode, TaxType: s.TaxType })) };
-const zc = buildZohoOrder({ invoice: xc, meta: c.meta, sent: c.items, vatExempt: false, paid: true,
-  paidDate: "2026-09-24", today: "2026-09-24", stripeId: "", syncNote: "", nowIso: "x" });
-eq("client consult pp", zc.items.map((i) => [i.product_code, i.Line_Type, i.Price_Point ?? null]), [
-  ["UKTM-AUD-UK-DOM", "TMH Fee", "Baseline"], ["UKTM-AUD-UK-DOM", "Discount", null],
-  ["UKTM-CONS-DOM", "TMH Fee", "Below Baseline"], ["UKTM-CONS-DOM", "Discount", null]]);
-eq("client consult total", [zc.order.Total, zc.warnings], [118.8, []]);
+// 3. RRP-tier client: no discount line at all on the audit.
+const r = buildXeroLines({ lines: [{ l: "Name — X", p: 14900 }], marks: 1, vatExempt: true, worldwide: false,
+  tier: "RRP", webException: false, consult: false });
+eq("rrp rows", rows(r), [['UK Clearance Audit – Word mark "X"', 149]]);
+eq("rrp money", echo(r, true, "RRP", false).dealMoney, { RRP_Total_Fee_Amount: 149, Collecting_Fee_Invoiced: 149, Gross_Profit: 104.3 });
+
+// 4. Staff, direct client dropped to Baseline, Worldwide, overseas; consultation
+//    charged at £99 (discount removed partly); one line raised above RRP.
+const s = buildXeroLines({ lines: [{ l: "Name — Hailaflo", p: 14900 }, { l: "Logo — Hailaflo logo", p: 25000 },
+  { l: "Audit Consultation", p: 9900 }], marks: 2, vatExempt: true, worldwide: true, tier: "Baseline", webException: false });
+eq("staff rows", rows(s), [
+  ['Worldwide Clearance Audit – Word mark "Hailaflo"', 199], ['Worldwide Clearance Audit – Logo "Hailaflo logo"', 250],
+  ["Clearance Audit – discount applied", -50], ["Clearance Consultation", 149], ["Clearance Consultation – discount applied", -50]]);
+eq("staff net", net(s), 149 + 250 + 99);
+const sz = echo(s, true, "Baseline", false);
+eq("staff pp", sz.items.map((i) => i.Price_Point ?? null), ["Baseline", "Baseline", null, "Baseline", null]);
+eq("staff codes", sz.items.map((i) => [i.product_code, i.Xero_Tax_Type]).slice(0, 4), [
+  ["UKTM-AUD-WW-INTL", "NONE"], ["UKTM-AUD-WW-INTL", "NONE"], ["UKTM-AUD-WW-INTL", "NONE"], ["UKTM-CONS-INTL", "NONE"]]);
+
+// 5. Below the floor (Super Admin override): Discounted tier, element at £80.
+const b = buildXeroLines({ lines: [{ l: "Name — Y", p: 8000 }, { l: "Audit Consultation — discounted to £0", p: 0 }],
+  marks: 1, vatExempt: false, worldwide: false, tier: "Discounted", webException: false });
+eq("below floor pp", echo(b, false, "Discounted", false).items.map((i) => i.Price_Point ?? null),
+   ["Below Baseline", null, "Included", null]);
+
+// 6. Legacy event: no lines, no tier -> the old single line, web rules.
+const l = buildXeroLines({ lines: [], marks: 2, vatExempt: false, worldwide: false, tier: "Baseline",
+  webException: true, consult: true });
+eq("legacy rows", rows(l), [["UK Clearance Audit × 2 marks – promotion applied", 99],
+  ["Clearance Consultation", 149], ["Clearance Consultation – included", -149]]);
 
 console.log(fails ? `${fails} FAILED` : "ALL PASS");
 if (fails) throw new Error("tests failed");
