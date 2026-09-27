@@ -2043,7 +2043,9 @@ async function loadDeal(){
   }
   if(z.Audit_Payment_Method||z.Audit_Order_Ref){
     /* Already ordered: the payment step is a record, not a new charge. */
-    if(z.Stage==='Paid'&&CONFIG.QUICK&&!state.billing.payWhen){
+    /* SJ-3 (25 Sep 2026): Paid is no longer a Stage. Paid = Delivery Approved
+       on the Deal, or Payment_Status Paid (approved on credit, then paid). */
+    if((z.Stage==='Delivery Approved'||z.Payment_Status==='Paid')&&CONFIG.QUICK&&!state.billing.payWhen){
       state.billing.payWhen='paid';state.billing.paidRef=z.Audit_Order_Ref||'';
       state.billing.paidDate=state.billing.paidDate||todayIso();state.billing.agreed=true;
     }
@@ -2449,8 +2451,8 @@ async function toPayment(){
             <li>£${(d.total_pence/100).toFixed(2)} — ${d.marks} audit${d.marks>1?'s':''}, paid
               ${esc(pretty(state.billing.paidDate))}, reference ${esc(state.billing.paidRef)}.</li>
             <li>The Xero invoice is raised and marked paid. The Deal is now
-              <b>Awaiting Payment → checked</b>: the staff check before Send for Research
-              happens on the Deal, as always.</li>
+              <b>Delivery Approved</b> with Payment Status <b>Paid</b>; it goes to
+              Send for Research, or to Set Up Order if anything is missing.</li>
           </ul>
         </div>`;
     }else if(d&&d.ok&&d.invoice){
