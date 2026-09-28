@@ -1933,7 +1933,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(out, out.get('status', 200))
             return
         if path not in ('/free-search', '/enrich', '/suggest-classes', '/read-website',
-                        '/class-scope', '/audit-pay'):
+                        '/class-scope', '/audit-pay', '/terms-accept'):
             self._send({'ok': False, 'error': 'not found'}, 404)
             return
         if not self._engine_key_ok():
