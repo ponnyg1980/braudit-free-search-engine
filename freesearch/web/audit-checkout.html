@@ -37,6 +37,11 @@
     color:#fff;background:var(--navy);border-radius:6px;padding:3px 9px;margin-left:8px;
     vertical-align:middle}
 
+  .ac-terms .q{font-weight:700;margin:6px 0 8px}
+  .ac-terms-yn{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:10px}
+  .ac-terms-yn label{display:flex;gap:8px;align-items:center;cursor:pointer}
+  .ac-tick{display:flex;gap:10px;align-items:flex-start;margin:10px 0;cursor:pointer;line-height:1.45}
+  .ac-tick input{margin-top:3px;flex:0 0 auto}
   .ac-choice{border:2px solid var(--line);border-radius:var(--r-md);padding:20px 22px;
     margin-bottom:14px;cursor:pointer;background:#fff}
   .ac-choice:hover{border-color:var(--navy)}
@@ -434,7 +439,7 @@
         <label class="fld" style="margin-top:0">When would you like your audit delivered by?</label>
         <input type="date" id="audit-date" onchange="clearErr('con-err')">
         <p class="sub" style="margin-top:8px">Every audit is reviewed by a human trademark
-          expert before it reaches you, so we need at least two working days.</p>
+          expert before it reaches you, so we need at least five working days.</p>
       </div>
     </div>
 
@@ -498,6 +503,27 @@
     <p class="lead">Check it all over &mdash; you can go back and change anything.</p>
     <div id="sum-body"></div>
     <div class="ac-totals" id="sum-totals"></div>
+
+    <!-- Terms of Service (handover 28 Sep 2026): accepted at order, not signed.
+         Unticked by default and required before any payment route opens. -->
+    <div class="ac-terms" id="terms-block">
+      <h3 style="margin-top:26px">Your terms</h3>
+      <div class="q">Are you buying for a business?</div>
+      <div class="ac-terms-yn">
+        <label><input type="radio" name="t-biz" value="yes" onchange="termsSet('business','yes')"> Yes</label>
+        <label><input type="radio" name="t-biz" value="no" onchange="termsSet('business','no')"> No, I&rsquo;m buying for myself</label>
+      </div>
+      <label class="ac-tick hidden" id="t-consent-wrap"><input type="checkbox" id="t-consent"
+        onchange="termsSet('consent',this.checked)">
+        <span>I ask you to start work within the 14-day cancellation period. I understand I
+        will pay for work done if I cancel, and lose the right to cancel once the report is
+        delivered.</span></label>
+      <label class="ac-tick"><input type="checkbox" id="t-accept"
+        onchange="termsSet('accepted',this.checked)">
+        <span>I accept the <a id="t-link" href="#" target="_blank" rel="noopener">Clearance Audit
+        Terms of Service</a> and the <a id="t-general" href="#" target="_blank"
+        rel="noopener">general Terms and Conditions of Service</a>.</span></label>
+    </div>
 
     <h3 style="margin-top:26px">How would you prefer to pay?</h3>
 
@@ -621,8 +647,11 @@ const CONFIG=(function(){
     ADMIN_EMAIL:'admin@thetrademarkhelpline.com',
     /* Office hours for the "over the phone now" option (Mon–Fri 9–5). */
     OFFICE_OPEN:9, OFFICE_CLOSE:17,
-    /* Working days a human expert needs between payment and the deadline. */
-    LEAD_DAYS:2
+    /* Working days between approval and delivery: the Clearance Audit Terms
+       of Service clause 4.2 promise (5; web orders are always 5). Fast Track
+       is how a client asks for sooner. Was 2 until 28 Sep 2026. */
+    LEAD_DAYS:5,
+    GENERAL_TERMS_URL:'https://www.thetrademarkhelpline.com/terms-and-conditions/'
   };
 })();
 function journeyBase(){return CONFIG.JOURNEY.replace(/\/$/,'');}
@@ -660,6 +689,7 @@ const PHASES=[
 
 const state={
   sessionId:CONFIG.SESSION||'', screen:'contact',
+  terms:{business:'',consent:false,consentAt:'',accepted:false,copyId:''},
   contact:{first:'',last:'',email:'',phone:''},
   name:CONFIG.NAME||'', hasLogo:false, logoUrl:'', logoLater:false, tagline:'',
   now:['GB'], plan:[], nowMode:'uk', planMode:'none',
@@ -675,7 +705,10 @@ SHOPS.forEach(([k])=>state.platforms.shop[k]={on:false,url:'',mode:'url'});
 /* ================= WORKING-DAY HELPERS ================= */
 /* Audits are reviewed by a human expert, so we need CONFIG.LEAD_DAYS clear
    WORKING days (Mon–Fri) between payment landing and the deadline. */
-function isWorkingDay(d){const g=d.getDay();return g>=1&&g<=5;}
+/* England & Wales bank holidays (gov.uk, fetched 28 Sep 2026). Same list as
+   freesearch/terms.py EW_BANK_HOLIDAYS and the checkout Deluge. */
+const EW_BANK_HOLIDAYS=new Set(["2026-12-25","2026-12-28","2027-01-01","2027-03-26","2027-03-29","2027-05-03","2027-05-31","2027-08-30","2027-12-27","2027-12-28","2028-01-03","2028-04-14","2028-04-17","2028-05-01","2028-05-29","2028-08-28","2028-12-25","2028-12-26"]);
+function isWorkingDay(d){const g=d.getDay();return g>=1&&g<=5&&!EW_BANK_HOLIDAYS.has(iso(d));}
 function addWorkingDays(date,n){
   const d=new Date(date.getTime()); let step=n<0?-1:1, left=Math.abs(n);
   while(left>0){ d.setDate(d.getDate()+step); if(isWorkingDay(d)) left--; }
@@ -1257,7 +1290,7 @@ function submitConsult(){
   const dl=deadlineIso();
   if(dl && fromIso(dl) < fromIso(earliestDeadlineIso()))
     return showErr('con-err','Every audit is reviewed by a human trademark expert first, so we '+
-      'need at least two working days — the earliest we can work to is '+
+      'need at least five working days — the earliest we can work to is '+
       prettyDate(earliestDeadlineIso())+'.');
   clearErr('con-err');
   logEvent('audit_checkout_consult','audit_consult',{consult:state.consult},
@@ -1508,6 +1541,7 @@ function renderSummary(){
         state.consult.taken?'appointment':'delivery date'}.`
     : 'We’ll email your invoice with a payment date.';
   checkPayDate();
+  renderTerms();
 }
 function payDateProblem(){
   const latest=latestPayIso(); if(!latest) return '';
@@ -1515,7 +1549,7 @@ function payDateProblem(){
   if(!chosen) return '';
   if(fromIso(chosen) > fromIso(latest)){
     const what=state.consult.taken?'appointment date':'report date';
-    return `We require 48 hours between payment and deadline for your report to be created. `+
+    return `We need five working days between payment and deadline for your report to be created. `+
       `Reschedule your ${what}, or set a payment date no later than `+
       `<b>${prettyDate(latest)}</b>. This is because our Audits are all reviewed by a human `+
       `trademark expert in advance of being supplied to you.`;
@@ -1528,8 +1562,69 @@ function checkPayDate(){
   box.innerHTML=msg;
   box.classList.toggle('hidden',!msg);
 }
+/* ---- Terms of Service (handover 28 Sep 2026) ---------------------------
+   The link opens the terms WITH THIS ORDER'S VALUES (5 working days; the
+   countries chosen). The answers are saved on the session, and the server
+   renders, records and hashes the copy before any payment route runs. */
+function termsWorldwide(){
+  if(state.quote&&typeof state.quote.worldwide==='boolean') return state.quote.worldwide;
+  return [...(state.now||[]),...(state.plan||[])].some(c=>!['GB','UK'].includes(String(c).toUpperCase()));
+}
+function termsUrl(){
+  const e=encodeURIComponent;
+  return '/terms/clearance-audit?ww='+(termsWorldwide()?1:0)
+    +'&cur='+e((state.now||[]).join(','))+'&plan='+e((state.plan||[]).join(','));
+}
+function renderTerms(){
+  const t=state.terms, l=document.getElementById('t-link'), g=document.getElementById('t-general');
+  if(l) l.href=termsUrl();
+  if(g) g.href=CONFIG.GENERAL_TERMS_URL;
+  const w=document.getElementById('t-consent-wrap');
+  if(w) w.classList.toggle('hidden',t.business!=='no');
+}
+function termsSet(k,v){
+  const t=state.terms;
+  if(k==='consent'){t.consent=!!v;t.consentAt=v?new Date().toISOString():'';}
+  else t[k]=v;
+  if(k==='business'&&v!=='no'){t.consent=false;t.consentAt='';
+    const c=document.getElementById('t-consent'); if(c) c.checked=false;}
+  renderTerms(); clearErr('sum-err');
+}
+function termsProblem(){
+  const t=state.terms;
+  if(t.business!=='yes'&&t.business!=='no') return 'Please tell us whether you are buying for a business.';
+  if(t.business==='no'&&!t.consent) return 'Please confirm you would like us to start within the 14-day cancellation period.';
+  if(!t.accepted) return 'Please accept the Clearance Audit Terms of Service to continue.';
+  return '';
+}
+/* Read-merge-write last_result.audit_terms, as audit_billing does. AWAITED:
+   the server reads it back before it will take any payment. */
+async function saveTerms(){
+  const id=await ensureSession(); if(!id) return false;
+  let lr={};
+  try{
+    const g=await fetch(journeyBase()+'/session?id='+encodeURIComponent(id));
+    const gd=await g.json();
+    if(gd&&gd.ok&&gd.session&&gd.session.last_result&&typeof gd.session.last_result==='object')
+      lr=gd.session.last_result;
+  }catch(e){}
+  const t=state.terms;
+  lr.audit_terms={accepted:t.accepted===true,business:t.business,
+    consumer_start:t.business==='no'&&t.consent===true,
+    consumer_start_at:t.business==='no'?t.consentAt:'',at:new Date().toISOString()};
+  try{
+    const r=await fetch(journeyBase()+'/session/event',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:id,event_type:'audit_terms_ticked',screen:'audit_summary',
+        payload:{business:t.business,accepted:t.accepted},snapshot:{last_result:lr}})});
+    return r.ok;
+  }catch(e){return false;}
+}
 function payChoice(m){
   if(m==='phone_now'&&!officeOpenNow())return;
+  const tp=termsProblem();
+  if(tp){showErr('sum-err',tp);
+    document.getElementById('terms-block').scrollIntoView({behavior:'smooth',block:'center'});return;}
   state.payment.method=m;
   [['online','pay-online'],['phone_now','pay-phone'],['invoice','pay-inv']].forEach(([k,id])=>{
     document.getElementById(id).classList.toggle('on',k===m);
@@ -1539,10 +1634,12 @@ function payChoice(m){
   if(m==='online'){
     const pr=pricing(), box=document.getElementById('pay-online-info');
     box.innerHTML='<span class="sub">Preparing your secure payment form…</span>';
-    fetch(CONFIG.PAY_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},
+    saveTerms().then(()=>fetch(CONFIG.PAY_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({ref:invoiceRef(),consult:pr.consult,vat_exempt:pr.exempt,
-        email:state.contact.email,session_id:state.sessionId})})
+        email:state.contact.email,session_id:state.sessionId})}))
       .then(r=>r.json()).then(d=>{
+        if(d&&!d.ok&&Array.isArray(d.unmet)&&d.unmet.some(u=>/^G-1[5-8]$/.test(u))){
+          box.innerHTML='<span class="sub">'+(d.error||'Please check your terms above.')+'</span>';return;}
         state.payment.stripeUrl=(d&&d.ok&&d.url)||'';
         box.innerHTML=d&&d.ok&&d.url
           ? `<b>Invoice reference ${invoiceRef()}</b>
@@ -1567,6 +1664,7 @@ function paidOnline(){
   logEvent('audit_checkout_payment_opened','audit_summary',{ref:invoiceRef()},{});
 }
 function submitOrder(){
+  const tp=termsProblem(); if(tp) return showErr('sum-err',tp);
   if(!state.payment.method) return showErr('sum-err','Choose how you’d like to pay.');
   if(state.payment.method==='invoice'){
     state.payment.payDate=document.getElementById('pay-date').value;
@@ -1576,6 +1674,22 @@ function submitOrder(){
       return showErr('sum-err','Please adjust your payment date — see the note above.');}
   }
   clearErr('sum-err');
+  /* Phone and invoice take no Stripe session, so the terms are recorded here
+     first (the online route recorded them inside /audit-pay). No record, no
+     order: the copy the client accepted must be kept. */
+  if(state.payment.method!=='online'){
+    saveTerms().then(()=>fetch('/terms-accept',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:state.sessionId})}))
+      .then(r=>r.json()).then(d=>{
+        if(!d||!d.ok) return showErr('sum-err',(d&&d.error)||'We could not record your acceptance of the terms. Please try again.');
+        state.terms.copyId=d.id; proceedOrder();
+      }).catch(()=>showErr('sum-err','We could not record your acceptance of the terms. Please try again.'));
+    return;
+  }
+  proceedOrder();
+}
+function proceedOrder(){
   const pr=pricing();
   /* Scenario 2 (client asks for an invoice): the request goes into the same
      journey-event queue the staff form uses, so the Xero invoice is raised
@@ -1652,6 +1766,10 @@ function renderDone(){
   head.push(`<p>A confirmation has been sent to <b>${state.contact.email}</b>${
     state.payment.cc?' and '+state.payment.cc:''}. If it hasn&rsquo;t arrived in a few minutes,
     check your junk folder.</p>`);
+  if(state.terms.copyId){
+    head.push(`<p>Your <a href="/terms/accepted?id=${encodeURIComponent(state.terms.copyId)}"
+      target="_blank" rel="noopener">Clearance Audit Terms of Service</a> (the copy you accepted).</p>`);
+  }
   document.getElementById('done-head').innerHTML=head.join('');
 
   const cards=[];
