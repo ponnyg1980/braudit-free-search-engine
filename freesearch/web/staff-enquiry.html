@@ -533,7 +533,7 @@
           results and refine them into five ranges from high to low risk. One of our
           paralegals then reviews the risks and decides which results need to be in
           the report before presenting it back to you."</span></li>
-        <li><span class="say">"We're looking at a turnaround of 3 working days at the
+        <li><span class="say">"We're looking at a turnaround of 5 working days at the
           moment, which would mean us sitting down next on
           <b id="f-turnday">…</b> — does that work for you, or would you like me to
           see if I can fast track your report?"</span></li>
@@ -543,7 +543,7 @@
     <div class="sf-row">
       <div><label class="fld">Handling</label>
         <select id="f-handling">
-          <option value="normal">Normal — 3 working days</option>
+          <option value="normal">Normal — 5 working days</option>
           <option value="expedited">Expedited (reason required)</option>
         </select></div>
       <div><label class="fld">Audit delivery due <span class="req">*</span></label>
@@ -798,6 +798,36 @@
 
     <div id="f-readback"></div>
 
+    <!-- Terms of Service (handover 28 Sep 2026). On BOTH forms: every order
+         needs the client's acceptance, ticked here on their instruction. -->
+    <div id="f-termsblock" style="margin-top:18px">
+      <h3 style="margin:0 0 6px">Terms of Service</h3>
+      <div class="sf-row">
+        <div><label class="fld">Agreed turnaround — working days</label>
+          <select id="f-turnaround">
+            <option value="5">5 (standard)</option><option value="4">4</option>
+            <option value="3">3</option><option value="2">2</option><option value="1">1</option>
+          </select>
+          <div class="sf-hint">Only shorter than 5, and only if agreed with the client. Longer
+            breaks our terms and needs Jonathan.</div></div>
+        <div><label class="fld">Buying for a business? <span class="req">*</span></label>
+          <select id="f-business">
+            <option value="">Ask the client…</option>
+            <option value="yes">Yes, for a business</option>
+            <option value="no">No, as a consumer</option>
+          </select></div>
+      </div>
+      <label class="sf-check hidden" id="f-consentwrap"><input type="checkbox" id="f-consumerstart">
+        <span>The client asks us to start work within the 14-day cancellation period, and
+        understands they will pay for work done if they cancel, and lose the right to cancel
+        once the report is delivered. (Read this to them.)</span></label>
+      <label class="sf-check"><input type="checkbox" id="f-termsok">
+        <span>On the client's instruction: they accept the <a id="f-termslink" href="#"
+        target="_blank" rel="noopener">Clearance Audit Terms of Service</a> and the
+        <a id="f-generalterms" href="#" target="_blank" rel="noopener">general Terms and
+        Conditions of Service</a>. The record shows this order was taken by staff.</span></label>
+    </div>
+
     <label class="sf-check" style="margin-top:16px"><input type="checkbox" id="r-confirmed">
       <span>I read the summary above back to the client and they accepted it.</span></label>
 
@@ -860,7 +890,8 @@ const CONFIG=(function(){
     PRICE:149,           /* RRP per line item (Jonathan, 9 Sep) */
     MIN_TOTAL:99,        /* net order floor -- the total can never go below */
     VAT:0.20,
-    LEAD_DAYS:3          /* clear working days: payment -> audit delivered */
+    LEAD_DAYS:5,         /* standard turnaround, Clearance Audit ToS clause 4.2 (was 3 until 28 Sep 2026) */
+    GENERAL_TERMS_URL:'https://www.thetrademarkhelpline.com/terms-and-conditions/'
   };
 })();
 if(CONFIG.STAFF) try{localStorage.setItem('tmh_staff',CONFIG.STAFF);}catch(e){}
@@ -934,7 +965,9 @@ const state={
      order. Anything left on 'later' is listed for follow-up on the deal. */
   platforms:{domain:'',domainMode:'',soc:{},shop:{}},
   advice:{risks:false,fees:false,noguarantee:false,questions:false,note:''},
-  recommend:{scope:'',rationale:'',handling:'normal',auditDate:'',expReason:''},
+  recommend:{scope:'',rationale:'',handling:'normal',auditDate:'',expReason:'',turnaroundDays:'5'},
+  /* Terms of Service (28 Sep 2026): staff tick on the client's instruction. */
+  terms:{accepted:false,business:'',consumerStart:false,consumerStartAt:''},
   consult:{date:'',time:'',adviser:'',method:'phone',agreed:false,
            declined:false,declineReason:'',feeWaived:true},
   billing:{entity:'',email:'',addr:'',location:'',payWhen:'',payDate:'',agreed:false,
@@ -950,7 +983,13 @@ const state={
 /* =====================================================================
    DATE HELPERS  (copied from audit-checkout.html — same rules apply)
    ===================================================================== */
-function isWorkingDay(d){const g=d.getDay();return g>=1&&g<=5;}
+/* England & Wales bank holidays (gov.uk, fetched 28 Sep 2026). Same list as
+   freesearch/terms.py and the checkout Deluge. */
+const EW_BANK_HOLIDAYS=new Set(["2026-12-25","2026-12-28","2027-01-01","2027-03-26","2027-03-29","2027-05-03","2027-05-31","2027-08-30","2027-12-27","2027-12-28","2028-01-03","2028-04-14","2028-04-17","2028-05-01","2028-05-29","2028-08-28","2028-12-25","2028-12-26"]);
+function isWorkingDay(d){const g=d.getDay();return g>=1&&g<=5&&!EW_BANK_HOLIDAYS.has(iso(d));}
+/* The agreed turnaround N (Terms of Service clause 4.2): 5 unless a SHORTER
+   one was agreed with the client. Never longer -- that needs Jonathan. */
+function turnaroundN(){const n=parseInt((state.recommend||{}).turnaroundDays||'5',10);return n>=1&&n<=5?n:5;}
 function addWorkingDays(date,n){
   const d=new Date(date.getTime());let step=n<0?-1:1,left=Math.abs(n);
   while(left>0){d.setDate(d.getDate()+step);if(isWorkingDay(d))left--;}
@@ -1044,7 +1083,17 @@ function gateRules(){
      why:'No line below the order\u2019s tier price (the floor). For less, invoice at the floor and give a credit note on the account.'},
     {id:'G-11',sec:'readback',label:'Read back and accepted',
      ok:state.readback.confirmed,
-     why:'Read the summary back, then tick.'}
+     why:'Read the summary back, then tick.'},
+    /* Terms of Service (28 Sep 2026). Mirrors _terms_accept in api.py. */
+    {id:'G-15',sec:'readback',label:'Terms of Service accepted',
+     ok:state.terms.accepted===true&&(state.terms.business==='yes'||state.terms.business==='no'),
+     why:'Ask whether they are buying for a business, then tick that they accept the Clearance Audit Terms of Service.'},
+    {id:'G-16',sec:'readback',label:'Consumer early-start consent',
+     ok:state.terms.business!=='no'||state.terms.consumerStart===true,
+     why:'A consumer must ask us to start within the 14-day cancellation period (clause 9.3). Read it to them.'},
+    {id:'G-17',sec:CONFIG.QUICK?'marks':'discovery',label:'Countries for a Worldwide audit',
+     ok:!isWorldwideOrder()||((state.discovery.terrNow||[]).length+(state.discovery.terrPlan||[]).length)>0,
+     why:'A Worldwide Clearance Audit needs at least one country, now or planned (clause 3.1).'}
   ];
   if(!CONFIG.QUICK) return rules;
   /* Quick Audit: only the rules whose section is on this form. The price
@@ -1493,13 +1542,24 @@ function renderWarnings(){
   if(!p) return;
   const pm=[];
   if(state.billing.payWhen==='date'&&state.billing.payDate&&state.recommend.auditDate&&!payDateWorks())
-    pm.push('Paying on that date leaves less than '+CONFIG.LEAD_DAYS+
+    pm.push('Paying on that date leaves less than '+turnaroundN()+
       ' working days to deliver the audit by '+pretty(state.recommend.auditDate)+'.');
   p.innerHTML=pm.length?'<div class="sf-guide sf-never" style="margin:14px 0 0"><div class="gh">Check</div><ul>'
     +pm.map(m=>'<li>'+esc(m)+'</li>').join('')+'</ul></div>':'';
 }
 
-function renderAll(){renderNav();renderGate();renderWarnings();}
+function renderAll(){renderNav();renderGate();renderWarnings();renderTermsBlock();}
+/* The terms link opens the terms WITH THIS ORDER'S VALUES (turnaround and
+   the Current + Planning countries), rendered by the engine. */
+function renderTermsBlock(){
+  const d=state.discovery||{}, e=encodeURIComponent;
+  const l=document.getElementById('f-termslink');
+  if(l) l.href='/terms/clearance-audit?ww='+(isWorldwideOrder()?1:0)+'&n='+turnaroundN()
+    +'&cur='+e((d.terrNow||[]).join(','))+'&plan='+e((d.terrPlan||[]).join(','));
+  const g=document.getElementById('f-generalterms'); if(g) g.href=CONFIG.GENERAL_TERMS_URL;
+  const w=document.getElementById('f-consentwrap');
+  if(w) w.classList.toggle('hidden',(state.terms||{}).business!=='no');
+}
 
 /* =====================================================================
    TERRITORY PICKERS (point 1) — the same /jurisdictions list the client
@@ -2154,12 +2214,16 @@ function finishLoad(){
   set('f-apname',state.applicant.name||'');set('f-apnum',state.applicant.companyNumber||'');
   tog('f-apwrap','hidden',state.applicant.sameAsBilling!==false);
   chk('r-confirmed',state.readback.confirmed);
+  if(!state.terms) state.terms={accepted:false,business:'',consumerStart:false,consumerStartAt:''};
+  set('f-turnaround',String(turnaroundN()));set('f-business',state.terms.business||'');
+  chk('f-consumerstart',state.terms.consumerStart);chk('f-termsok',state.terms.accepted);
+  renderTermsBlock();
 
   tog('f-expwrap','hidden',r.handling!=='expedited');
   tog('f-paydatewrap','hidden',b.payWhen!=='date');
   if(!r.auditDate){
     /* Sensible default: the earliest date we could actually deliver. */
-    r.auditDate=iso(addWorkingDays(new Date(),CONFIG.LEAD_DAYS));
+    r.auditDate=iso(addWorkingDays(new Date(),turnaroundN()));
     set('f-auditdate',r.auditDate);
   }
   renderMarks();renderScope();renderAll();
@@ -2184,6 +2248,11 @@ function applyQuickChrome(){
      recommendation, so it moves under the marks before that section goes. */
   const pb=document.getElementById('f-priceblock'),ms=document.querySelector('[data-sec="marks"]');
   if(pb&&ms) ms.appendChild(pb);
+  /* Terms of Service (28 Sep 2026): a Worldwide audit names its countries in
+     clause 2.3(b), so Quick Audit needs the Current + Planning pickers too.
+     They move under the marks before the discovery section goes. */
+  const tb=document.getElementById('f-terrnow-box'), tr=tb&&tb.closest('.sf-row');
+  if(tr&&ms) ms.appendChild(tr);
   /* Sections not on this form must never show, whatever the state says. */
   document.querySelectorAll('[data-sec]').forEach(el=>{
     if(!inForm(el.getAttribute('data-sec'))) el.remove();});
@@ -2372,6 +2441,19 @@ function bindAll(){
     },320);
   });
 
+  const ta=document.getElementById('f-turnaround');
+  if(ta) ta.addEventListener('change',()=>{state.recommend.turnaroundDays=ta.value;
+    renderTermsBlock();renderAll();touch();});
+  const bz=document.getElementById('f-business');
+  if(bz) bz.addEventListener('change',()=>{state.terms.business=bz.value;
+    if(bz.value!=='no'){state.terms.consumerStart=false;state.terms.consumerStartAt='';
+      const c=document.getElementById('f-consumerstart'); if(c) c.checked=false;}
+    renderTermsBlock();renderAll();touch();});
+  const cs=document.getElementById('f-consumerstart');
+  if(cs) cs.addEventListener('change',()=>{state.terms.consumerStart=cs.checked;
+    state.terms.consumerStartAt=cs.checked?new Date().toISOString():'';renderAll();touch();});
+  const tk=document.getElementById('f-termsok');
+  if(tk) tk.addEventListener('change',()=>{state.terms.accepted=tk.checked;renderAll();touch();});
   const rc=document.getElementById('r-confirmed');
   rc.addEventListener('change',()=>{
     state.readback.confirmed=rc.checked;
@@ -2546,10 +2628,10 @@ wireLookup('f-linkq','f-linkresults',linkModule,h=>{
   renderLinkUI();renderAll();loadPriorSearches();touch();
 });
 wireLookup('f-acctq','f-acctresults','Accounts',acctPick);
-/* The delivery-conversation day: 3 working days out, spoken as a day name. */
+/* The delivery-conversation day: 5 working days out, spoken as a day name. */
 (function(){
   const el=document.getElementById('f-turnday');
-  if(el) el.textContent=addWorkingDays(new Date(),3).toLocaleDateString('en-GB',
+  if(el) el.textContent=addWorkingDays(new Date(),5).toLocaleDateString('en-GB',
     {weekday:'long',day:'numeric',month:'long'});
 })();
 loadJuris();
