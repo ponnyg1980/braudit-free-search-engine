@@ -25,6 +25,7 @@ approved introducer domains) and put IP rate-limiting in front.
 """
 from __future__ import annotations
 
+import html as _htmlmod
 import json
 import os
 import re
@@ -816,6 +817,110 @@ def _client_quote(sess: dict | None, session_id: str) -> dict:
                           'web_exception': web, 'worldwide': ww}}
 
 
+def _terms_accept(session_id: str, *, staff: bool, enq: dict | None,
+                  sess: dict | None, staff_email: str, worldwide: bool) -> dict:
+    """Terms of Service acceptance for one order (handover 28 Sep 2026).
+
+    Decided from the STORED order, never the request: the tick, the
+    business/consumer answer, the turnaround and the Current + Planning
+    countries. Renders the terms with this order's values, records the exact
+    copy through the journey (terms_acceptances, hashed) and returns the
+    record. On failure returns {'ok': False, 'unmet': [...], 'error': ...}
+    and NO payment may be taken.
+
+      G-15  terms not accepted            G-17  Worldwide with no countries
+      G-16  consumer early-start consent  G-18  turnaround not 1..5 days
+    """
+    import datetime as _dt
+    import urllib.request
+    try:
+        from . import terms as T                 # package context (Render)
+    except ImportError:                          # bare-script context
+        import terms as T                        # type: ignore
+    now = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat()
+    if staff:
+        e = enq or {}
+        tb = e.get('terms') if isinstance(e.get('terms'), dict) else {}
+        disc = e.get('discovery') if isinstance(e.get('discovery'), dict) else {}
+        rec = e.get('recommend') if isinstance(e.get('recommend'), dict) else {}
+        accepted = tb.get('accepted') is True
+        business = tb.get('business')             # 'yes' | 'no' | ''
+        consent = tb.get('consumerStart') is True
+        consent_at = str(tb.get('consumerStartAt') or '') or (now if consent else '')
+        n_raw = rec.get('turnaroundDays')
+        current, planning = disc.get('terrNow') or [], disc.get('terrPlan') or []
+        source = 'quick_audit' if e.get('quick') else 'staff_enquiry'
+        by = staff_email or 'staff'
+    else:
+        lr = ((sess or {}).get('last_result') or {})
+        tb = lr.get('audit_terms') if isinstance(lr.get('audit_terms'), dict) else {}
+        accepted = tb.get('accepted') is True
+        business = tb.get('business')
+        consent = tb.get('consumer_start') is True
+        consent_at = str(tb.get('consumer_start_at') or '') or (now if consent else '')
+        n_raw = None                              # web orders: always 5
+        current = (sess or {}).get('trading_now') or []
+        planning = (sess or {}).get('planning_to_trade') or []
+        source, by = 'client_checkout', 'client'
+    unmet = []
+    if not accepted:
+        unmet.append('G-15')
+    if business not in ('yes', 'no'):
+        unmet.append('G-15')
+    if business == 'no' and not consent:
+        unmet.append('G-16')
+    try:
+        r = T.render(worldwide=worldwide, turnaround_days=n_raw,
+                     current=current, planning=planning)
+    except T.TermsError as ex:
+        msg = str(ex)
+        unmet.append('G-18' if 'urnaround' in msg else 'G-17')
+        r = None
+    if unmet:
+        unmet = sorted(set(unmet))
+        _journey_event(session_id, 'terms_refused', {'unmet': unmet})
+        why = {'G-15': 'the client must accept the Clearance Audit Terms of '
+                       'Service and say whether they are buying for a business',
+               'G-16': 'a consumer must ask us to start within the 14-day '
+                       'cancellation period (clause 9.3)',
+               'G-17': 'a Worldwide Clearance Audit needs at least one country '
+                       '(Current or Planning)',
+               'G-18': 'the agreed turnaround must be 1 to 5 working days'}
+        return {'ok': False, 'unmet': unmet,
+                'error': '; '.join(why[u] for u in unmet)}
+    rec_out = {
+        'session_id': session_id, 'document': r['document'],
+        'version': r['version'], 'sha256': r['sha256'],
+        'rendered_html': T.page(r), 'turnaround_days': r['turnaround_days'],
+        'worldwide': r['worldwide'], 'jurisdictions': r['jurisdictions'],
+        'current_jurisdictions': T.combined_jurisdictions(current, []),
+        'planning_jurisdictions': T.combined_jurisdictions([], planning),
+        'buying_as_consumer': business == 'no',
+        'consumer_consent_at': consent_at if business == 'no' else None,
+        'accepted_at': now, 'accepted_by': by, 'source': source,
+    }
+    key = (os.environ.get('XERO_PROCESS_KEY') or '').strip()
+    rid = ''
+    if key:
+        try:
+            req = urllib.request.Request(
+                _JOURNEY_URL.rstrip('/') + '/terms/record',
+                data=json.dumps({'key': key, **rec_out}).encode(),
+                headers={'Content-Type': 'application/json'})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                rid = str(json.loads(resp.read().decode()).get('id') or '')
+        except Exception:
+            rid = ''
+    if not rid:
+        # The copy MUST be kept (handover §1.3). If it cannot be stored, no
+        # order is taken -- better a retry than an order we cannot evidence.
+        return {'ok': False, 'unmet': ['G-15'],
+                'error': 'could not record the accepted terms -- please try again'}
+    return {'ok': True, 'id': rid, **{k: rec_out[k] for k in (
+        'document', 'sha256', 'turnaround_days', 'jurisdictions',
+        'buying_as_consumer', 'accepted_at')}}
+
+
 def _audit_pay(payload: dict) -> dict:
     """Create a Stripe Checkout session for an audit order.
 
@@ -892,6 +997,13 @@ def _audit_pay(payload: dict) -> dict:
         tr = _pricing_tier(session_id, True)
         tier = tr['tier']
         ww = bool(tr.get('worldwide'))
+        # Terms of Service (28 Sep 2026): staff tick on the client's
+        # instruction; no order without it, and the copy is recorded first.
+        ta = _terms_accept(session_id, staff=True, enq=enq, sess=sess,
+                           staff_email=staff_email, worldwide=ww)
+        if not ta.get('ok'):
+            return {'ok': False, 'unmet': ta.get('unmet', []),
+                    'error': ta.get('error', 'terms not accepted'), 'status': 200}
         a_sku = 'AUDIT_WORLDWIDE' if ww else 'AUDIT_UK'
         floor_p = _tier_price_pence(a_sku, tier)
         override = (su or {}).get('role') == 'super_admin'
@@ -1020,6 +1132,11 @@ def _audit_pay(payload: dict) -> dict:
         q = _client_quote(sess, session_id)
         lines, discount_p = q['lines'], q['discount_pence']
         tier_meta = q['tier_meta']
+        ta = _terms_accept(session_id, staff=False, enq=None, sess=sess,
+                           staff_email='', worldwide=bool(tier_meta.get('worldwide')))
+        if not ta.get('ok'):
+            return {'ok': False, 'unmet': ta.get('unmet', []),
+                    'error': ta.get('error', 'terms not accepted'), 'status': 200}
         consult = True          # §9: the consultation is always included
         qty = len(lines)
 
@@ -1580,6 +1697,44 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_raw(_fasttrack_page(params).encode(),
                            'text/html; charset=utf-8')
             return
+        if path == '/terms/clearance-audit':
+            # The terms WITH THIS ORDER'S VALUES (handover §1.2): what the tick
+            # box links to. ?ww=1&n=3&cur=GB,US&plan=AU. An invalid order shows
+            # the reason instead of a misleading copy.
+            try:
+                try:
+                    from . import terms as T
+                except ImportError:
+                    import terms as T               # type: ignore
+                sp = lambda k: [c for c in str(params.get(k, '')).split(',') if c]
+                r = T.render(worldwide=params.get('ww') in ('1', 'true'),
+                             turnaround_days=params.get('n') or None,
+                             current=sp('cur'), planning=sp('plan'))
+                self._send_raw(T.page(r, note='These are the terms for the order '
+                               'you are about to place.').encode(),
+                               'text/html; charset=utf-8')
+            except Exception as e:
+                self._send_raw(('<!doctype html><meta charset="utf-8"><p style="'
+                                'font-family:sans-serif;max-width:640px;margin:40px auto">'
+                                + _htmlmod.escape(str(e)) + '</p>').encode(),
+                               'text/html; charset=utf-8')
+            return
+        if path == '/terms/accepted':
+            # The copy the client accepted, exactly as stored (handover §1.3).
+            import urllib.parse as _up
+            import urllib.request as _ur
+            rid = str(params.get('id', ''))[:40]
+            try:
+                with _ur.urlopen(_JOURNEY_URL.rstrip('/') + '/terms/copy?id='
+                                 + _up.quote(rid), timeout=12) as resp:
+                    d = json.loads(resp.read().decode())
+                if d.get('ok') and d.get('html'):
+                    self._send_raw(d['html'].encode(), 'text/html; charset=utf-8')
+                    return
+            except Exception:
+                pass
+            self._send({'ok': False, 'error': 'not found'}, 404)
+            return
         if path == '/nuggets':
             from .nuggets import payload as _nug
             self._send({'ok': True, 'nuggets': _nug()})
@@ -1802,6 +1957,20 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if path == '/audit-pay':
             out = _audit_pay(payload)
+        elif path == '/terms-accept':
+            # Client checkout, phone and invoice routes: they take no Stripe
+            # session, so the terms are recorded here (the online route
+            # records them inside /audit-pay). Everything is read from the
+            # STORED session; the request carries only its id.
+            sid = str(payload.get('session_id') or '')[:60]
+            sess = _journey_session(sid)
+            if not sess:
+                out = {'ok': False, 'error': 'session not found', 'status': 200}
+            else:
+                ww = bool(_client_quote(sess, sid)['tier_meta'].get('worldwide'))
+                out = _terms_accept(sid, staff=False, enq=None, sess=sess,
+                                    staff_email='', worldwide=ww)
+                out['status'] = 200
         elif path == '/enrich':
             out = handle_enrich(payload)
         elif path == '/suggest-classes':
