@@ -515,7 +515,7 @@
       <img src="/brand/owl-branch.png" alt="" class="ill" style="width:120px">
       <div style="min-width:280px;flex:1">
         <h2>Want some help picking your classes?</h2>
-        <p class="sub" style="font-size:15.5px">Try any of our four handy tools. Each one opens
+        <p class="sub" style="font-size:15.5px">Try any of our three handy tools. Each one opens
           right here &mdash; you won&rsquo;t lose your place.</p>
       </div>
     </div>
@@ -548,31 +548,22 @@
         <div class="opt-drawer" id="ho-3"></div>
       </div>
 
+      <!-- ONE AI option (Jonathan, 2 Oct 2026): "The AI services are too
+           complicated … let's simplify with one AI option." A short chat that
+           asks for the website, or goods / services, and finds the classes.
+           Replaces Describe your business and Your website. -->
       <div class="opt-block tool" data-opt="1">
         <button type="button" class="opt-row no-tile" onclick="openHelp('1')">
           <span class="tick tool-n">3</span>
           <span>
-            <span class="tool-h"><h4>Describe your business</h4>
+            <span class="tool-h"><h4>Ask our class assistant</h4>
               <span class="badge ai">AI</span></span>
-            <span class="sub">A few questions about what you do. The more detail you give,
-              the more accurate the answer.</span>
+            <span class="sub">A quick chat about your business &mdash; your website, or what you
+              sell &mdash; and it finds your classes. A member of our team checks them before
+              anything is filed.</span>
           </span>
         </button>
         <div class="opt-drawer" id="ho-1"></div>
-      </div>
-
-      <div class="opt-block tool" data-opt="2">
-        <button type="button" class="opt-row no-tile" onclick="openHelp('2')">
-          <span class="tick tool-n">4</span>
-          <span>
-            <span class="tool-h"><h4>Your website</h4>
-              <span class="badge ai">AI</span></span>
-            <span class="sub">Only if your site has a real breakdown of what you offer. If
-              it&rsquo;s a landing page, use <b>Describe your business</b> &mdash; you&rsquo;ll
-              get a better answer.</span>
-          </span>
-        </button>
-        <div class="opt-drawer" id="ho-2"></div>
       </div>
     </div>
 
@@ -601,7 +592,7 @@
     <!-- Copy rewritten 19 Sep 2026. It used to open by describing the term
          editors, which is the advanced path now: the promise on arrival is
          "check your classes", and terms are offered, not imposed. -->
-    <p class="lead">Check the classes and their official descriptions. The specific terms are
+    <p class="lead" id="rv-lead">Check the classes and their official descriptions. The specific terms are
       drawn from marks already registered at the UKIPO and are included automatically &mdash;
       open them below if you want to read or change them. What you send is exactly what we
       search and file against.</p>
@@ -634,10 +625,10 @@
          Asked once per selection; the answer lands on the Scope Asset as
          Additional Terms Request for an adviser to review before filing. -->
     <div class="panel" style="display:block;margin-bottom:22px">
-      <b>Are there any specific goods or services you don&rsquo;t feel are covered above?</b>
+      <b>Is there anything you sell or provide that isn&rsquo;t covered above?</b>
       <div class="pills" style="gap:10px;margin-top:10px">
         <button type="button" class="pill navy lg on" id="rv-cov-no" onclick="setCovered(true)">
-          No &mdash; the terms above reflect my goods and services</button>
+          No &mdash; that covers everything</button>
         <button type="button" class="pill lg" id="rv-cov-yes" onclick="setCovered(false)">
           Yes &mdash; something is missing</button>
       </div>
@@ -650,6 +641,19 @@
       </div>
     </div>
 
+    <!-- APPROVALS (Jonathan, 2 Oct 2026). A CLIENT approves the classes; a TMH
+         team member approves the terms (the research gate waits for it). -->
+    <label id="rv-approve-wrap" class="hidden" style="display:flex;gap:10px;align-items:flex-start;margin:0 0 18px;cursor:pointer;line-height:1.5">
+      <input type="checkbox" id="rv-approve" style="margin-top:4px">
+      <span><b>These are the classes I want.</b> I understand a member of The Trademark Helpline
+        team will check them, and the wording within each class, with me before anything is filed.</span>
+    </label>
+    <label id="rv-staff-approve-wrap" class="hidden" style="display:flex;gap:10px;align-items:flex-start;margin:0 0 18px;cursor:pointer;line-height:1.5">
+      <input type="checkbox" id="rv-staff-approve" style="margin-top:4px">
+      <span><b>I have checked these classes and terms and they are approved for searching.</b>
+        (TMH approval. The client approves the terms later, in the trademark application draft.)</span>
+    </label>
+
     <div id="rv-deal-send" class="hidden">
       <button class="btn primary" onclick="sendToDeal()">Send to the Deal&rsquo;s Classes &amp; Terms</button>
     </div>
@@ -659,7 +663,7 @@
     </div>
 
     <div id="rv-lead-send" class="hidden" style="max-width:560px">
-      <h2 style="font-size:20px">Email me my classes &amp; terms</h2>
+      <h2 style="font-size:20px">Email me my classes</h2>
       <p class="sub">We&rsquo;ll send your selection as a spreadsheet (CSV) you can keep.</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <input class="txt" id="rv-first" placeholder="First name *">
@@ -668,7 +672,7 @@
       <input class="txt" id="rv-email" type="email" placeholder="Email *" style="margin-top:10px">
       <input class="txt" id="rv-phone" type="tel" placeholder="Mobile *" style="margin-top:10px">
       <input class="txt" id="rv-company" placeholder="Company (optional)" style="margin-top:10px">
-      <p style="margin-top:14px"><button class="btn primary" onclick="sendClassTools()">Send my classes &amp; terms</button></p>
+      <p style="margin-top:14px"><button class="btn primary" onclick="sendClassTools()">Send my classes</button></p>
     </div>
 
     <div class="err hidden" id="rv-err"></div>
@@ -1122,22 +1126,23 @@ const TOOLS={
     h1:'Which brand are you creating classes and terms for?',
     lead:'Pop in your brand name, then we&rsquo;ll find your company at Companies House and '+
          'show you what businesses in your sector actually registered.'},
-  'describe-business':{opt:'1', name:'Describe your business',
-    h1:'Which brand are you creating classes and terms for?',
-    lead:'Pop in your brand name, then answer a few plain questions about what you sell '+
-         'and who you sell it to, and we&rsquo;ll build your classes and terms from the answers.'},
-  'my-website':{opt:'2', name:'Your website',
-    h1:'Which brand are you creating classes and terms for?',
-    lead:'Pop in your brand name, then give us your website address. We&rsquo;ll read the '+
-         'site, ask a couple of questions to fill the gaps, and propose your classes and terms.'}};
+  'class-assistant':{opt:'1', name:'Ask our class assistant',
+    h1:'Which brand are you creating classes for?',
+    lead:'Pop in your brand name, then have a quick chat with our class assistant. It asks '+
+         'about your website, or what you sell, and finds your classes.'}};
+/* The two retired AI routes (2 Oct 2026) open the one class assistant, so
+   links already published to /class-builder/describe-business or
+   /class-builder/my-website keep working. */
+const TOOL_ALIAS={'describe-business':'class-assistant','my-website':'class-assistant'};
 /* The slug comes from the PATH on the engine (/class-builder/my-company), or
    from ?tool= when the page is embedded. A WordPress host page is a single
    published page with a single embed tag, so it has no path to carry the slug;
    embed.js forwards ?tool= into the iframe instead. Path wins when both are
    present — it is the more specific statement of intent. */
-const TOOL_SLUG=(location.pathname.match(/class-builder\/([a-z-]+)/)||[])[1]
+const TOOL_SLUG_RAW=(location.pathname.match(/class-builder\/([a-z-]+)/)||[])[1]
   || (new URLSearchParams(location.search).get('tool')||'').trim()
   || '';
+const TOOL_SLUG=TOOL_ALIAS[TOOL_SLUG_RAW]||TOOL_SLUG_RAW;
 const ONLY_TOOL=TOOLS[TOOL_SLUG]||null;
 if(ONLY_TOOL){
   document.title='Trademark Class Builder — '+ONLY_TOOL.name+' — The Trademark Helpline';
@@ -1171,7 +1176,7 @@ function applyToolMode(){
   foot.className='sub'; foot.style.marginTop='18px';
   foot.innerHTML='Or try another way to find your classes: '+
     others.map(s=>'<a href="/class-builder/'+s+'">'+TOOLS[s].name+'</a>').join(' &middot; ')+
-    ' &middot; <a href="/class-builder">all four together</a>';
+    ' &middot; <a href="/class-builder">all three together</a>';
   foot.querySelectorAll('a').forEach(a=>{a.style.color='var(--pink)';a.style.fontWeight='700';});
   panel.parentNode.insertBefore(foot,panel.nextSibling);
 }
@@ -1423,7 +1428,32 @@ function openHelp(opt){
     <div class="hbar"><input id="ho3-q" placeholder="Company name or number" oninput="ho3coSearch()"></div>
     <div class="hres hidden" id="ho3-res"></div>
     <div class="muted-note" id="ho3-out"></div>`;
+  else if(opt==='1'){
+    body.innerHTML='<div class="muted-note" id="ho1-out"></div><div id="ho1-chat"></div>';
+    startClassChat();
+  }
   else body.innerHTML=aiGateHtml(opt);
+}
+/* The ONE AI class assistant (2 Oct 2026). Email first (the same just-in-time
+   notice and per-email allowance as before), then the chat. Its classes land
+   in the SAME pre-ticked picker every other route uses; the terms ride along
+   hidden on class_source for a TMH team member to check. */
+function startClassChat(){
+  const out=document.getElementById('ho1-out');
+  if(!state.emailForAI){ aiEmailGate('1', startClassChat); return; }
+  aiUse('class_chat', out, function(){
+    out.textContent='';
+    TMHClassChat.mount(document.getElementById('ho1-chat'), {
+      api:(CONFIG.API_BASE||''), staff:(CONFIG.RETURN==='staff'||!!CONFIG.DEAL),
+      onDone:function(r){
+        const items=(r.classes||[]).map(c=>({n:c.n,label:c.label,on:true}));
+        if(!items.length) return;
+        showClassPicker('1','What our class assistant found',items,
+          {value:r.description||'',label:'class assistant chat',agent_terms:r.terms,
+           model:'class-chat',website:r.website||'',provides:r.provides||''});
+        logEvent('class_chat_done','classes',{classes:items.map(i=>i.n)},true);
+      }});
+  });
 }
 function aiGateHtml(opt){
   /* Change spec 22 Aug §8: the description or website comes FIRST. The email
@@ -2718,8 +2748,11 @@ function renderReview(){
   /* Staff = opened from a Deal button (?deal=) or a staff form (?return=staff).
      NOT any ?return= -- the client wizard and Brand Audit embed this page
      with return=<token> too, and they must stay collapsed. */
-  const adv = (state.rvAdvanced===undefined)
-    ? (CONFIG.RETURN==='staff' || !!CONFIG.DEAL) : !!state.rvAdvanced;
+  /* CLIENTS SEE CLASSES ONLY (Jonathan, 2 Oct 2026). The term editors stay
+     in the DOM, hidden, so collectReview() still sends every term -- they go
+     to Zoho as Terms_Status = Draft for a TMH team member to check. */
+  const STAFF_RV = (CONFIG.RETURN==='staff' || !!CONFIG.DEAL);
+  const adv = !STAFF_RV ? false : (state.rvAdvanced===undefined) ? true : !!state.rvAdvanced;
   const ta=(id,list,minR)=>`<textarea id="${id}" rows="${Math.min(8,Math.max(2,Math.ceil(fmtTerms(list).length/90)))}">${esc(fmtTerms(list))}</textarea>`;
   host.innerHTML=(state.review||[]).map((r,i)=>{
     const tt=r.term_tiers;
@@ -2735,7 +2768,7 @@ function renderReview(){
       : `<label>Specific terms &mdash; separated by "; " &mdash; delete any that don't apply</label>
          ${ta('rv-t-'+r.n,r.terms,4)}`;
     const n=rvTermCount(r);
-    const summary = adv ? '' :
+    const summary = (adv || !STAFF_RV) ? '' :
       `<div class="rv-terms-sum">${n?`<b>${n}</b> specific term${n===1?'':'s'} included`
         :'No specific terms for this class yet'}</div>`;
     return `
@@ -2752,7 +2785,18 @@ function renderReview(){
 
   const total=(state.review||[]).reduce((a,r)=>a+rvTermCount(r),0);
   const sw=document.getElementById('rv-adv');
-  if(sw){
+  if(sw) sw.classList.toggle('hidden', !STAFF_RV);
+  const lead=document.getElementById('rv-lead');
+  if(lead && !STAFF_RV) lead.textContent='Check these are the classes you want. We draft the '+
+    'specific wording within each class for you, from terms already accepted by the UK IPO, '+
+    'and a member of our team checks it with you before anything is filed.';
+  const apw=document.getElementById('rv-approve-wrap');
+  if(apw) apw.classList.toggle('hidden', STAFF_RV);
+  const sapw=document.getElementById('rv-staff-approve-wrap');
+  if(sapw) sapw.classList.toggle('hidden', !CONFIG.DEAL);
+  const rsb=document.querySelector('#rv-return-send button');
+  if(rsb && !STAFF_RV) rsb.textContent='Approve these classes';
+  if(sw && STAFF_RV){
     sw.innerHTML=
       `<button type="button" class="rv-adv-btn" onclick="rvToggleAdvanced()">`+
         `${adv?'&minus;':'+'} ${adv?'Hide':'Show and edit'} the specific terms</button>`+
@@ -2766,7 +2810,7 @@ function renderReview(){
      else   -> email the visitor a CSV and make a Class Tools lead */
   /* The nudge, when the engine says these terms had nothing to work from.
      Suppressed once the visitor has answered or declined. */
-  const needsCtx=(state.review||[]).some(r=>r.needs_context) && !state.ctxAsked;
+  const needsCtx=STAFF_RV && (state.review||[]).some(r=>r.needs_context) && !state.ctxAsked;
   const ctxBox=document.getElementById('rv-ctx');
   if(ctxBox) ctxBox.classList.toggle('hidden', !needsCtx);
 
@@ -2801,6 +2845,26 @@ function collectReview(){
     return {n:r.n, heading:(h?h.value.trim():r.heading)||'', terms:terms, terms_source:src};
   }).filter(r=>r.terms.length||r.heading);
 }
+/* Client classes approval (2 Oct 2026): required before a client sends, and
+   stamped so the scope asset can carry Classes_Approved_By_Client. */
+function clientApproval(){
+  if(CONFIG.RETURN==='staff' || CONFIG.DEAL) return '';
+  const a=document.getElementById('rv-approve');
+  if(!a || !a.checked) return null;
+  return new Date().toISOString().replace(/\.\d{3}Z$/,'+00:00');
+}
+/* TMH approval from a Deal-launched builder: after the classes and terms are
+   on the Deal, mark them Approved by TMH (staff token from this browser). */
+function staffApproveAfterSend(){
+  const a=document.getElementById('rv-staff-approve');
+  if(!CONFIG.DEAL || !a || !a.checked) return Promise.resolve(null);
+  let k=''; try{ k=localStorage.getItem('tmh_staff')||''; }catch(e){}
+  if(!k) return Promise.resolve({ok:false,error:'no staff token in this browser'});
+  /* Give the classes-and-terms write a moment to land before approving it. */
+  return new Promise(res=>setTimeout(res,4000)).then(()=>fetch('/staff-terms-approve',{method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({k:k,deal_id:CONFIG.DEAL})}))
+    .then(r=>r.json()).catch(()=>({ok:false,error:'could not record the approval'}));
+}
 function rvDone(msg){
   rvErr('');
   const d=document.getElementById('rv-done');
@@ -2814,7 +2878,9 @@ function rvDone(msg){
    the builder must not create leads or deals on its way through. */
 function sendToCaller(){
   const rows=collectReview();
-  if(!rows.length){ rvErr('Nothing to send — add at least one class with terms.'); return; }
+  if(!rows.length){ rvErr('Nothing to send — add at least one class.'); return; }
+  const approvedAt=clientApproval();
+  if(approvedAt===null){ rvErr('Please tick to confirm these are the classes you want.'); return; }
   const flat=[];
   rows.forEach(r=>{ (r.terms||[]).forEach(t=>{ if(flat.indexOf(t)<0) flat.push(t); }); });
   const msg={brauditClasses:{
@@ -2823,6 +2889,7 @@ function sendToCaller(){
     terms:flat,
     scope:rows,
     additional_terms:additionalTerms(),
+    classes_approved_at:approvedAt||undefined,
     token:CONFIG.RETURN}};
   try{ window.parent.postMessage(msg,'*'); }catch(e){}
   rvDone('Added to your brand — you can close this and carry on.');
@@ -2841,8 +2908,12 @@ function sendToDeal(){
                   last_result:{application_scope:rows,additional_terms:additionalTerms()},
                   status:'class_builder_sent'}})})
       .then(r=>r.json())
-      .then(d=>{ if(d&&d.ok) rvDone('Sent — the classes and terms are on the Deal in Zoho.');
-                 else rvErr('The send failed — please try again.'); })
+      .then(d=>{ if(!(d&&d.ok)){ rvErr('The send failed — please try again.'); return; }
+                 rvDone('Sent — the classes and terms are on the Deal in Zoho.');
+                 staffApproveAfterSend().then(a=>{ if(!a) return;
+                   rvDone(a.ok ? ('Sent and approved by TMH.'+(a.released?' The Deal has been released for research.':''))
+                               : ('Sent, but the approval did not save: '+(a.error||'try again from the Deal')+'.')); });
+               })
       .catch(()=>rvErr('The send failed — please try again.'));
   });
 }
@@ -2855,7 +2926,9 @@ function sendClassTools(){
   if(!first||!last||!email||!phone){ rvErr('First name, last name, email and mobile are all needed to send your classes.'); return; }
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ rvErr('That email address does not look right.'); return; }
   const rows=collectReview();
-  if(!rows.length){ rvErr('Nothing to send — add at least one class with terms.'); return; }
+  if(!rows.length){ rvErr('Nothing to send — add at least one class.'); return; }
+  const approvedAt=clientApproval();
+  if(approvedAt===null){ rvErr('Please tick to confirm these are the classes you want.'); return; }
   state.email=email; state.emailSource='class_tools';
   ensureSession().then(function(id){
     if(!id){ rvErr('Could not reach the server — please try again.'); return; }
@@ -2867,11 +2940,12 @@ function sendClassTools(){
         snapshot:{name:state.name,classes:rows.map(r=>r.n),class_source:state.classSource,
                   first_name:first,last_name:last,email:email,phone:phone,
                   business_name:company||'',email_source:'class_tools',
-                  last_result:{application_scope:rows,additional_terms:additionalTerms()},
+                  last_result:{application_scope:rows,additional_terms:additionalTerms(),
+                               classes_approved_at:approvedAt||undefined},
                   status:'class_builder_sent'}})})
       .then(r=>r.json())
       .then(d=>{ if(d&&d.ok){ if(window.tmhTool) tmhTool.step('lead_submitted',{classes:rows.map(r=>r.n)});
-                   rvDone('Done — your classes and terms are on their way to '+email+' as a CSV.'); }
+                   rvDone('Done — your classes are on their way to '+email+'. A member of our team will check them with you.'); }
                  else rvErr('The send failed — please try again.'); })
       .catch(()=>rvErr('The send failed — please try again.'));
   });
@@ -2880,7 +2954,7 @@ function sendClassTools(){
 if(BUILDER){
   document.querySelectorAll('[data-screen="classes"] button').forEach(function(b){
     if((b.getAttribute('onclick')||'')==='beginSearch()'){
-      b.textContent='Review classes & terms';
+      b.textContent=(CONFIG.RETURN==='staff'||CONFIG.DEAL)?'Review classes & terms':'Review my classes';
       b.setAttribute('onclick','goToReview()');
     }
   });
@@ -3421,5 +3495,6 @@ document.getElementById('modeflag').textContent =
    is the only one now. */
 </script>
 <script src="/help-line.js" defer></script>
+<script src="/class-chat.js" defer></script>
 </body>
 </html>
