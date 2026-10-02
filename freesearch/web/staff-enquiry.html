@@ -431,6 +431,20 @@
     <div class="sf-hint" id="f-scoperesp-hint"></div>
 
     <div id="f-scope" style="margin-top:14px"></div>
+
+    <!-- TERMS APPROVAL (Jonathan, 2 Oct 2026). Clients see classes only; a TMH
+         team member checks the terms and approves them before any search runs
+         (the research gate waits for it). The client approves the terms later,
+         in the trademark application draft. Editing a class or a term after
+         ticking clears the tick. -->
+    <label class="sf-check" style="margin-top:14px"><input type="checkbox" id="f-termsok2">
+      <span><b>I have checked these classes and terms and they are approved for searching.</b>
+      Deleting or adding terms above is expected: approve what should be searched.</span></label>
+    <div id="f-termsapprove-now" class="hidden" style="margin-top:8px">
+      <button type="button" class="sf-add" onclick="approveTermsNow()">Approve the terms on the Deal now</button>
+      <div class="sf-hint" id="f-termsapprove-msg">Approves the classes and terms already on this Deal in Zoho
+        and releases it for research if that is all it was waiting for. To change them first, use the class tools.</div>
+    </div>
   </section>
 
   <!-- ---------- THEIR BRAND ONLINE ---------- -->
@@ -968,6 +982,9 @@ const state={
   recommend:{scope:'',rationale:'',handling:'normal',auditDate:'',expReason:'',turnaroundDays:'5'},
   /* Terms of Service (28 Sep 2026): staff tick on the client's instruction. */
   terms:{accepted:false,business:'',consumerStart:false,consumerStartAt:''},
+  /* TMH approval of the classes and terms (2 Oct 2026). The approver is the
+     staff token's owner, resolved server-side at payment. */
+  termsApproval:{approved:false,at:''},
   consult:{date:'',time:'',adviser:'',method:'phone',agreed:false,
            declined:false,declineReason:'',feeWaived:true},
   billing:{entity:'',email:'',addr:'',location:'',payWhen:'',payDate:'',agreed:false,
@@ -1385,12 +1402,34 @@ function scopeEdited(c,el){
   }
   state.scope[c]=v; el.value=v; touch();
 }
+/* Any change to the classes or terms after approval clears it: what was
+   approved is no longer what will be searched. */
+function termsChanged(){
+  if(state.termsApproval&&state.termsApproval.approved){
+    state.termsApproval={approved:false,at:''};
+    const t=document.getElementById('f-termsok2'); if(t) t.checked=false;
+  }
+}
+async function approveTermsNow(){
+  const msg=document.getElementById('f-termsapprove-msg');
+  if(!CONFIG.DEAL){ return; }
+  msg.textContent='Approving…';
+  try{
+    const r=await fetch('/staff-terms-approve',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({k:CONFIG.TOKEN||'',deal_id:CONFIG.DEAL})});
+    const d=await r.json();
+    msg.textContent=!d||!d.ok?('Could not approve: '+((d&&d.error)||'please try again')):
+      d.released?'Approved. The Deal has been released for research.':
+      d.still_missing?('Approved. Still needed before research: '+d.still_missing):
+      'Approved.';
+  }catch(e){ msg.textContent='Could not approve — please try again.'; }
+}
 function renderScope(){
   const cls=parseClasses(state.classes);
   document.getElementById('f-scope').innerHTML=cls.length?cls.map(c=>`
     <div class="sf-cls"><div class="ch">Class <span class="n">${c}</span></div>
       <textarea placeholder="Goods and services for class ${c} — terms separated by &quot;; &quot; — applies to every mark above"
-        oninput="state.scope[${c}]=this.value;touch()"
+        oninput="state.scope[${c}]=this.value;termsChanged();touch()"
         onblur="scopeEdited(${c},this)">${esc(fmtTerms(state.scope[c]||''))}</textarea></div>`
     ).join(''):'<div class="sf-hint">Enter classes above and the terms boxes appear here.</div>';
 }
@@ -1837,6 +1876,7 @@ window.addEventListener('message',e=>{
   const sc=e.data&&e.data.brauditScope;
   if(!sc||!Array.isArray(sc.classes)) return;
   state.classes=sc.classes.join(', ');
+  termsChanged();
   const el=document.getElementById('f-classes'); if(el) el.value=state.classes;
   if(!state.scopeSource) state.scopeSource={};
   if(sc.terms){Object.keys(sc.terms).forEach(n=>{
@@ -2214,6 +2254,9 @@ function finishLoad(){
   set('f-apname',state.applicant.name||'');set('f-apnum',state.applicant.companyNumber||'');
   tog('f-apwrap','hidden',state.applicant.sameAsBilling!==false);
   chk('r-confirmed',state.readback.confirmed);
+  if(!state.termsApproval) state.termsApproval={approved:false,at:''};
+  chk('f-termsok2',state.termsApproval.approved);
+  tog('f-termsapprove-now','hidden',!CONFIG.DEAL);
   if(!state.terms) state.terms={accepted:false,business:'',consumerStart:false,consumerStartAt:''};
   set('f-turnaround',String(turnaroundN()));set('f-business',state.terms.business||'');
   chk('f-consumerstart',state.terms.consumerStart);chk('f-termsok',state.terms.accepted);
@@ -2295,7 +2338,7 @@ function bindAll(){
   bind('f-risk',v=>state.discovery.risk=v);
 
   const cl=document.getElementById('f-classes');
-  cl.addEventListener('input',()=>{state.classes=cl.value;renderScope();touch();});
+  cl.addEventListener('input',()=>{state.classes=cl.value;termsChanged();renderScope();touch();});
 
   /* Scope responsibility (19 Sep 2026). Drives G-03 and rides to the Deal. */
   const sr=document.getElementById('f-scoperesp');
@@ -2441,6 +2484,9 @@ function bindAll(){
     },320);
   });
 
+  const tk2=document.getElementById('f-termsok2');
+  if(tk2) tk2.addEventListener('change',()=>{state.termsApproval={approved:tk2.checked,
+    at:tk2.checked?new Date().toISOString():''};touch();});
   const ta=document.getElementById('f-turnaround');
   if(ta) ta.addEventListener('change',()=>{state.recommend.turnaroundDays=ta.value;
     renderTermsBlock();renderAll();touch();});
