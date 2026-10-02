@@ -103,9 +103,13 @@
 <body>
 <div class="wrap">
   <h1>Class &amp; Term Finder</h1>
-  <p class="lead">Describe a business and get Nice classes with specification terms.
-    Every term comes from a UK trademark <b>actually registered in the last five years</b> —
-    nothing is generated. The count beside each term is how many real registrations use that wording.</p>
+  <p class="lead">The ONE AI class assistant (2 Oct 2026). Have the conversation with the client's
+    answers; it finds the classes and the registered terms for each. Every term comes from a UK
+    trademark <b>actually registered in the last five years</b> &mdash; nothing is generated.
+    Staff see the terms; clients only ever see classes.</p>
+  <div class="card"><div id="cc-host"></div></div>
+  <!-- The previous form-based tool, kept out of sight while the chat beds in. -->
+  <div id="old-agent" style="display:none">
 
   <div class="card">
     <label class="fld" for="site">Start from their website <span class="opt">— optional shortcut</span></label>
@@ -219,7 +223,10 @@
       <div class="out" id="out"></div>
     </div>
   </div>
+  </div>
 </div>
+<script src="/class-chat.js"></script>
+<script>TMHClassChat.mount(document.getElementById('cc-host'),{api:'',staff:true});</script>
 
 <script>
 /* Thin client. All the logic lives behind POST /suggest-classes so Brand
