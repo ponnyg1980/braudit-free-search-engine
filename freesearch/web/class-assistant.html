@@ -200,53 +200,21 @@ button.route small{display:block;font-weight:400;color:#64748b;margin-top:3px}
        the four routes above are. -->
   <div class="card ai-card" id="ai-card" style="display:none">
     <h3>AI Assisted Class Tools</h3>
-    <div class="ai-note">AI Assisted Class Tools require email verification and are
-      subject to our fair use policy. Suggestions are a starting point, not advice &mdash;
-      an adviser should confirm them before you file.</div>
+    <div class="ai-note">The class assistant asks a few questions about your business and finds
+      your classes. It needs your email and is subject to our fair use policy. Suggestions are a
+      starting point: a member of our team checks them before anything is filed.</div>
 
     <div class="bar" style="margin-top:12px">
       <input id="ai-email" type="email" placeholder="Your email address" autocomplete="email">
     </div>
     <div class="hint">We use this to apply the fair use allowance. It is not shared.</div>
 
-    <!-- Same shape as the Class & Term Finder and Free Search's AI route:
-         the website read PRE-FILLS the questionnaire, it never classifies
-         straight off the page — a misread site becomes a visible mistake,
-         not silently wrong classes (Jonathan, 28 Aug). -->
-    <div style="margin-top:16px">
-      <label class="lbl">Start from your website <span style="font-weight:400;color:var(--muted)">&mdash; optional shortcut</span></label>
-      <div class="bar"><input id="ai-url" placeholder="e.g. yourbusiness.co.uk">
-        <button class="btn ghost" onclick="aiWebsite()">Read it</button></div>
-      <div class="hint" id="ai-sitenote">Fills in the answers below, which you can then correct.</div>
-    </div>
-
-    <div style="margin-top:14px">
-      <label class="lbl">If somebody asked what your business does, what&rsquo;s the first thing you&rsquo;d say?</label>
-      <textarea id="ai-desc" rows="2" style="width:100%;padding:11px 13px;border:2px solid #c9b8f0;border-radius:9px;font-size:15px;font-family:inherit"
-        placeholder="e.g. We&rsquo;re a plumbing and heating company covering Cheshire"></textarea>
-    </div>
-
-    <div style="margin-top:12px">
-      <label class="lbl">Do you provide&hellip;</label>
-      <div class="tabs" id="ai-prov" style="margin-bottom:0">
-        <div class="t on" data-p="">Not sure</div>
-        <div class="t" data-p="goods">Goods or products</div>
-        <div class="t" data-p="services">Services</div>
-        <div class="t" data-p="both">Both</div>
-      </div>
-    </div>
-    <div id="ai-goods-wrap" style="display:none;margin-top:10px">
-      <label class="lbl">What goods or products?</label>
-      <input id="ai-goods" placeholder="e.g. boilers, radiators, spare parts">
-    </div>
-    <div id="ai-services-wrap" style="display:none;margin-top:10px">
-      <label class="lbl">What services?</label>
-      <input id="ai-services" placeholder="e.g. boiler installation, emergency repairs, servicing plans">
-    </div>
-
+    <!-- ONE AI option (Jonathan, 2 Oct 2026): a short conversation with our
+         class assistant replaces the website / describe-your-business form. -->
     <div class="sel-acts" style="margin-top:14px">
-      <button class="btn" onclick="aiSuggest()">Suggest my classes</button>
+      <button class="btn" id="ai-start" onclick="aiStartChat()">Start the class assistant</button>
     </div>
+    <div id="ai-chat" style="margin-top:14px"></div>
     <div class="loading" id="ai-load"><span class="tmh-loader" role="status" aria-live="polite" aria-label="Working"><i></i><i></i><i></i></span>Working out your classes&hellip;</div>
     <div class="err" id="ai-err" style="display:none"></div>
   </div>
@@ -657,7 +625,13 @@ function decorateRows(){
        these spans, so hiding is the only safe move. Adding a class still
        captures every term whether or not the visitor ever opened the list. */
     const terms=row.querySelector('.terms');
-    if(terms){
+    /* Clients see CLASSES only (Jonathan, 2 Oct 2026); the terms stay in the
+       DOM, hidden, so Add still captures them for the order, where a TMH team
+       member checks them. Staff (?return=staff) keep the toggle. */
+    if(terms && !(typeof STAFF_VIEW!=='undefined' && STAFF_VIEW)){
+      terms.style.display='none';
+    }
+    else if(terms){
       const n_t=terms.querySelectorAll('.term').length;
       if(n_t){
         terms.style.display='none';
@@ -842,6 +816,18 @@ function aiFail(m){const e=document.getElementById('ai-err');e.textContent=m;e.s
 function aiBusy(on){document.getElementById('ai-load').classList.toggle('show',on);
   if(on) document.getElementById('ai-err').style.display='none';}
 function aiApi(){return (CONFIG.API_BASE||'').replace(/\/$/,'');}
+/* Staff surfaces (?return=staff) see the terms; clients see classes only
+   (Jonathan, 2 Oct 2026). */
+const STAFF_VIEW = P_QS.get('return')==='staff';
+async function aiStartChat(){
+  const email=await aiGate(); if(!email) return;
+  document.getElementById('ai-start').style.display='none';
+  TMHClassChat.mount(document.getElementById('ai-chat'), {api: aiApi(), staff: STAFF_VIEW,
+    onDone: function(r){
+      renderAi('Your class assistant suggests', {classes:(r.classes||[]).map(c=>({
+        n:c.n, class_label:c.label, terms:(r.terms[c.n]||[])}))});
+    }});
+}
 
 /* Server-side per-email allowance; a safe-listed email (TMH staff,
    introducers, resellers — flagged in Zoho) is never limited. */
@@ -917,7 +903,7 @@ function renderAi(title,d){
   outHead(title,BASIS.ai);
   document.getElementById('out-body').innerHTML=(d.classes||[]).map(c=>{
     const n=c.nice_class||c.class||c.n;
-    const terms=(c.terms||[]).slice(0,8).map(t=>
+    const terms=(c.terms||[]).map(t=>
       `<span class="term" data-term="${(t.text||t)}">${(t.text||t)}</span>`).join('');
     return `<div class="cls"><div class="h"><span>Class ${n}${c.class_label?' \u00b7 '+c.class_label:''}</span>
       ${c.confidence?`<span class="band">${c.confidence}</span>`:''}</div>
@@ -1040,5 +1026,6 @@ document.getElementById('flag').textContent =
 })();
 </script>
 <script src="/help-line.js" defer></script>
+<script src="/class-chat.js" defer></script>
 </body>
 </html>
