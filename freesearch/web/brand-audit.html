@@ -158,14 +158,16 @@
            headings, and terms grouped Definitely / Possibly / Unlikely. The
            builder is embedded rather than re-implemented, so every future
            improvement to the tools reaches this form for free. -->
-      <label class="fld">Classes &amp; terms</label>
+      <label class="fld">Classes</label>
       <div class="basket" id="bf-cls-basket"><span class="muted-note">None selected yet.</span></div>
-      <div class="basket" id="bf-term-basket" style="margin-top:8px"><span class="muted-note">No terms yet.</span></div>
+      <!-- Clients see CLASSES only (Jonathan, 2 Oct 2026). The terms are still
+           collected (hidden) and checked by a TMH team member. -->
+      <div class="basket" id="bf-term-basket" style="display:none"><span class="muted-note">No terms yet.</span></div>
       <p style="margin:10px 0 0">
         <button type="button" class="btn ghost" id="bf-tools-btn" onclick="openClassTools()">
-          Choose classes &amp; terms &rarr;</button>
+          Choose classes &rarr;</button>
         <span class="muted-note" style="margin-left:10px">Use an existing trademark, your company,
-          a description of what you do, or your website.</span>
+          or a quick chat with our class assistant.</span>
       </p>
 
       <div class="tick" id="bf-tick-logo" onclick="toggleBrandTick('logo')">
@@ -197,10 +199,11 @@
            callers (Jonathan, 10 Aug — "transferrable to other applications").
            Reads the description above, or the website if one was given. -->
       <div class="ai-row">
-        <button type="button" class="btn ghost small" id="bf-ai" onclick="suggestForBrand()">
-          ✨ Suggest classes &amp; terms
+        <button type="button" class="btn ghost small" id="bf-ai" onclick="chatForBrand()">
+          ✨ Ask our class assistant
         </button>
-        <span class="muted-note" id="bf-ai-note">Uses your description above — or your website if you’ve given one.</span>
+        <span class="muted-note" id="bf-ai-note">A quick chat about your business finds your classes.
+          A member of our team checks them before anything is filed.</span>
       </div>
       <div id="bf-ai-out"></div>
       <div class="cols">
@@ -517,6 +520,22 @@ async function suggestForBrand(){
   }
 }
 
+/* The ONE AI class assistant (Jonathan, 2 Oct 2026). Classes go into this
+   brand's basket; the terms go into its (hidden) term basket for a TMH team
+   member to check. Clients never see terms. */
+function chatForBrand(){
+  const out=document.getElementById('bf-ai-out');
+  document.getElementById('bf-ai').disabled=true;
+  TMHClassChat.mount(out,{api:engineBase(),staff:false,onDone:function(r){
+    (r.classes||[]).forEach(c=>addBrandClass(c.n));
+    Object.keys(r.terms||{}).forEach(n=>(r.terms[n]||[]).forEach(t=>{
+      if(!state.brandForm.terms.includes(t)) state.brandForm.terms.push(t); }));
+    if(r.website && !document.getElementById('bf-website').value) document.getElementById('bf-website').value=r.website;
+    if(r.description && !document.getElementById('bf-desc').value) document.getElementById('bf-desc').value=r.description;
+    renderBrandClassBasket(); renderTermBasket(); onBrandFieldChange();
+    document.getElementById('bf-ai').disabled=false;
+  }});
+}
 function renderBrandSuggestions(d, out){
   out.innerHTML='<div class="ai-box">'+
     '<h4>Suggested for this brand</h4>'+
@@ -867,5 +886,6 @@ function applyPrefill(session){
 init();
 </script>
 <script src="/help-line.js" defer></script>
+<script src="/class-chat.js" defer></script>
 </body>
 </html>
