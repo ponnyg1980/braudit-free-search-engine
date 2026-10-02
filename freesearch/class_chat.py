@@ -130,7 +130,11 @@ def _apply_drop(state: dict, drops: list) -> None:
 def _classify(state: dict, cfg: dict) -> str | None:
     """Steps 4-6: classes, the approved-term list per class, irrelevant out."""
     text = _description(state)
-    res = A.suggest(text, provides=state.get('provides'), cfg=cfg)
+    # The goods/services answer steers the questions and is in the text as a
+    # hint, but it does NOT filter classes: people say "services" and then
+    # describe products they sell too (tested 2 Oct: a dog groomer selling
+    # shampoos lost class 3 when the answer was enforced as a filter).
+    res = A.suggest(text, provides=None, cfg=cfg)
     if not res.get('ok'):
         return res.get('message') or 'error'
     classes = []
