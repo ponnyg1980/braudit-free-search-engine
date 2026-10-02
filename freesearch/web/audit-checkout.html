@@ -271,14 +271,14 @@
 
   <!-- ============ 4 — CLASSES & DESCRIPTIONS ============ -->
   <section class="card hidden" data-screen="classes">
-    <h1>Classes &amp; descriptions</h1>
+    <h1>Your classes</h1>
     <p class="lead" id="cls-lead">Your registration only protects what you list, so this is
       what your audit is measured against.</p>
 
     <div class="eyebrow">Your classes</div>
     <div class="basket" id="cls-basket"></div>
     <div style="margin-top:14px">
-      <button class="btn ghost" id="cls-tools-btn" onclick="openClassTools()">Select classes &amp; terms &rarr;</button>
+      <button class="btn ghost" id="cls-tools-btn" onclick="openClassTools()">Select classes &rarr;</button>
     </div>
 
     <!-- "Let us pick" (Jonathan, 19 Sep 2026). An audit cannot run without
@@ -289,17 +289,12 @@
          gate used to say the same thing about both. -->
     <div class="ac-scope-resp" id="cls-resp">
       <div class="h">Would you rather we did this part?</div>
-      <p class="sub">Your audit is measured against your classes and terms, so they have to be
-        right. If you are not sure, hand it to us &mdash; we will confirm them with you before
-        the audit runs. It does not hold up your order either way.</p>
+      <p class="sub">Your audit is measured against your classes, so they have to be right. If you
+        are not sure, hand it to us &mdash; we will confirm them with you before the audit runs.
+        It does not hold up your order either way.</p>
       <label class="ac-resp-opt" data-resp="tmh_all">
         <input type="radio" name="scoperesp" value="tmh_all" onchange="setScopeResp('tmh_all')">
-        <span>Let The Trademark Helpline pick my <b>Classes &amp; Terms</b></span>
-      </label>
-      <label class="ac-resp-opt" data-resp="tmh_terms" id="cls-resp-terms">
-        <input type="radio" name="scoperesp" value="tmh_terms" onchange="setScopeResp('tmh_terms')">
-        <span>Let The Trademark Helpline pick my <b>Terms</b>
-          <small>&mdash; you have chosen the classes</small></span>
+        <span>Let The Trademark Helpline pick my <b>classes</b></span>
       </label>
       <label class="ac-resp-opt" data-resp="client">
         <input type="radio" name="scoperesp" value="client" checked onchange="setScopeResp('client')">
@@ -308,6 +303,15 @@
     </div>
 
     <div id="cls-rows" style="margin-top:20px"></div>
+
+    <!-- The client approves the CLASSES (Jonathan, 2 Oct 2026). The wording
+         within each class is drafted and checked by a TMH team member; the
+         client approves it later, in the trademark application draft. -->
+    <label class="ac-tick hidden" id="cls-approve-wrap" style="margin-top:16px">
+      <input type="checkbox" id="cls-approve" onchange="state.classesApprovedAt=this.checked?isoNow():'';clearErr('cls-err')">
+      <span><b>These are the classes I want.</b> I understand a member of The Trademark Helpline
+        team will check them, and the wording within each class, with me before my audit runs.</span>
+    </label>
 
     <div class="err hidden" id="cls-err"></div>
     <div class="actions">
@@ -655,6 +659,7 @@ const CONFIG=(function(){
   };
 })();
 function journeyBase(){return CONFIG.JOURNEY.replace(/\/$/,'');}
+function isoNow(){return new Date().toISOString().replace(/\.\d{3}Z$/,'+00:00');}
 function engineBase(){return '';}
 
 const NICE={1:'Chemicals',2:'Paints & Coatings',3:'Cosmetics & Cleaning',4:'Oils, Lubricants & Fuels',
@@ -976,21 +981,21 @@ function renderClasses(){
 
   const mode=classesMode();
   const btn=document.getElementById('cls-tools-btn');
-  btn.textContent={select:'Select classes & terms →',
-                   review:'Review classes & terms →',
-                   change:'Change classes & terms →'}[mode];
+  btn.textContent={select:'Select classes →',
+                   review:'Review classes →',
+                   change:'Change classes →'}[mode];
   btn.className=mode==='change'?'btn ghost':'btn primary';
   document.getElementById('cls-lead').textContent=
     mode==='select'
       ? 'Trade marks are registered against classes of goods and services. Pick the ones you actually trade in — your registration only protects what you list.'
       : mode==='review'
-        ? 'These classes came through from your search. Review the official descriptions and terms so your audit measures the right things.'
-        : 'These came through from your search. Review the wording, remove anything that doesn’t apply, or reopen the tools to change your classes.';
+        ? 'These classes came through from your search. Check they are the ones you want, so your audit measures the right things.'
+        : 'Check these are the classes you want, or reopen the tools to change them.';
 
   /* "Let us pick my Terms" only makes sense once classes exist, so it is
      hidden until then — and de-selected if the visitor empties the basket,
      which would otherwise leave an instruction naming classes that are gone. */
-  const termsOpt=document.getElementById('cls-resp-terms');
+  const termsOpt=null;   /* "pick my terms" retired 2 Oct 2026: TMH checks every order's terms */
   if(termsOpt){
     const ok=state.classes.length>0;
     termsOpt.style.display=ok?'':'none';
@@ -1003,12 +1008,18 @@ function renderClasses(){
   const respBox=document.getElementById('cls-resp');
   if(respBox) respBox.classList.toggle('chosen', (state.scopeResp||'client')!=='client');
 
+  const apw=document.getElementById('cls-approve-wrap');
+  if(apw){ apw.classList.toggle('hidden', !state.classes.length || (state.scopeResp||'client')!=='client');
+    const cb=document.getElementById('cls-approve'); if(cb) cb.checked=!!state.classesApprovedAt; }
   const rows=document.getElementById('cls-rows');
   /* Handed to us: the term editors would be editing nothing. */
   if(state.scopeResp&&state.scopeResp!=='client'&&state.scopeResp!=='tmh_terms'){
     rows.innerHTML=''; return;
   }
-  if(!state.termsShown||!state.scope.length){rows.innerHTML='';return;}
+  /* CLIENTS SEE CLASSES ONLY (Jonathan, 2 Oct 2026): no term editors. The
+     terms from the class tools ride along in state.scope, unseen, and reach
+     Zoho as Terms_Status = Draft for a TMH team member to check. */
+  rows.innerHTML=''; return;
   rows.innerHTML=state.scope.map((r,i)=>`
     <div class="ac-clsrow"><div class="h"><span class="n">Class ${r.n}</span> &mdash; ${NICE[r.n]||''}</div>
       ${r.heading?`<div class="sub" style="margin-top:2px">${r.heading}</div>`:''}
@@ -1042,7 +1053,7 @@ function openClassTools(){
     '&journey='+encodeURIComponent(journeyBase());
   const ov=document.createElement('div');ov.id='tools-ov';
   ov.innerHTML=`<div class="tv"><div class="bar">
-      <b style="color:var(--navy)">${mode==='select'?'Choose':'Review'} classes &amp; terms${state.name?' — '+state.name:''}</b>
+      <b style="color:var(--navy)">${mode==='select'?'Choose':'Review'} your classes${state.name?' — '+state.name:''}</b>
       <button class="btn ghost sm" onclick="closeClassTools()">Close</button></div>
       <iframe id="tools-if" src="${src}"></iframe></div>`;
   document.body.appendChild(ov);
@@ -1055,6 +1066,8 @@ window.addEventListener('message',e=>{
   state.scope=(d.scope||[]).map(r=>({n:Number(r.n),heading:r.heading||'',
     terms:(r.terms||[]).map(String),terms_source:r.terms_source||'Approved'}));
   state.termsShown=true;
+  /* Approved in the class tools -> already approved here. */
+  if(d.classes_approved_at) state.classesApprovedAt=d.classes_approved_at;
   renderClasses();
   setTimeout(closeClassTools,700);
 });
@@ -1077,8 +1090,8 @@ function submitClasses(){
   if(resp==='client'&&!state.classes.length)
     return showErr('cls-err',
       'Pick at least one class — the tools make it quick. Or ask us to pick them for you.');
-  if(resp==='tmh_terms'&&!state.classes.length)
-    return showErr('cls-err','Pick your classes, or ask us to pick the classes too.');
+  if(resp==='client'&&!state.classesApprovedAt)
+    return showErr('cls-err','Please tick to confirm these are the classes you want.');
   clearErr('cls-err');
   collectTermEdits();
   logEvent('audit_checkout_classes','audit_classes',
@@ -1238,6 +1251,8 @@ function pushScope(){
     search_layers:[...new Set(layers)],scope:scope,create_scope_asset:scope.length>0,
     /* Deals.Scope_Responsibility — the stored picklist string, verbatim. */
     scope_responsibility:SCOPE_RESP[state.scopeResp||'client'],
+    /* The client approved the CLASSES (2 Oct 2026); terms stay Draft. */
+    classes_approved_at:state.classesApprovedAt||undefined,
     exclusions:exclusions,description:desc});
 }
 
@@ -1496,17 +1511,15 @@ function renderSummary(){
     /* The summary must say WHICH of the two it is (Jonathan, 19 Sep): an
        empty Classes line reads as an omission, and "we are picking them" is
        the opposite of one. */
-    sec('Classes &amp; terms', (function(){
+    sec('Classes', (function(){
       const r=state.scopeResp||'client';
       const list=state.classes.map(n=>`<b>${n}</b> ${NICE[n]||''}`).join(' &middot; ');
       if(r==='tmh_all')
-        return 'The Trademark Helpline will pick your classes and terms, and confirm them '+
+        return 'The Trademark Helpline will pick your classes and confirm them '+
                'with you before the audit runs.';
-      if(r==='tmh_terms')
-        return (list||'No classes picked')+
-               '<br><span style="color:#617383">We will pick the specific terms for these '+
-               'classes and confirm them with you.</span>';
-      return list||'None picked';
+      return (list||'None picked')+
+        '<br><span style="color:#617383">A member of our team will check these, and the wording '+
+        'within each class, with you before your audit runs.</span>';
     })())+
     sec('Search platforms','Registers: '+ipoOn.join(', ')+
       '<br>UK Companies House &middot; Domain registers'+
