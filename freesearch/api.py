@@ -86,6 +86,7 @@ _PAGES = {
     '/class-builder/my-company': 'free-search.html',
     '/class-builder/describe-business': 'free-search.html',
     '/class-builder/my-website': 'free-search.html',
+    '/class-builder/class-assistant': 'free-search.html',
     # Full search report at a unique URL (Jonathan, 21 Aug): the emailed
     # Free/Quick Search reports link here; the page renders the COMPLETE
     # stored result (all flagged marks) in the Sector-Report design and
@@ -507,8 +508,9 @@ def _static(path: str):
     # tool mounts. Shared file so the number, the booking URL and the wording
     # cannot drift apart across six pages.
     # tool-events.js: GA4 step messages to the host page (handoff 24 Sep).
+    # class-chat.js: the ONE AI class assistant widget (2 Oct 2026).
     if path in ('/braudit.css', '/wizard.css', '/demo-banner.js', '/help-line.js',
-                '/tool-events.js'):
+                '/tool-events.js', '/class-chat.js'):
         rel = path.lstrip('/')
     elif path.startswith('/brand/') or path.startswith('/fonts/'):
         rel = path.lstrip('/')
@@ -1872,6 +1874,36 @@ class _Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send({'ok': False, 'searches': []}, 200)
             return
+        if path == '/staff-terms-approve':
+            # A TMH team member approves the classes and terms on a Deal
+            # (Jonathan, 2 Oct 2026). Staff token only; the approver is the
+            # token's owner, never a name the browser chose.
+            try:
+                length = int(self.headers.get('Content-Length', 0) or 0)
+                payload = json.loads(self.rfile.read(length) or b'{}')
+            except (ValueError, json.JSONDecodeError):
+                self._send({'ok': False, 'error': 'invalid JSON'}, 400)
+                return
+            su = _staff_user(str(payload.get('k') or ''))
+            if not su:
+                self._send({'ok': False, 'error': 'forbidden'}, 403)
+                return
+            deal_id = str(payload.get('deal_id') or '').strip()
+            if not deal_id.isdigit():
+                self._send({'ok': False, 'error': 'deal_id required'}, 400)
+                return
+            import urllib.request as _ur
+            body = json.dumps({'key': os.environ.get('XERO_PROCESS_KEY', ''),
+                               'deal_id': deal_id,
+                               'approved_by': su.get('email') or su.get('name') or 'staff'}).encode()
+            req = _ur.Request(_JOURNEY_URL.rstrip('/') + '/staff/terms-approve', data=body,
+                              headers={'Content-Type': 'application/json'})
+            try:
+                with _ur.urlopen(req, timeout=30) as r:
+                    self._send(json.loads(r.read().decode()))
+            except Exception:
+                self._send({'ok': False, 'error': 'could not record the approval'}, 200)
+            return
         if path == '/staff-deal':
             # Read an existing audit Deal back for EDIT mode (15 Sep). Shared
             # by both staff forms. Staff-token gated like /staff-lookup and
@@ -1933,7 +1965,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(out, out.get('status', 200))
             return
         if path not in ('/free-search', '/enrich', '/suggest-classes', '/read-website',
-                        '/class-scope', '/audit-pay', '/terms-accept'):
+                        '/class-scope', '/audit-pay', '/terms-accept', '/class-chat'):
             self._send({'ok': False, 'error': 'not found'}, 404)
             return
         if not self._engine_key_ok():
@@ -1977,6 +2009,22 @@ class _Handler(BaseHTTPRequestHandler):
             out = handle_suggest_classes(payload)
         elif path == '/read-website':
             out = handle_read_website(payload)
+        elif path == '/class-chat':
+            # The ONE AI class assistant (Jonathan, 2 Oct 2026). Stateless:
+            # the browser sends back the state each turn. Never raises into
+            # the page -- a model failure says so and offers manual picking.
+            try:
+                try:
+                    from . import class_chat
+                except ImportError:
+                    import class_chat          # type: ignore
+                out = class_chat.turn(payload if isinstance(payload, dict) else {})
+                out['status'] = 200
+            except Exception as exc:           # noqa: BLE001
+                print(f'[class-chat] {type(exc).__name__}', flush=True)
+                out = {'ok': False, 'status': 200, 'error': 'agent_unavailable',
+                       'reply': "Sorry, I can't help with classes right now. "
+                                'Please pick your classes from the list instead.'}
         elif path == '/class-scope':
             # Class Builder's review screen: the application-grade selection
             # (official Nice headings + registered-vocabulary terms) WITHOUT
