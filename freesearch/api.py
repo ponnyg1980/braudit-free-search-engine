@@ -279,7 +279,10 @@ _EMBED_JS = """(function(){
     // partner ref code, from ?ref= or the tmh_ref cookie the WordPress plugin
     // sets. Passed through RAW -- never validated in the browser; the journey
     // records it (first touch wins) and Zoho resolves it.
-    var rf=hp.get('ref');
+    // data-ref (3 Oct, partner pages): a host page that already KNOWS the
+    // code -- /p/<code> carries it in the path, not the query, and the cookie
+    // only exists after consent -- states it on the tag. It wins over ?ref=.
+    var rf=s.dataset.ref||hp.get('ref');
     if(!rf){var mc=document.cookie.match(/(?:^|;\s*)tmh_ref=([^;]+)/); if(mc) rf=decodeURIComponent(mc[1]);}
     // Raw, trimmed, length-capped only (3 Oct, A7a: "no client-side
     // validation"); the frame normalises it exactly as the plugin does.
