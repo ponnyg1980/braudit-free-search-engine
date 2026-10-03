@@ -788,8 +788,19 @@ async function crm(stage,extra){
    a partner_ref_captured event; the EARLIEST one on the session wins (first
    touch), and Zoho decides whether it is a live partner. Never validated here
    beyond its shape, and the partner list is never sent to the browser. */
-const REF_CODE=(()=>{try{const v=new URLSearchParams(location.search).get('ref');
-  return v&&/^[A-Za-z0-9_-]{2,40}$/.test(v)?v:'';}catch(e){return '';}})();
+/* Same reading as free-search.html (A7a, 3 Oct 2026): ?ref= else referrer,
+   normalised, first touch wins for the visit, sessionStorage only. */
+const REF_CODE=(()=>{
+  const norm=v=>String(v||'').trim().toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,20);
+  let raw='';
+  try{raw=new URLSearchParams(location.search).get('ref')||'';}catch(e){}
+  if(!raw){try{raw=new URLSearchParams((document.referrer.split('?')[1]||'').split('#')[0]).get('ref')||'';}catch(e){}}
+  const ref=norm(raw);
+  let kept='';
+  try{kept=sessionStorage.getItem('tmh_partner_ref')||'';}catch(e){}
+  if(kept) return kept;
+  if(ref){try{sessionStorage.setItem('tmh_partner_ref',ref);}catch(e){}}
+  return ref;})();
 let refSent=false;
 function sendRef(id){
   if(!id||!REF_CODE||refSent) return; refSent=true;
