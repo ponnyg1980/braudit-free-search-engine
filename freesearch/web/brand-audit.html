@@ -129,6 +129,7 @@
   .err{color:#c0392b;font-size:13px;margin-top:8px;font-weight:600}
   .pill-note{background:#f6f2ff;border:1px solid #ddd0ff;color:#5b3fb0;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:16px}
 </style>
+<script src="/partner-ref.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -841,7 +842,10 @@ function init(){
   fetch(journeyBase()+'/audit/start',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({tenant_id:CONFIG.TENANT_ID,session_id:state.sessionId,screen:'brands'})})
     .then(r=>r.json()).then(function(d){
-      if(d&&d.ok){ state.requestId=d.request_id; }
+      if(d&&d.ok){ state.requestId=d.request_id;
+        // Partner code on the request (3 Oct): a brand audit opened straight
+        // from a partner's site has no search session to carry it.
+        if(window.tmhRef) tmhRef.log(journeyBase(),{request_id:d.request_id}); }
       if(state.sessionId){ return fetch(journeyBase()+'/session?id='+encodeURIComponent(state.sessionId)).then(r=>r.json()); }
       return null;
     }).then(function(sd){
