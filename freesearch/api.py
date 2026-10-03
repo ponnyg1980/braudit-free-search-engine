@@ -281,7 +281,9 @@ _EMBED_JS = """(function(){
     // records it (first touch wins) and Zoho resolves it.
     var rf=hp.get('ref');
     if(!rf){var mc=document.cookie.match(/(?:^|;\s*)tmh_ref=([^;]+)/); if(mc) rf=decodeURIComponent(mc[1]);}
-    if(rf && /^[A-Za-z0-9_-]{2,40}$/.test(rf)) q+='&ref='+encodeURIComponent(rf);
+    // Raw, trimmed, length-capped only (3 Oct, A7a: "no client-side
+    // validation"); the frame normalises it exactly as the plugin does.
+    if(rf){ rf=String(rf).trim().slice(0,40); if(rf) q+='&ref='+encodeURIComponent(rf); }
   }catch(e){}
   // GA4 (handoff SEARCH_JOURNEY_GA4_TRACKING, 24 Sep): where the widget sits
   // (data-placement), and the visit context the Zoho lead carries -- the GA
