@@ -344,6 +344,7 @@
     .op-top{grid-template-columns:1fr;justify-items:center;text-align:center}
     .cols{grid-template-columns:1fr}
   }</style>
+<script src="/partner-ref.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -1318,7 +1319,10 @@ function ensureSession(){
  * read a session id keeps working unchanged.
  */
 function exitUrl(base, param){
-  if(!state.sessionId) return base;
+  /* Partner code rides on every exit too (3 Oct): window.open() exits are not
+     clicks, so partner-ref.js cannot add it on the way out. */
+  const R=(u)=>(window.tmhRef?tmhRef.withRef(u):u);
+  if(!state.sessionId) return R(base);
   /* PARAMETER NAME IS NOT FREE — `s` IS WORDPRESS'S SEARCH QUERY.
    * Shipped `?s=` to every exit on 21 Sep and it turned
    * /apply-for-trademark/ into a SEARCH RESULTS page: HTTP 404, application
@@ -1333,9 +1337,9 @@ function exitUrl(base, param){
   const hash=base.indexOf('#');
   if(hash>-1){
     const head=base.slice(0,hash), tail=base.slice(hash);
-    return head+(head.indexOf('?')>-1?'&':'?')+s+tail;
+    return R(head+(head.indexOf('?')>-1?'&':'?')+s+tail);
   }
-  return base+(base.indexOf('?')>-1?'&':'?')+s;
+  return R(base+(base.indexOf('?')>-1?'&':'?')+s);
 }
 /* One beacon helper for all three exits — the page is about to unload, so a
  * normal fetch is not reliable here. */
