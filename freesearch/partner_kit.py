@@ -249,8 +249,8 @@ h3{{font-size:18px;color:{NAVY};margin:0 0 4px}}
 .eyebrow{{font-size:12.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:{PINK}}}
 .card{{background:#fff;border:1px solid #E6E9ED;border-radius:14px;padding:20px;box-shadow:0 2px 8px rgba(45,69,90,.06)}}
 .m{{color:#617383;font-size:14px}}
-table{{width:100%;border-collapse:collapse}} td{{padding:10px 8px;border-top:1px solid #E6E9ED;vertical-align:middle}}
-tr:first-child td{{border-top:0}}
+table.lk{{width:100%;border-collapse:collapse}} table.lk td{{padding:10px 8px;border-top:1px solid #E6E9ED;vertical-align:middle}}
+table.lk tr:first-child td{{border-top:0}}
 input{{width:100%;min-width:220px;font:13px ui-monospace,Menlo,monospace;padding:8px;border:1px solid #E6E9ED;border-radius:8px;background:#F7F8FA}}
 .cp{{background:{PINK};color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer;white-space:nowrap}}
 .cp:hover{{background:#c9134a}}
@@ -262,7 +262,7 @@ input{{width:100%;min-width:220px;font:13px ui-monospace,Menlo,monospace;padding
 .code{{display:flex;gap:10px;align-items:flex-start}} pre{{flex:1;margin:0;white-space:pre-wrap;word-break:break-all;font:12.5px/1.5 ui-monospace,Menlo,monospace;background:#F7F8FA;border:1px solid #E6E9ED;border-radius:8px;padding:10px}}
 details{{margin-top:10px}} summary{{cursor:pointer;color:{NAVY};font-weight:700}} .pv{{margin-top:10px}}
 .note{{background:#FDE7EE;border-radius:12px;padding:14px 18px;margin-top:14px}}
-@media(max-width:640px){{.qr{{grid-template-columns:1fr}} td{{display:block}} }}
+@media(max-width:640px){{.qr{{grid-template-columns:1fr}} table.lk td{{display:block}} }}
 </style></head><body><div class="wrap">
 <header><img src="/brand/logo.png" alt="The Trademark Helpline"><div>
 <div class="eyebrow">Partner kit</div><h1>Everything you need to refer clients</h1>
@@ -279,7 +279,7 @@ Use them on your website, in emails, on social posts and in print.</div>
 <p class="m">Want your name on the card? Add <code>?name=Your%20Business</code> to the card link and it will read "Recommended by Your Business".</p></div></div>
 
 <h2>2. Links for emails, posts and messages</h2>
-<div class="card"><table>{link_rows}</table></div>
+<div class="card"><table class="lk">{link_rows}</table></div>
 
 <h2>3. An email button</h2>
 <div class="card"><p class="m">Paste this into an email that accepts HTML. It works without images or scripts.</p>
