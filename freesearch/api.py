@@ -514,7 +514,7 @@ def _static(path: str):
     # cannot drift apart across six pages.
     # tool-events.js: GA4 step messages to the host page (handoff 24 Sep).
     # class-chat.js: the ONE AI class assistant widget (2 Oct 2026).
-    if path in ('/braudit.css', '/wizard.css', '/demo-banner.js', '/help-line.js',
+    if path in ('/braudit.css', '/wizard.css', '/demo-banner.js', '/help-line.js', '/partner-ref.js',
                 '/tool-events.js', '/class-chat.js'):
         rel = path.lstrip('/')
     elif path.startswith('/brand/') or path.startswith('/fonts/'):
@@ -1703,6 +1703,31 @@ class _Handler(BaseHTTPRequestHandler):
         if path == '/fasttrack/decide':
             self._send_raw(_fasttrack_page(params).encode(),
                            'text/html; charset=utf-8')
+            return
+        if path.startswith('/partner-kit/'):
+            # Partner kit (3 Oct 2026, Jonathan): one live page per introducer,
+            # generated from the ref code alone. See partner_kit.py.
+            try:
+                from . import partner_kit as PK
+            except ImportError:
+                import partner_kit as PK            # type: ignore
+            parts = path.split('/')[2:]
+            code = PK.norm(parts[0]) if parts else ''
+            sub = parts[1] if len(parts) > 1 else ''
+            if not code:
+                self._send({'ok': False, 'error': 'not found'}, 404)
+                return
+            if sub == '':
+                self._send_raw(PK.page(code).encode(), 'text/html; charset=utf-8')
+            elif sub == 'qr.svg':
+                self._send_raw(PK.qr_svg(code), 'image/svg+xml')
+            elif sub == 'qr.png':
+                self._send_raw(PK.qr_png(code), 'image/png')
+            elif sub in ('card.pdf', 'card-a4.pdf'):
+                self._send_raw(PK.card_pdf(code, params.get('name', ''), a4=sub == 'card-a4.pdf'),
+                               'application/pdf')
+            else:
+                self._send({'ok': False, 'error': 'not found'}, 404)
             return
         if path == '/terms/clearance-audit':
             # The terms WITH THIS ORDER'S VALUES (handover §1.2): what the tick
