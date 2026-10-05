@@ -1285,9 +1285,17 @@ function isWorldwideOrder(){
 function auditSku(){return isWorldwideOrder()?'AUDIT_WORLDWIDE':'AUDIT_UK';}
 function tierPrice(sku,tier){const p=(tierInfo().prices||TIER_FALLBACK)[sku]||TIER_FALLBACK[sku];
   return p[tier||tierInfo().tier];}
-function lineFloor(){return tierPrice(auditSku());}
+/* WORLDWIDE STAFF FLOOR (Jonathan, 5 Oct 2026): "maintain the baseline price on an
+   international audit at £149 but allow discount to £99 without management
+   authorisation". A line STARTS at the tier price (Baseline £149 worldwide); staff
+   may take a worldwide line down to £99 on their own. UK lines are unchanged
+   (their floor is the tier price, Baseline £99). Server: api.py STAFF_WW_FLOOR_PENCE. */
+const STAFF_WW_FLOOR=99;
+function lineDefault(){return tierPrice(auditSku());}
+function lineFloor(){const t=lineDefault();
+  return auditSku()==='AUDIT_WORLDWIDE'?Math.min(t,STAFF_WW_FLOOR):t;}
 function lineRrp(){return tierPrice(auditSku(),'RRP');}
-function linePrice(m){return (m.price!=null&&m.priceSet)?m.price:lineFloor();}
+function linePrice(m){return (m.price!=null&&m.priceSet)?m.price:lineDefault();}
 function consultLine(){
   /* Offered included on every staff order, Quick Audit too; only a
      consultation the client DECLINED carries no line. */
