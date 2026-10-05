@@ -547,6 +547,7 @@ _JOURNEY_URL = (os.environ.get('JOURNEY_URL')
                 or 'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey')
 AUDIT_LINE_PENCE = 14900        # RRP per line item: Name / Logo / Tagline (9 Sep).
 AUDIT_MIN_PENCE = 9900          # net order floor — no order goes below £99.
+STAFF_WW_FLOOR_PENCE = 9900     # worldwide line: staff may discount to £99 unaided (5 Oct 2026)
 
 
 def _journey_session(session_id: str) -> dict | None:
@@ -1012,7 +1013,12 @@ def _audit_pay(payload: dict) -> dict:
             return {'ok': False, 'unmet': ta.get('unmet', []),
                     'error': ta.get('error', 'terms not accepted'), 'status': 200}
         a_sku = 'AUDIT_WORLDWIDE' if ww else 'AUDIT_UK'
-        floor_p = _tier_price_pence(a_sku, tier)
+        # tier_p is where an untouched line starts; floor_p is the lowest a staff
+        # member may go without management authority. Worldwide (Jonathan, 5 Oct
+        # 2026): "maintain the baseline price on an international audit at £149 but
+        # allow discount to £99 without management authorisation".
+        tier_p = _tier_price_pence(a_sku, tier)
+        floor_p = min(tier_p, STAFF_WW_FLOOR_PENCE) if ww else tier_p
         override = (su or {}).get('role') == 'super_admin'
         rows = [m for m in (enq.get('marks') or [])
                 if isinstance(m, dict) and str(m.get('text') or '').strip()]
@@ -1023,9 +1029,9 @@ def _audit_pay(payload: dict) -> dict:
             # A line the staff member never touched is at the tier price --
             # the same rule the form shows (linePrice), so the two agree.
             try:
-                gbp = float(m.get('price')) if m.get('priceSet') is True else floor_p / 100
+                gbp = float(m.get('price')) if m.get('priceSet') is True else tier_p / 100
             except (TypeError, ValueError):
-                gbp = floor_p / 100
+                gbp = tier_p / 100
             pence = int(round(gbp * 100))
             if pence < 0 or pence > 10 * _tier_price_pence(a_sku, 'RRP'):
                 return {'ok': False, 'error': 'line price out of bounds',
