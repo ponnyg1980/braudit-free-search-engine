@@ -319,7 +319,10 @@
     <div class="sf-row">
       <div><label class="fld">Email <span class="req">*</span></label>
         <input type="email" id="f-email" autocomplete="off"></div>
-      <div><label class="fld">Phone <span class="req">*</span></label>
+      <!-- MOBILE (Jonathan, 5 Oct 2026): "Phone always shows blank, what we actually
+           want is mobile". Zoho Contacts hold the number in Mobile; this box reads
+           Mobile first (then Phone) and is written to Mobile. state key stays 'phone'. -->
+      <div><label class="fld">Mobile <span class="req">*</span></label>
         <input type="tel" id="f-phone" autocomplete="off"></div>
     </div>
     <div class="sf-row">
@@ -1717,11 +1720,19 @@ async function loadAccountContacts(){
       +'take their details below and we\'ll add them.</div>';
     return;
   }
-  box.innerHTML=hits.map((h,i)=>`<div class="sf-plat" style="cursor:pointer" data-i="${i}">
+  /* One person on the account (Jonathan, 5 Oct 2026: Etiquette GC Ltd showed the
+     Account but did not pull through Mike Lee): pick them straight away. */
+  if(hits.length===1&&!state.link.contact_id){
+    const h=hits[0];
+    state.link.contact_id=h.id; state.link.contact_name=h.name; state.link.picked=h;
+    fillFromRecord(h);
+    renderLinkUI();renderAll();loadPriorSearches();touch();
+  }
+  box.innerHTML=(hits.length>1?'<div class="sf-hint">Click the person you are speaking to:</div>':'')+hits.map((h,i)=>`<div class="sf-plat" style="cursor:pointer" data-i="${i}">
     <b style="color:var(--navy)">${esc(h.name||'')}</b>
-    <span style="color:var(--quiet);font-size:12.5px">${esc([h.detail,h.email,h.phone]
+    <span style="color:var(--quiet);font-size:12.5px">${esc([h.detail,h.email,h.mobile||h.phone]
       .filter(Boolean).join(' · '))}</span></div>`).join('');
-  [...box.children].forEach(el=>el.addEventListener('click',()=>{
+  [...box.querySelectorAll('[data-i]')].forEach(el=>el.addEventListener('click',()=>{
     const h=hits[+el.dataset.i];
     state.link.contact_id=h.id; state.link.contact_name=h.name; state.link.picked=h;
     fillFromRecord(h);
@@ -1840,8 +1851,9 @@ function fillFromRecord(h){
     const el=document.getElementById('f-last'); if(el) el.value=h.last;}
   if(h.email&&!state.contact.email){state.contact.email=h.email;
     const el=document.getElementById('f-email'); if(el) el.value=h.email;}
-  if(h.phone&&!state.contact.phone){state.contact.phone=h.phone;
-    const el=document.getElementById('f-phone'); if(el) el.value=h.phone;}
+  const mob=h.mobile||h.phone;
+  if(mob&&!state.contact.phone){state.contact.phone=mob;
+    const el=document.getElementById('f-phone'); if(el) el.value=mob;}
   if(h.account&&!state.billing.account_name){
     state.billing.account_id=h.account_id||'';state.billing.account_name=h.account;}
 }
@@ -2027,7 +2039,8 @@ async function crmStart(sid){
   try{
     const body={stage:'contact',session_id:sid,staff:true,
       staff_email:state.staffEmail||'',
-      email:c.email.trim(),first_name:c.first||'',last_name:c.last||'',phone:c.phone||'',
+      email:c.email.trim(),first_name:c.first||'',last_name:c.last||'',mobile:c.phone||'',
+      business_name:c.org||'',
       mark:(state.marks[0]&&state.marks[0].text)||'',
       lead_source_group:state.leadSource||'',
       zoho_lead_id:state.link.lead_id||undefined,
@@ -2506,7 +2519,7 @@ function bindAll(){
       try{
         const r=await fetch('/lookup/company?q='+encodeURIComponent(q));
         const d=await r.json();
-        const items=(d.companies||d.items||[]).slice(0,6);
+        const items=(d.results||d.companies||d.items||[]).slice(0,6);
         out.innerHTML=items.length?items.map((c,i)=>`<div style="padding:9px 12px;
           border:1.5px solid var(--line);border-top:0;background:#fff;cursor:pointer;
           font-size:13.5px" data-i="${i}"><b>${esc(c.name||c.title||'')}</b>
@@ -2548,7 +2561,7 @@ function bindAll(){
       try{
         const r=await fetch('/lookup/company?q='+encodeURIComponent(q));
         const d=await r.json();
-        const items=(d.companies||d.items||[]).slice(0,6);
+        const items=(d.results||d.companies||d.items||[]).slice(0,6);
         out.innerHTML=items.length?items.map((c,i)=>`<div class="sf-hit" data-i="${i}"
           style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin:4px 0;cursor:pointer">
           <b>${esc(c.name||c.title||'')}</b>
@@ -2721,7 +2734,17 @@ function chPick(c){
     state.billing.postcode=a.postal_code||a.postcode||'';
     state.billing.country=a.country||'United Kingdom';
   }else if(typeof a==='string'&&a){
-    state.billing.addr1=a;
+    /* "Unit 15-23 Attenburys Lane, Timperley, Altrincham, England, WA14 5QE" */
+    const parts=a.split(',').map(x=>x.trim()).filter(Boolean);
+    const pc=/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i;
+    let post='',country='',city='';
+    if(parts.length&&pc.test(parts[parts.length-1])) post=parts.pop();
+    if(parts.length&&/^(england|scotland|wales|northern ireland|united kingdom|uk|great britain)$/i.test(parts[parts.length-1])){parts.pop();country='United Kingdom';}
+    if(parts.length>1) city=parts.pop();
+    state.billing.addr1=parts.shift()||'';
+    state.billing.addr2=parts.join(', ');
+    state.billing.city=city;state.billing.postcode=post;
+    state.billing.country=country||state.billing.country||'United Kingdom';
   }
   set('f-addr1',state.billing.addr1);set('f-addr2',state.billing.addr2);
   set('f-addrcity',state.billing.city);set('f-addrregion',state.billing.region);
