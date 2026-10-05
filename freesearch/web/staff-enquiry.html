@@ -954,6 +954,10 @@ const state={
      Account (company number first; a name alone queues for Laura). */
   applicant:{sameAsBilling:true,name:'',companyNumber:''},
   leadSource:'',          /* Zoho Lead_Source_Group, asked not guessed */
+  /* Zoho records made at the START (Jonathan, 5 Oct 2026): the Lead is converted
+     and the Contact / Account / Deal exist as soon as the form is being filled
+     in -- no payment or invoice needed. Kept here so a save can never drop them. */
+  zoho:{deal_id:'',contact_id:'',account_id:'',started:false,error:''},
   contact:{first:'',last:'',email:'',phone:'',position:'',org:'',clientType:''},
   /* searchIn (11 Sep): which module the typed lookup hits. Account is offered
      for the portfolio it carries; account_id survives the contact pick so the
@@ -1958,6 +1962,11 @@ async function saveNow(explicit){
     /* Edit mode: every Zoho stage is idempotent on zoho_deal_id, and the
        journey reads it from last_result.zoho.deal_id -- so stamping it here
        is what turns the whole order path into an UPDATE of this Deal. */
+    if(state.zoho&&state.zoho.deal_id&&!state.deal.id){
+      lr.zoho=Object.assign({},lr.zoho||{},{deal_id:String(state.zoho.deal_id)},
+        state.zoho.contact_id?{contact_id:String(state.zoho.contact_id)}:{},
+        state.zoho.account_id?{account_id:String(state.zoho.account_id)}:{});
+    }
     if(state.deal.id){
       lr.zoho=Object.assign({},lr.zoho||{},{deal_id:String(state.deal.id)});
       if(state.link.contact_id&&!lr.zoho.contact_id) lr.zoho.contact_id=String(state.link.contact_id);
@@ -1988,11 +1997,76 @@ async function saveNow(explicit){
     const d=await r.json();
     if(d&&d.ok){dirty=false;
       setSaveState('Saved '+new Date().toLocaleTimeString('en-GB',
-        {hour:'2-digit',minute:'2-digit'}),'ok');}
+        {hour:'2-digit',minute:'2-digit'}),'ok');
+      crmStart(id);}
     else setSaveState('Not saved','bad');
   }catch(e){setSaveState('Not saved','bad');}
   saving=false;
   if(dirty){clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveNow(false),1200);}
+}
+/* =====================================================================
+   START IN ZOHO (Jonathan, 5 Oct 2026): "If we begin an audit on a lead, we
+   need to actually convert the lead into Account/Contact Deals as soon as we
+   begin completing the form without taking payment or raising an invoice."
+   Once the client's email and a name are in, the SAME 'contact' stage the
+   client checkout uses converts the linked Lead (or matches the Contact) and
+   creates the Deal at Prospect in Audit and Consultation -- owned by this
+   staff member. Once only; the Deal id rides the session, so the order
+   (order_complete) UPDATES this Deal instead of creating another. Edit mode
+   (?deal=) already has its Deal and never calls it.
+   ===================================================================== */
+let crmStarting=false;
+async function crmStart(sid){
+  if(!state.zoho||typeof state.zoho!=='object') state.zoho={deal_id:'',contact_id:'',account_id:'',started:false,error:''};
+  if(state.deal.id||state.zoho.deal_id||state.zoho.started||crmStarting) return;
+  if(window.IS_DEMO&&window.IS_DEMO()) return;
+  const c=state.contact;
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((c.email||'').trim())) return;
+  if(!(c.first||'').trim()&&!(c.last||'').trim()) return;
+  crmStarting=true;
+  try{
+    const body={stage:'contact',session_id:sid,staff:true,
+      staff_email:state.staffEmail||'',
+      email:c.email.trim(),first_name:c.first||'',last_name:c.last||'',phone:c.phone||'',
+      mark:(state.marks[0]&&state.marks[0].text)||'',
+      lead_source_group:state.leadSource||'',
+      zoho_lead_id:state.link.lead_id||undefined,
+      zoho_contact_id:state.link.contact_id||undefined,
+      zoho_account_id:state.link.account_id||undefined};
+    const r=await fetch(jb()+'/audit/checkout',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    const res=(d&&d.result)||{};
+    if(res.zoho_deal_id){
+      state.zoho={deal_id:String(res.zoho_deal_id),contact_id:String(res.zoho_contact_id||''),
+                  account_id:String(res.zoho_account_id||''),started:true,error:''};
+      if(state.zoho.contact_id&&!state.link.contact_id){
+        state.link.contact_id=state.zoho.contact_id;
+        state.link.contact_name=((c.first||'')+' '+(c.last||'')).trim()||c.email;
+        state.link.lead_id='';state.link.lead_name='';
+      }
+      if(state.zoho.account_id&&!state.link.account_id) state.link.account_id=state.zoho.account_id;
+      crmStartNote();touch();
+    }else{
+      state.zoho.error=(d&&(d.error||(res&&res.error)))||'Zoho did not return a Deal';
+      crmStartNote();
+    }
+  }catch(e){state.zoho.error=String(e&&e.message||e);crmStartNote();}
+  crmStarting=false;
+}
+function crmStartNote(){
+  let el=document.getElementById('crm-start-note');
+  if(!el){const host=document.getElementById('f-email');
+    if(!host) return;
+    el=document.createElement('div');el.id='crm-start-note';el.style.cssText='margin-top:8px;font-size:13px';
+    (host.closest('.fld')||host.parentNode).appendChild(el);}
+  const z=state.zoho;
+  el.innerHTML=z.deal_id
+    ?'<span style="color:#17704a;font-weight:700">\u2713 In Zoho:</span> Contact, Account and Deal (Prospect) created'
+      +' &middot; <a target="_blank" rel="noopener" href="https://crm.zoho.com/crm/org628887698/tab/Potentials/'
+      +encodeURIComponent(z.deal_id)+'">open the Deal</a>. No payment or invoice yet.'
+    :(z.error?'<span style="color:#8f1d1d;font-weight:700">Not yet in Zoho:</span> '+String(z.error).replace(/</g,'&lt;')
+      +' &mdash; it will be created when the order is placed.':'');
 }
 window.addEventListener('beforeunload',e=>{
   if(dirty){e.preventDefault();e.returnValue='';}
@@ -2045,6 +2119,14 @@ async function load(){
           state.link.contact_id=String(z.contact_id);
           state.link.contact_name='the linked client record';
         }
+      }
+      /* A Deal already started on this session (crmStart, or an earlier client
+         checkout) is reused -- never a second one. Old saves have no zoho slot. */
+      if(!state.zoho||typeof state.zoho!=='object') state.zoho={deal_id:'',contact_id:'',account_id:'',started:false,error:''};
+      const zz=(lr&&lr.zoho)||{};
+      if(zz.deal_id&&!state.deal.id&&!state.zoho.deal_id){
+        state.zoho=Object.assign(state.zoho,{deal_id:String(zz.deal_id),contact_id:String(zz.contact_id||''),
+          account_id:String(zz.account_id||''),started:true,error:''});
       }
     }
   }catch(e){}
@@ -2529,7 +2611,10 @@ async function newEnquiry(){
 }
 function openTools(){
   /* Point 5: keep the opener so the tool can post the scope back. */
-  const u='/class-assistant?return=staff'
+  /* ai=1 (Jonathan, 5 Oct 2026): staff get the ONE AI option -- the Opus class
+     assistant chat -- alongside the register-based routes. Without it the AI
+     card stays hidden and staff only had the non-AI routes. */
+  const u='/class-assistant?return=staff&ai=1'
     +(state.classes?('&classes='+encodeURIComponent(state.classes)):'')
     +((window.IS_DEMO&&window.IS_DEMO())?'&demo=1':'');
   window.open(u,'brauditClassTools','width=1100,height=800');
