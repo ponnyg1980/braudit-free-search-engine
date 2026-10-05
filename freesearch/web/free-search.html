@@ -1449,7 +1449,10 @@ function openHelp(opt){
     <div class="hres hidden" id="ho3-res"></div>
     <div class="muted-note" id="ho3-out"></div>`;
   else if(opt==='1'){
-    body.innerHTML='<div class="muted-note" id="ho1-out"></div><div id="ho1-chat"></div>';
+    /* #ho1-res is the picker host (pickHost('1')). It was dropped when the chat
+       replaced the old AI form (2 Oct), so showClassPicker() returned silently
+       and the chat's classes could never be added or reviewed (Jonathan, 5 Oct). */
+    body.innerHTML='<div class="muted-note" id="ho1-out"></div><div id="ho1-chat"></div><div class="hres hidden" id="ho1-res"></div>';
     startClassChat();
   }
   else body.innerHTML=aiGateHtml(opt);
