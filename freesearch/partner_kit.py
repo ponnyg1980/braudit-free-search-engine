@@ -29,7 +29,7 @@ import os
 import re
 
 SITE = 'https://www.thetrademarkhelpline.com'
-ENGINE = 'https://braudit-free-search.onrender.com'
+ENGINE = 'https://tools.thetrademarkhelpline.com'   # TMH address, 6 Oct 2026 (onrender still answers older pasted code)
 BOOKINGS = 'https://bookings.thetrademarkhelpline.com/portal-embed#/general-enquiry'
 _WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web')
 
