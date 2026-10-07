@@ -144,9 +144,28 @@ def _row(r: dict, applicant: str = '') -> dict:
     return out
 
 
+def _name_variants(q: str) -> list[str]:
+    """The register search matches from the START of the mark, so "baker's
+    oven" misses THE BAKER'S OVEN (found 7 Oct). Tried in order, first hit wins:
+    as typed, with "the" in front, and without apostrophes/punctuation."""
+    plain = re.sub(r"[^\w\s&-]", '', q).strip()
+    out = [q]
+    if not q.lower().startswith('the '):
+        out.append('the ' + q)
+    if plain and plain != q:
+        out.append(plain)
+        if not plain.lower().startswith('the '):
+            out.append('the ' + plain)
+    return out
+
+
 def _marks_by_name(client, q: str) -> list[dict]:
     from . import lookup as lk
-    res = lk.search_marks(client, q, limit=12)
+    res = {}
+    for v in _name_variants(q):
+        res = lk.search_marks(client, v, limit=12)
+        if res.get('results'):
+            break
     return [_row(r) for r in res.get('results', [])]
 
 
