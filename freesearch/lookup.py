@@ -318,6 +318,9 @@ def _mark_row(rec: dict) -> dict:
         'mark_feature': _mark_feature(rec),
         'classes': classes,
         'classes_detail': classes_detail(classes),
+        # Added 7 Oct (renewal search): the search, applicant and detail
+        # responses all carry it, so it costs nothing to keep.
+        'expiry_date': _s(rec.get('expiry_date'))[:10],
     }
 
 
@@ -427,6 +430,7 @@ def get_owner(client, ipo_identifier) -> dict | None:
             'application_date': _app_date(t),
             'mark_feature': _mark_feature(t),
             'classes_detail': classes_detail(cls),
+            'expiry_date': _s(t.get('expiry_date'))[:10],
         })
     return {
         'owner': {
