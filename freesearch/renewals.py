@@ -357,6 +357,71 @@ def portfolio(client, ipo) -> dict | None:
     return {'owner': owner, 'marks': marks, 'counts': counts}
 
 
+# --------------------------------------------------------------------------
+# Renew Online: the three catalogue bundles, priced for the ticked marks
+# (RENEWAL_PROCESS_MAP §5). Prices come from data/renewal_pricing.json,
+# copied from the catalogue's temmy_checkout_bundles. The client sees the RRP,
+# ONE combined saving and what they pay today; internal price levels never
+# leave this function (no "baseline" key is returned).
+#   * the renewal line and its online discount apply PER MARK;
+#   * the plan line (Monitoring & Defence, or Annual Review) is ONE per
+#     applicant account (catalogue: unit account/applicant) and the Defence
+#     plan includes UK renewals;
+#   * the UKIPO fee is per mark, never discounted, shown as its own line.
+# --------------------------------------------------------------------------
+
+def _pricing() -> dict:
+    import json
+    import os
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'renewal_pricing.json')) as f:
+        return json.load(f)
+
+
+def ukipo_fee(n_classes: int, late: bool, fees: dict) -> int:
+    n = max(1, int(n_classes or 1))
+    return fees['renewal_first_class'] + fees['each_further_class'] * (n - 1) + (fees['late_fee'] if late else 0)
+
+
+def quote(client, numbers: list[str]) -> dict:
+    pr = _pricing()
+    fees = pr['ukipo']
+    marks, skipped = [], []
+    for num in numbers[:50]:
+        m = mark_detail(client, num)
+        if not m:
+            skipped.append({'number': num, 'why': 'not found'})
+            continue
+        b = m['band']
+        if not b.get('renewable_online'):
+            skipped.append({'number': m['number'], 'name': m['name'], 'why': b['label']})
+            continue
+        n_cls = len(m['classes']) or 1
+        marks.append({'number': m['number'], 'name': m['name'], 'band': b, 'classes': [c['n'] for c in m['classes']],
+                      'owner': (m['owners'][0] if m['owners'] else {}).get('name', ''),
+                      'owner_ipo': (m['owners'][0] if m['owners'] else {}).get('ipo_identifier'),
+                      'ukipo_fee': ukipo_fee(n_cls, b['key'] == 'late', fees),
+                      'late': b['key'] == 'late'})
+    n = len(marks)
+    ukipo_total = sum(m['ukipo_fee'] for m in marks)
+    owners = sorted({str(m['owner_ipo']) for m in marks if m['owner_ipo']})
+    options = []
+    for bd in pr['bundles']:
+        ren = [l for l in bd['lines'] if l['sku'] == 'RENEWAL_UK']
+        plan = [l for l in bd['lines'] if l['sku'] != 'RENEWAL_UK']
+        rrp = sum(l['rrp'] for l in ren) * n + sum(l['rrp'] for l in plan) * max(1, len(owners))
+        net = (sum(l['baseline'] for l in ren) - bd['online_discount']) * n + \
+              sum(l['baseline'] for l in plan) * max(1, len(owners))
+        options.append({'n': bd['n'], 'label': bd['label'], 'recommended': bd['recommended'],
+                        'rrp': rrp, 'saving': rrp - net, 'tmh_today': net,
+                        'pays_today': net + ukipo_total,
+                        'then_monthly': bd['then_monthly'] * max(1, len(owners)) if bd['then_monthly'] else 0})
+    return {'marks': marks, 'skipped': skipped, 'count': n, 'ukipo_total': ukipo_total,
+            'ukipo_note': 'UKIPO renewal fee: £%d including one class, plus £%d for each further class%s. Paid to the UK Intellectual Property Office, never discounted.'
+                          % (fees['renewal_first_class'], fees['each_further_class'],
+                             ', plus a £%d late fee for marks past their renewal date' % fees['late_fee'] if any(m['late'] for m in marks) else ''),
+            'applicants': len(owners), 'options': options}
+
+
 def handle(params: dict, client) -> dict:
     raw = params.get('types') or params.get('type') or ''
     if isinstance(raw, list):
@@ -383,6 +448,11 @@ def handle(params: dict, client) -> dict:
                 p['other_owners'] = others
             return {'ok': True, 'status': 200, **p} if p else \
                 {'ok': False, 'status': 404, 'error': 'We could not find that applicant.'}
+        if action == 'quote':
+            nums = [x.strip() for x in str(params.get('numbers', '')).split(',') if x.strip()]
+            if not nums:
+                return {'ok': False, 'status': 400, 'error': 'Choose at least one trademark.'}
+            return {'ok': True, 'status': 200, **quote(client, nums)}
         return search(client, str(params.get('q', '')), types)
     except Exception as e:                       # degrade loudly, JSON-shaped
         return {'ok': False, 'status': 500, 'error': f'renewal search failed: {e}'}
