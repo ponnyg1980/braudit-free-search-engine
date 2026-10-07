@@ -109,12 +109,61 @@
   .selbar.on{display:flex}
   .selbar b{font-size:1rem}
   .selbar span{color:var(--on-navy);font-size:.86rem}
+  .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .btn{padding:7px 13px;border-radius:8px;border:1.5px solid var(--navy);background:#fff;color:var(--navy);
+    font-weight:700;font-size:.84rem;font-family:var(--font);cursor:pointer;transition:background .15s ease}
+  .btn:hover{background:var(--navy);color:#fff}
+  .btn.pink{border-color:var(--pink);background:var(--pink);color:#fff}
+  .btn.pink:hover{background:var(--pink-hover)}
+  .back{background:none;border:0;color:var(--pink);font-weight:700;font-family:var(--font);font-size:.92rem;cursor:pointer;padding:0;margin:0 0 14px}
+  /* trademark page */
+  .tmhead{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+  .tmhead h1{margin:2px 0 4px}
+  .tmimg{max-width:140px;max-height:110px;border:1px solid var(--line);border-radius:10px;padding:6px;background:#fff}
+  .rband{border-radius:var(--r-md);padding:14px 16px;margin:16px 0;border:1px solid var(--line);background:var(--panel-soft)}
+  .rband.t-urgent{border-color:#f0b9ae;background:#fff6f4}
+  .rband.t-soon{border-color:#efd9a2;background:#fffbf0}
+  .rband.t-ok{border-color:#bfe3cf;background:#f4fbf7}
+  .sect{border:1px solid var(--line);border-radius:var(--r-md);margin:12px 0;overflow:hidden}
+  .sect h3{margin:0;padding:12px 16px;font-size:.98rem;color:var(--navy);background:var(--panel);border-bottom:1px solid var(--line)}
+  .sect .in{padding:12px 16px}
+  dl.kv{display:grid;grid-template-columns:200px 1fr;gap:8px 16px;margin:0;font-size:.92rem}
+  dl.kv dt{color:var(--quiet)} dl.kv dd{margin:0;color:var(--ink);font-weight:600}
+  .cls{padding:10px 0;border-top:1px solid var(--line)} .cls:first-child{border-top:0;padding-top:0}
+  .cls b{color:var(--navy)} .cls p{margin:4px 0 0;font-size:.9rem;line-height:1.5;color:var(--slate)}
+  /* portfolio */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+  .tile{border:1px solid var(--line);border-radius:var(--r-md);padding:12px 14px;background:#fff}
+  .tile .v{font-size:1.6rem;font-weight:800;color:var(--navy);font-family:var(--font-display)}
+  .tile .l{font-size:.82rem;color:var(--quiet)}
+  .tile.urgent{border-color:#f0b9ae} .tile.urgent .v{color:var(--pill-high-fg)}
+  .tile.soon .v{color:var(--pill-med-fg)}
+  .seg{display:inline-flex;border:1.5px solid var(--navy);border-radius:10px;overflow:hidden;margin:4px 0 6px}
+  .seg button{border:0;background:#fff;color:var(--navy);font-weight:700;font-family:var(--font);padding:8px 16px;cursor:pointer}
+  .seg button.on{background:var(--navy);color:#fff}
+  .pcard{border:1px solid var(--line);border-radius:var(--r-md);margin:12px 0;overflow:hidden;background:#fff}
+  .pcard.urgent{border:1.5px solid #e9a597}
+  .pcard>h3{margin:0;padding:12px 16px;font-size:.98rem;color:var(--navy);background:var(--panel);border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;gap:10px}
+  .pcard.urgent>h3{background:#fff6f4}
+  .pcard .sub{font-weight:400;color:var(--quiet);font-size:.84rem}
+  table.pt{width:100%;border-collapse:collapse;font-size:.88rem}
+  table.pt th{text-align:left;font-size:.78rem;color:var(--quiet);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  table.pt th.s{cursor:pointer} table.pt th.s:hover{color:var(--navy)}
+  table.pt td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+  table.pt tr:last-child td{border-bottom:0}
+  table.pt tr.sel td{background:var(--pink-tint)}
+  table.pt td.nm{font-weight:800;color:var(--navy)}
+  table.pt input{width:17px;height:17px;accent-color:var(--pink)}
+  .tscroll{overflow-x:auto}
+  @media (max-width:560px){ dl.kv{grid-template-columns:1fr} .hide-sm{display:none} }
   @media (max-width:560px){ .mark{grid-template-columns:auto 1fr} .mark .right{grid-column:2} .exp{text-align:left} }
 </style>
 <script src="/partner-ref.js"></script>
 </head>
 <body>
 <div class="wrap">
+ <div id="searchView">
   <p class="eyebrow">Trademark renewals</p>
   <h1>Not sure whether you need to renew?</h1>
   <p class="lead">Check your trademarks. Search the UK register and we will show you when each mark is due for renewal and what to do next.</p>
@@ -137,6 +186,8 @@
   <p class="err" id="err" role="alert"></p>
 
   <div id="out" aria-live="polite"></div>
+ </div>
+ <div id="view" aria-live="polite" hidden></div>
 
   <div class="selbar" id="selbar">
     <div><b id="selcount">0 marks selected</b><br><span>Next you will choose how to renew them.</span></div>
@@ -239,7 +290,9 @@ function markCard(m){
     (can ? '<input type="checkbox" aria-label="Select '+esc(m.name)+'"'+(on?' checked':'')+'>' : '<span></span>')+
     '<div><div class="nm">'+esc(m.name)+'</div>'+
       '<div class="meta">'+esc(m.number)+(m.applicant?' &middot; '+esc(m.applicant):'')+(cls?' &middot; '+esc(cls):'')+'</div>'+
-      '<div class="say">'+esc(b.say||'')+'</div></div>'+
+      '<div class="say">'+esc(b.say||'')+'</div>'+
+      '<div class="acts"><button type="button" class="btn" data-act="mark" data-n="'+esc(m.number)+'">View this trademark</button>'+
+      '<button type="button" class="btn" data-act="all" data-n="'+esc(m.number)+'">View all trademarks</button></div></div>'+
     '<div class="right"><span class="badge t-'+esc(b.tone||'info')+'">'+esc(b.label||'')+'</span>'+
       '<div class="exp">'+esc(expLine)+'</div></div></div>';
 }
@@ -283,7 +336,7 @@ function render(d){
          d.owners.map(o=>'<div class="owner" data-ipo="'+esc(o.ipo_identifier)+'"><div><b>'+esc(o.name)+'</b><div class="hint">'+
             esc([o.address,o.postcode].filter(Boolean).join(', '))+' &middot; applicant '+esc(o.ipo_identifier)+' &middot; '+
             o.trademark_count+' trademark'+(o.trademark_count===1?'':'s')+'</div></div>'+
-            '<button type="button">Show trademarks</button></div><div class="ownmarks" data-for="'+esc(o.ipo_identifier)+'"></div>').join('')+'</div>', false);
+            '<button type="button" data-act="owner" data-ipo="'+esc(o.ipo_identifier)+'">Show trademarks</button></div>').join('')+'</div>', false);
   }
   if(!h){
     h = '<div class="empty">We couldn’t find anything for “'+esc(d.query)+'”'+
@@ -295,22 +348,25 @@ function render(d){
   syncSel();
 }
 
-/* owners: load their marks inline */
-elOut.addEventListener('click', async function(e){
-  const btn = e.target.closest('.owner button');
-  if(btn){
-    const card = btn.closest('.owner'), ipo = card.dataset.ipo,
-          box = elOut.querySelector('.ownmarks[data-for="'+CSS.escape(ipo)+'"]');
-    if(card.classList.contains('open')){ card.classList.remove('open'); box.innerHTML=''; btn.textContent='Show trademarks'; return; }
-    btn.disabled = true; btn.textContent = 'Loading…';
-    let d; try{ d = await lookup(ipo, ['applicant_number']); }catch(err){ d = null; }
-    btn.disabled = false;
-    if(!d || !d.ok){ btn.textContent = 'Try again'; return; }
-    card.classList.add('open'); btn.textContent = 'Hide trademarks';
-    box.innerHTML = '<div style="margin:8px 0 6px 14px">'+marksBlock(d.marks||[], '')+'</div>';
-    syncSel();
-    return;
+/* actions: View this trademark / View all trademarks / Show trademarks */
+document.addEventListener('click', function(e){
+  const a = e.target.closest('[data-act]');
+  if(!a) return;
+  e.preventDefault(); e.stopPropagation();
+  const act = a.dataset.act;
+  if(act==='mark') go({view:'mark', n:a.dataset.n});
+  else if(act==='all') go({view:'portfolio', n:a.dataset.n});
+  else if(act==='owner') go({view:'portfolio', ipo:a.dataset.ipo});
+  else if(act==='back'){
+    if(NAV > 0){ history.back(); }
+    else { const u = new URL(location.href); ['mark','ipo','pn'].forEach(k=>u.searchParams.delete(k));
+           history.pushState({view:'search'}, '', u); show({view:'search'}); }
   }
+  else if(act==='prio' || act==='list'){ PVIEW = act; drawPortfolio(); }
+  else if(act==='sort'){ const k=a.dataset.k; PSORT = {k, d: PSORT.k===k ? -PSORT.d : 1}; drawPortfolio(); }
+}, true);
+
+elOut.addEventListener('click', async function(e){
   const row = e.target.closest('.mark');
   if(!row || row.classList.contains('dis')) return;
   const n = row.dataset.n, cb = row.querySelector('input');
@@ -320,7 +376,7 @@ elOut.addEventListener('click', async function(e){
 });
 
 function syncSel(){
-  elOut.querySelectorAll('.mark').forEach(r=>{
+  document.querySelectorAll('.mark[data-n], tr[data-n]').forEach(r=>{
     const on = selected.has(r.dataset.n); r.classList.toggle('sel', on);
     const cb = r.querySelector('input'); if(cb) cb.checked = on;
   });
@@ -329,6 +385,150 @@ function syncSel(){
   document.getElementById('selbar').classList.toggle('on', n > 0);
   window.RENEWAL_SELECTED = [...selected.values()];     // for the next step (§8a)
 }
+
+
+/* ===== VIEWS (Jonathan, 7 Oct) =========================================
+   "View this trademark"  -> every section of the mark, NEVER the representative
+   "View all trademarks"  -> the owner's portfolio in the Temmy Portal's
+                             Priority View (who needs you first), with a List
+                             View toggle. "Show trademarks" on an applicant
+                             opens the same portfolio.
+   Views live in the URL (?mark= / ?ipo= / ?pn=) so Back works and a view can
+   be linked to. The search results stay in the page underneath. */
+const elView = document.getElementById('view'), elSearch = document.getElementById('searchView');
+let PF = null, PVIEW = 'prio', PSORT = {k:'expiry', d:1};
+let NAV = 0;     // views opened from inside the page; Back steps through them
+
+function go(st){
+  const u = new URL(location.href);
+  ['mark','ipo','pn'].forEach(k=>u.searchParams.delete(k));
+  if(st.view==='mark') u.searchParams.set('mark', st.n);
+  if(st.view==='portfolio'){ if(st.ipo) u.searchParams.set('ipo', st.ipo); else u.searchParams.set('pn', st.n); }
+  history.pushState(st, '', u); NAV++;
+  show(st);
+}
+window.addEventListener('popstate', e=>{ if(NAV>0) NAV--; show(e.state || stateFromUrl()); });
+function stateFromUrl(){
+  const q = new URLSearchParams(location.search);
+  if(q.get('mark')) return {view:'mark', n:q.get('mark')};
+  if(q.get('ipo')) return {view:'portfolio', ipo:q.get('ipo')};
+  if(q.get('pn')) return {view:'portfolio', n:q.get('pn')};
+  return {view:'search'};
+}
+function scrollUp(){ try{ window.parent.postMessage({brauditScrollTop:true}, '*'); }catch(e){} window.scrollTo(0,0); }
+function loadingView(msg){ elView.innerHTML = '<div class="loading"><div class="spin"></div>'+msg+'</div>'; }
+function backBtn(){ return '<button type="button" class="back" data-act="back">← Back</button>'; }
+
+async function show(st){
+  if(!st || st.view==='search'){ elView.hidden = true; elView.innerHTML = ''; elSearch.hidden = false; syncSel(); return; }
+  elSearch.hidden = true; elView.hidden = false; scrollUp();
+  if(st.view==='mark'){
+    loadingView('Loading the trademark…');
+    let d; try{ d = await (await fetch('/renewal-lookup?action=mark&number='+encodeURIComponent(st.n))).json(); }catch(e){ d = null; }
+    if(!d || !d.ok){ elView.innerHTML = backBtn()+'<div class="empty">'+esc((d&&d.error)||'We could not load that trademark. Please try again.')+'</div>'; return; }
+    drawMark(d.mark);
+  } else {
+    loadingView('Loading the portfolio…');
+    const qs = st.ipo ? 'ipo='+encodeURIComponent(st.ipo) : 'number='+encodeURIComponent(st.n);
+    let d; try{ d = await (await fetch('/renewal-lookup?action=portfolio&'+qs)).json(); }catch(e){ d = null; }
+    if(!d || !d.ok){ elView.innerHTML = backBtn()+'<div class="empty">'+esc((d&&d.error)||'We could not load the portfolio. Please try again.')+'</div>'; return; }
+    PF = d; PVIEW = 'prio'; (d.marks||[]).forEach(m=>{ MARKS[m.number] = m; });
+    drawPortfolio();
+  }
+}
+
+function kv(rows){ rows = rows.filter(r=>r[1]); return rows.length ? '<dl class="kv">'+rows.map(r=>'<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>').join('')+'</dl>' : '<p class="hint">Not recorded.</p>'; }
+function sect(title, body){ return '<div class="sect"><h3>'+title+'</h3><div class="in">'+body+'</div></div>'; }
+
+function drawMark(m){
+  const b = m.band || {}, dt = m.dates || {};
+  MARKS[m.number] = MARKS[m.number] || {number:m.number, name:m.name, band:b, classes:(m.classes||[]).map(c=>c.n),
+                                        expiry_date:dt.expiry, applicant:(m.owners[0]||{}).name||''};
+  const can = !!b.renewable_online, on = selected.has(m.number);
+  let h = backBtn()+'<div class="tmhead"><div><p class="eyebrow">Trademark '+esc(m.number)+'</p><h1>'+esc(m.name)+'</h1>'+
+    '<span class="badge t-'+esc(b.tone||'info')+'">'+esc(b.label||'')+'</span> <span class="hint">Register status: '+esc(m.status||'Unknown')+'</span></div>'+
+    (m.image_url ? '<img class="tmimg" src="'+esc(m.image_url)+'" alt="">' : '')+'</div>';
+  h += '<div class="rband t-'+esc(b.tone||'info')+'"><b>'+esc(b.label||'')+'</b><div style="margin-top:4px">'+esc(b.say||'')+'</div>'+
+    (b.expiry ? '<div class="hint" style="margin-top:6px">Renewal date '+fmtDate(b.expiry)+
+      (b.renewable_online ? ' &middot; UKIPO renewal window opens '+fmtDate(b.window_opens)+' &middot; late renewal possible until '+fmtDate(b.late_until) : '')+'</div>' : '')+
+    '<div class="acts">'+(can ? '<label class="btn'+(on?' pink':'')+'" style="display:inline-flex;gap:8px;align-items:center"><input type="checkbox" data-sel="'+esc(m.number)+'"'+(on?' checked':'')+'> Select for renewal</label>' : '')+
+    '<button type="button" class="btn" data-act="all" data-n="'+esc(m.number)+'">View all trademarks</button></div></div>';
+  h += sect('Trademark details', kv([['Trademark', esc(m.name)], ['Number', esc(m.number)], ['Type of mark', esc(m.feature)],
+        ['Kind', esc(m.kind)], ['Description', esc(m.description)], ['Status on the register', esc(m.status)]]));
+  h += sect('Key dates', kv([['Filed', fmtDate(dt.filed)], ['Published', fmtDate(dt.published)], ['Registered', fmtDate(dt.registered)],
+        ['Renewal (expiry) date', fmtDate(dt.expiry)], ['Last updated on the register', fmtDate(dt.last_updated)]]));
+  h += sect('Owner'+((m.owners||[]).length>1?'s':''), (m.owners||[]).map(o=>kv([['Name', esc(o.name)], ['Applicant number', esc(o.ipo_identifier)],
+        ['Type', esc(o.kind)], ['Company number', esc(o.company_number)], ['Address', esc(o.address)]])).join('<hr style="border:0;border-top:1px solid var(--line);margin:12px 0">') || '<p class="hint">Not recorded.</p>');
+  h += sect('Classes, goods and services ('+(m.classes||[]).length+')', (m.classes||[]).map(c=>'<div class="cls"><b>Class '+c.n+'</b>'+
+        (c.heading?' <span class="hint">'+esc(c.heading)+'</span>':'')+(c.spec?'<p>'+esc(c.spec)+'</p>':'')+'</div>').join('') || '<p class="hint">Not recorded.</p>');
+  h += sect('Register history', (m.history||[]).length ? kv(m.history.map(x=>[fmtDate(x.date), esc(x.state)])) : '<p class="hint">No history recorded.</p>');
+  h += '<p class="hint" style="margin-top:10px">Source: the UK trademark register. <a href="'+esc(m.ukipo_url)+'" target="_blank" rel="noopener">View on the UKIPO site</a></p>';
+  elView.innerHTML = h; syncSel();
+}
+
+const PGROUPS = [
+  {id:'action', title:'Action required', sub:'Renew now, or expired and still renewable', keys:['renew_now','late'], urgent:true},
+  {id:'soon', title:'Renewal approaching', sub:'Due within the next 12 months', keys:['approaching']},
+  {id:'ok', title:'Registered, not yet due', sub:'More than 12 months to go', keys:['not_yet_due']},
+  {id:'apps', title:'Applications', sub:'Not registered yet, nothing to renew', keys:['pending']},
+  {id:'ended', title:'Expired, removed or not live', sub:'Can’t be renewed online', keys:['removed','not_live','unknown'], closed:true},
+];
+function prow(m){
+  const b = m.band||{}, can = !!b.renewable_online, on = selected.has(m.number);
+  return '<tr data-n="'+esc(m.number)+'"'+(on?' class="sel"':'')+'><td>'+(can?'<input type="checkbox" data-sel="'+esc(m.number)+'"'+(on?' checked':'')+' aria-label="Select '+esc(m.name)+'">':'')+'</td>'+
+    '<td><span class="badge t-'+esc(b.tone||'info')+'">'+esc(b.label||'')+'</span></td>'+
+    '<td class="nm">'+esc(m.name)+'</td><td>'+esc(m.number)+'</td>'+
+    '<td class="hide-sm">'+esc((m.classes||[]).join(', '))+'</td>'+
+    '<td class="hide-sm">'+fmtDate(m.application_date)+'</td>'+
+    '<td>'+fmtDate(m.expiry_date)+'</td>'+
+    '<td><button type="button" class="btn" data-act="mark" data-n="'+esc(m.number)+'">View</button></td></tr>';
+}
+function ptable(list, sortable){
+  const th = (k,l,cls)=>'<th'+(sortable?' class="s'+(cls?' '+cls:'')+'" data-act="sort" data-k="'+k+'"':(cls?' class="'+cls+'"':''))+'>'+l+
+      (sortable && PSORT.k===k ? (PSORT.d>0?' ↑':' ↓') : '')+'</th>';
+  return '<div class="tscroll"><table class="pt"><thead><tr><th></th>'+th('band','Status')+th('name','Name')+th('number','Number')+
+    th('classes','Classes','hide-sm')+th('filed','Filed','hide-sm')+th('expiry','Renewal date')+'<th></th></tr></thead><tbody>'+
+    list.map(prow).join('')+'</tbody></table></div>';
+}
+function drawPortfolio(){
+  const d = PF, o = d.owner||{}, ms = d.marks||[], c = d.counts||{};
+  const n = k=>k.reduce((a,x)=>a+(c[x]||0),0);
+  let h = backBtn()+'<p class="eyebrow">Portfolio</p><h1>'+esc(o.name||'Applicant')+'</h1>'+
+    '<p class="hint" style="margin:0">Applicant '+esc(o.ipo_identifier)+(o.address?' &middot; '+esc(o.address):'')+(o.postcode?', '+esc(o.postcode):'')+
+    ' &middot; '+ms.length+' trademark'+(ms.length===1?'':'s')+' on the UK register</p>';
+  if((d.other_owners||[]).length) h += '<p class="hint">This mark is jointly owned. Also see: '+d.other_owners.map(x=>'<a href="#" data-act="owner" data-ipo="'+esc(x.ipo_identifier)+'">'+esc(x.name)+'</a>').join(', ')+'</p>';
+  h += '<div class="tiles">'+
+    '<div class="tile urgent"><div class="v">'+n(['renew_now','late'])+'</div><div class="l">Need action now</div></div>'+
+    '<div class="tile soon"><div class="v">'+n(['approaching'])+'</div><div class="l">Due within 12 months</div></div>'+
+    '<div class="tile"><div class="v">'+n(['not_yet_due'])+'</div><div class="l">Registered, not yet due</div></div>'+
+    '<div class="tile"><div class="v">'+n(['removed','not_live','unknown','pending'])+'</div><div class="l">Applications, expired or removed</div></div></div>';
+  h += '<div class="seg"><button type="button" data-act="prio" class="'+(PVIEW==='prio'?'on':'')+'">Priority View</button>'+
+       '<button type="button" data-act="list" class="'+(PVIEW==='list'?'on':'')+'">List View</button></div>';
+  if(PVIEW==='prio'){
+    PGROUPS.forEach(g=>{
+      const list = ms.filter(m=>g.keys.includes((m.band||{}).key));
+      if(!list.length) return;
+      const body = ptable(list, false);
+      h += g.closed ? '<details class="grp"><summary><span>'+g.title+' <span class="n">('+list.length+')</span></span></summary><div class="body" style="padding:0">'+body+'</div></details>'
+                    : '<div class="pcard'+(g.urgent?' urgent':'')+'"><h3><span>'+g.title+' ('+list.length+')</span><span class="sub">'+g.sub+'</span></h3>'+body+'</div>';
+    });
+  } else {
+    const key = {band:m=>(m.band||{}).order, name:m=>m.name.toLowerCase(), number:m=>m.number, classes:m=>(m.classes||[])[0]||99,
+                 filed:m=>m.application_date||'', expiry:m=>m.expiry_date||'9999'}[PSORT.k] || (m=>m.expiry_date||'');
+    const list = ms.slice().sort((a,b)=>{ const x=key(a), y=key(b); return (x>y?1:x<y?-1:0)*PSORT.d; });
+    h += '<div class="pcard">'+ptable(list, true)+'</div>';
+  }
+  elView.innerHTML = h; syncSel();
+}
+
+/* ticking in the trademark page / portfolio tables */
+document.addEventListener('change', function(e){
+  const cb = e.target.closest('input[data-sel]'); if(!cb) return;
+  const n = cb.dataset.sel;
+  if(cb.checked) selected.set(n, MARKS[n] || {number:n}); else selected.delete(n);
+  syncSel();
+  if(cb.closest('label.btn')) cb.closest('label.btn').classList.toggle('pink', cb.checked);
+});
 
 elGo.addEventListener('click', run);
 elQ.addEventListener('keydown', e=>{ if(e.key === 'Enter') run(); });
@@ -339,6 +539,8 @@ elQ.addEventListener('keydown', e=>{ if(e.key === 'Enter') run(); });
   t.forEach(v=>{ const i = document.querySelector('#types input[value="'+v+'"]'); if(i) i.checked = true; });
   if(t.length) Typer.restart();
   if(q){ elQ.value = q; run(); }
+  const st = stateFromUrl();
+  if(st.view !== 'search'){ history.replaceState(st, '', location.href); show(st); }
 })();
 
 /* embed.js contract: report height, and ready once drawn */
