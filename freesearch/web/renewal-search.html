@@ -107,6 +107,42 @@
   .selbar{position:sticky;bottom:0;margin-top:16px;display:none;align-items:center;justify-content:space-between;gap:12px;
     background:var(--navy);color:#fff;border-radius:var(--r-md);padding:12px 16px;box-shadow:var(--shadow)}
   .selbar.on{display:flex}
+  body[data-view=renew] .selbar{display:none!important}
+  .selbar{flex-wrap:wrap}
+  .abar{display:flex;gap:8px;flex-wrap:wrap}
+  .abar button,.abar a{padding:9px 13px;border-radius:8px;border:1.5px solid #fff;background:transparent;color:#fff;font-weight:700;
+    font-size:.86rem;font-family:var(--font);cursor:pointer;text-decoration:none;white-space:nowrap}
+  .abar button:hover,.abar a:hover{background:rgba(255,255,255,.12)}
+  .abar .primary{background:var(--pink);border-color:var(--pink)} .abar .primary:hover{background:var(--pink-hover)}
+  .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:14px 0}
+  .opt{position:relative;border:2px solid var(--line);border-radius:var(--r-lg);padding:18px 16px 16px;background:#fff;cursor:pointer;display:flex;flex-direction:column}
+  .opt:hover{border-color:#b9c4ce}
+  .opt.on{border-color:var(--pink);background:var(--pink-tint)}
+  .opt.rec{border-color:var(--navy)}
+  .opt.rec.on{border-color:var(--pink)}
+  .opt .tag{position:absolute;top:-11px;left:14px;background:var(--navy);color:#fff;font-size:.72rem;font-weight:800;letter-spacing:.6px;
+    text-transform:uppercase;padding:4px 10px;border-radius:var(--r-pill)}
+  .opt h3{margin:0 0 8px;font-size:1.02rem;color:var(--navy)}
+  .opt .was{color:var(--quiet);text-decoration:line-through;font-size:.9rem}
+  .opt .save{display:inline-block;background:var(--pill-low-bg);color:var(--pill-low-fg);font-weight:800;font-size:.8rem;padding:3px 8px;border-radius:var(--r-pill);margin-left:6px}
+  .opt .today{font-size:1.7rem;font-weight:800;color:var(--navy);font-family:var(--font-display);margin:8px 0 0}
+  .opt .today small{font-size:.8rem;font-weight:600;color:var(--quiet)}
+  .opt ul{margin:10px 0 0;padding-left:18px;font-size:.86rem;color:var(--slate);line-height:1.5}
+  .opt .then{margin-top:auto;padding-top:10px;font-size:.84rem;color:var(--ink);font-weight:600}
+  .opt .then span{display:block;font-weight:400;color:var(--quiet)}
+  .fees{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:6px}
+  .fees td{padding:7px 0;border-bottom:1px solid var(--line)} .fees td.r{text-align:right;white-space:nowrap}
+  .fees tr.tot td{font-weight:800;color:var(--navy);border-bottom:0;font-size:1rem}
+  .fees .was{color:var(--quiet);text-decoration:line-through;margin-right:6px}
+  .modal{position:fixed;inset:0;background:rgba(28,45,59,.45);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:40px 14px;overflow:auto}
+  .modal.on{display:flex}
+  .modal .box{background:#fff;border-radius:var(--r-lg);max-width:560px;width:100%;padding:20px;box-shadow:var(--shadow)}
+  .modal h3{margin:0 0 6px;color:var(--navy)}
+  .modal label{display:block;font-size:.86rem;font-weight:700;color:var(--navy);margin:12px 0 4px}
+  .modal input,.modal textarea{width:100%;padding:10px 12px;border:1.5px solid var(--field-line);border-radius:8px;font:inherit;font-size:.95rem}
+  .modal textarea{min-height:130px;resize:vertical}
+  .modal .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media (max-width:480px){ .modal .row2{grid-template-columns:1fr} }
   .selbar b{font-size:1rem}
   .selbar span{color:var(--on-navy);font-size:.86rem}
   .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
@@ -191,7 +227,29 @@
  <div id="view" aria-live="polite" hidden></div>
 
   <div class="selbar" id="selbar">
-    <div><b id="selcount">0 marks selected</b><br><span>Next you will choose how to renew them.</span></div>
+    <div><b id="selcount">0 marks selected</b><br><span>How would you like to renew?</span></div>
+    <div class="abar">
+      <button type="button" class="primary" data-act="renew">Renew Online</button>
+      <button type="button" data-act="message">Message Us</button>
+      <a id="act-book" href="https://bookings.thetrademarkhelpline.com/#/webinitialcall" target="_blank" rel="noopener">Schedule an Appointment</a>
+      <a id="act-call" href="tel:+441618335400">Call us</a>
+      <button type="button" data-act="chat">Chat with us</button>
+    </div>
+  </div>
+  <div class="modal" id="msg" role="dialog" aria-modal="true" aria-labelledby="msg-h">
+    <div class="box">
+      <h3 id="msg-h">Message us about these renewals</h3>
+      <p class="hint" style="margin:0">Change the message if you like, then send it. We will reply by email.</p>
+      <label for="m-text">Your message</label><textarea id="m-text"></textarea>
+      <div class="row2"><div><label for="m-name">Your name</label><input id="m-name" autocomplete="name"></div>
+        <div><label for="m-phone">Phone <span class="hint">(optional)</span></label><input id="m-phone" type="tel" autocomplete="tel"></div></div>
+      <label for="m-email">Email</label><input id="m-email" type="email" autocomplete="email">
+      <p class="err" id="m-err"></p>
+      <div class="acts" style="justify-content:flex-end;margin-top:14px">
+        <button type="button" class="btn" data-act="msg-cancel">Cancel</button>
+        <button type="button" class="btn pink" data-act="msg-send">Send message</button>
+      </div>
+    </div>
   </div>
 
   <div data-tmh-help="strip" data-temmy="question" style="margin-top:22px"
@@ -360,10 +418,16 @@ document.addEventListener('click', function(e){
   else if(act==='owner') go({view:'portfolio', ipo:a.dataset.ipo});
   else if(act==='back'){
     if(NAV > 0){ history.back(); }
-    else { const u = new URL(location.href); ['mark','ipo','pn'].forEach(k=>u.searchParams.delete(k));
+    else { const u = new URL(location.href); ['mark','ipo','pn','renew'].forEach(k=>u.searchParams.delete(k));
            history.pushState({view:'search'}, '', u); show({view:'search'}); }
   }
   else if(act==='prio' || act==='list'){ PVIEW = act; drawPortfolio(); }
+  else if(act==='renew') go({view:'renew', nums:selNums().join(',')});
+  else if(act==='message') openMessage();
+  else if(act==='msg-cancel') document.getElementById('msg').classList.remove('on');
+  else if(act==='msg-send') sendMessage();
+  else if(act==='chat') openChat();
+  else if(act==='opt'){ CHOICE = +a.dataset.n; drawRenew(); }
   else if(act==='sort'){ const k=a.dataset.k; PSORT = {k, d: PSORT.k===k ? -PSORT.d : 1}; drawPortfolio(); }
 }, true);
 
@@ -385,6 +449,7 @@ function syncSel(){
   document.getElementById('selcount').textContent = n + ' mark' + (n===1?'':'s') + ' selected';
   document.getElementById('selbar').classList.toggle('on', n > 0);
   window.RENEWAL_SELECTED = [...selected.values()];     // for the next step (§8a)
+  if(typeof syncActions==='function') syncActions();
 }
 
 
@@ -402,8 +467,9 @@ let NAV = 0;     // views opened from inside the page; Back steps through them
 
 function go(st){
   const u = new URL(location.href);
-  ['mark','ipo','pn'].forEach(k=>u.searchParams.delete(k));
+  ['mark','ipo','pn','renew'].forEach(k=>u.searchParams.delete(k));
   if(st.view==='mark') u.searchParams.set('mark', st.n);
+  if(st.view==='renew') u.searchParams.set('renew', st.nums || selNums().join(','));
   if(st.view==='portfolio'){ if(st.ipo) u.searchParams.set('ipo', st.ipo); else u.searchParams.set('pn', st.n); }
   history.pushState(st, '', u); NAV++;
   show(st);
@@ -414,6 +480,7 @@ function stateFromUrl(){
   if(q.get('mark')) return {view:'mark', n:q.get('mark')};
   if(q.get('ipo')) return {view:'portfolio', ipo:q.get('ipo')};
   if(q.get('pn')) return {view:'portfolio', n:q.get('pn')};
+  if(q.get('renew')) return {view:'renew', nums:q.get('renew')};
   return {view:'search'};
 }
 function scrollUp(){ try{ window.parent.postMessage({brauditScrollTop:true}, '*'); }catch(e){} window.scrollTo(0,0); }
@@ -421,10 +488,19 @@ function loadingView(msg){ elView.innerHTML = '<div class="loading"><div class="
 function backBtn(){ return '<button type="button" class="back" data-act="back">← Back</button>'; }
 
 async function show(st){
+  document.body.dataset.view = (st && st.view) || 'search';
   if(!st || st.view==='search'){ elView.hidden = true; elView.innerHTML = ''; elSearch.hidden = false; syncSel(); return; }
   elSearch.hidden = true; elView.hidden = false; scrollUp();
+  if(st.view==='renew'){
+    const nums = st.nums ? st.nums.split(',') : selNums();
+    if(!nums.length){ elView.innerHTML = backBtn()+'<div class="empty">Tick at least one trademark first.</div>'; return; }
+    loadingView('Working out your renewal options\u2026');
+    let d; try{ d = await (await fetch('/renewal-lookup?action=quote&numbers='+encodeURIComponent(nums.join(',')))).json(); }catch(e){ d = null; }
+    if(!d || !d.ok){ elView.innerHTML = backBtn()+'<div class="empty">'+esc((d&&d.error)||'We could not price that just now. Please try again.')+'</div>'; return; }
+    QUOTE = d; CHOICE = CHOICE || 2; drawRenew(); return;
+  }
   if(st.view==='mark'){
-    loadingView('Loading the trademark…');
+    loadingView('Loading the trademark\u2026');
     let d; try{ d = await (await fetch('/renewal-lookup?action=mark&number='+encodeURIComponent(st.n))).json(); }catch(e){ d = null; }
     if(!d || !d.ok){ elView.innerHTML = backBtn()+'<div class="empty">'+esc((d&&d.error)||'We could not load that trademark. Please try again.')+'</div>'; return; }
     drawMark(d.mark);
@@ -520,6 +596,83 @@ function drawPortfolio(){
     h += '<div class="pcard">'+ptable(list, true)+'</div>';
   }
   elView.innerHTML = h; syncSel();
+}
+
+
+/* ===== ACTIONS ON THE SELECTION (§8a) ===================================== */
+let QUOTE = null, CHOICE = 0;
+function selNums(){ return [...selected.keys()]; }
+function selText(){ return [...selected.values()].map(m=>(m.number||'')+(m.name?' '+m.name:'')).join(', '); }
+function money(n){ return '£'+Number(n).toLocaleString('en-GB'); }
+
+/* booking carries the trademark numbers */
+function syncActions(){
+  const nums = selNums().join(','), b = document.getElementById('act-book');
+  if(b){ const u = new URL('https://bookings.thetrademarkhelpline.com/'); if(nums) u.searchParams.set('tm', nums); u.hash = '/webinitialcall'; b.href = u.toString(); }
+}
+
+/* Message Us: editable box pre-filled with the ticked numbers (§8a).
+   NOT YET WIRED to Zoho (note on the Account + Task + copy to the client):
+   until it is, Send opens an email to support@ as the fallback the map allows. */
+function openMessage(){
+  document.getElementById('m-text').value = "I'd like to renew: " + selText() + '.';
+  document.getElementById('m-err').classList.remove('on');
+  document.getElementById('msg').classList.add('on');
+}
+function sendMessage(){
+  const g = id=>document.getElementById(id).value.trim(), err = document.getElementById('m-err');
+  if(!g('m-name') || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(g('m-email'))){ err.textContent='Please add your name and a valid email so we can reply.'; err.classList.add('on'); return; }
+  const body = g('m-text') + '\n\n' + g('m-name') + (g('m-phone') ? '\n' + g('m-phone') : '') + '\n' + g('m-email');
+  location.href = 'mailto:support@thetrademarkhelpline.com?subject=' + encodeURIComponent('Trademark renewal: ' + selNums().join(', ')) +
+                  '&body=' + encodeURIComponent(body);
+  document.getElementById('msg').classList.remove('on');
+}
+
+/* Chat with us: the website's Zoho SalesIQ chat, opening question = the ticked
+   numbers. Embedded, the host page owns the chat, so the frame asks the parent
+   (needs a small embed.js handler, sent for review); standalone, the widget
+   loads here. */
+const SIQ = 'siq2ff2511837e9259c4710382e24bf6229d5558ce1d558304328de39ae7c11deaf';
+function openChat(){
+  const q = "I'd like to renew: " + selText();
+  if(window.parent !== window){ try{ window.parent.postMessage({brauditChat:{question:q}}, '*'); }catch(e){} return; }
+  function start(){ try{ $zoho.salesiq.visitor.question(q); }catch(e){} try{ $zoho.salesiq.floatwindow.visible('show'); }catch(e){} }
+  if(window.$zoho && $zoho.salesiq && $zoho.salesiq.floatwindow){ start(); return; }
+  window.$zoho = window.$zoho || {}; $zoho.salesiq = $zoho.salesiq || {widgetcode: SIQ, values:{}, ready: function(){ setTimeout(start, 300); }};
+  const s = document.createElement('script'); s.id = 'zsiqscript'; s.defer = true;
+  s.src = 'https://salesiq.zohopublic.com/widget?wc=' + SIQ; document.body.appendChild(s);
+}
+
+function cleanLabel(l){ return l.replace(/^Recommended\s*—\s*/,'').replace(/^On a Budget\s*—\s*/,''); }
+function drawRenew(){
+  const d = QUOTE, n = d.count;
+  let h = backBtn()+'<p class="eyebrow">Renew online</p><h1>Choose how to renew '+(n===1?'your trademark':'your '+n+' trademarks')+'</h1>';
+  if(!n){ elView.innerHTML = h + '<div class="empty">None of the ticked marks can be renewed online. Talk to us and we will help.</div>'; return; }
+  h += '<div class="marks" style="margin:12px 0">'+d.marks.map(m=>'<div class="mark dis" style="cursor:default"><span></span><div><div class="nm">'+esc(m.name)+'</div>'+
+       '<div class="meta">'+esc(m.number)+' &middot; '+esc(m.owner)+' &middot; Class'+(m.classes.length>1?'es ':' ')+esc(m.classes.join(', '))+'</div>'+
+       '<div class="say">'+esc(m.band.say)+'</div></div><div class="right"><span class="badge t-'+esc(m.band.tone)+'">'+esc(m.band.label)+'</span>'+
+       '<div class="exp">UKIPO fee '+money(m.ukipo_fee)+'</div></div></div>').join('')+'</div>';
+  if(d.skipped.length) h += '<p class="hint">Not included (can’t be renewed online): '+d.skipped.map(x=>esc((x.name||x.number)+' – '+x.why)).join('; ')+'</p>';
+  const INC = {1:['Your renewal filed with the UKIPO','We confirm when it is done'],
+               2:['Renewal included for '+(n===1?'this mark':'all '+n+' marks'),'Monthly monitoring of the register','Defence if someone copies your brand','Future UK renewals included while you are on the plan'],
+               3:['Your renewal filed with the UKIPO','A yearly review of your trademarks','Renewal reminders, so nothing lapses']};
+  h += '<div class="opts">'+d.options.map(o=>'<div class="opt'+(o.recommended?' rec':'')+(CHOICE===o.n?' on':'')+'" data-act="opt" data-n="'+o.n+'" role="button" tabindex="0">'+
+       (o.recommended?'<span class="tag">Recommended</span>':'')+
+       '<h3>'+esc(cleanLabel(o.label))+'</h3>'+
+       '<div><span class="was">'+money(o.rrp)+'</span><span class="save">Save '+money(o.saving)+'</span></div>'+
+       '<div class="today">'+money(o.tmh_today)+' <small>today + UKIPO fees</small></div>'+
+       '<ul>'+(INC[o.n]||[]).map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>'+
+       '<div class="then">'+(o.then_monthly ? 'Then '+money(o.then_monthly)+' a month<span>Rolling monthly. Cancel or change your plan at any time.</span>' : 'Nothing more to pay')+'</div></div>').join('')+'</div>';
+  const o = d.options.find(x=>x.n===CHOICE) || d.options[0];
+  h += '<div class="sect"><h3>What you pay today</h3><div class="in"><table class="fees">'+
+       '<tr><td>'+esc(cleanLabel(o.label))+'</td><td class="r"><span class="was">'+money(o.rrp)+'</span>'+money(o.tmh_today)+'</td></tr>'+
+       '<tr><td>UKIPO renewal fee'+(n>1?'s ('+n+' marks)':'')+'</td><td class="r">'+money(d.ukipo_total)+'</td></tr>'+
+       '<tr class="tot"><td>Total today</td><td class="r">'+money(o.pays_today)+'</td></tr></table>'+
+       (o.then_monthly?'<p class="hint">Then '+money(o.then_monthly)+' a month. Rolling monthly, cancel or change at any time.</p>':'')+
+       '<p class="hint">'+esc(d.ukipo_note)+' Prices exclude VAT where it applies.</p>'+
+       '<div class="acts" style="margin-top:12px"><button type="button" class="btn pink" disabled>Continue: your details</button>'+
+       '<span class="hint" style="align-self:center">Next: confirm your details, sign the authority, and pay.</span></div></div></div>';
+  elView.innerHTML = h;
 }
 
 /* ticking in the trademark page / portfolio tables */
