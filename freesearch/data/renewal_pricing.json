@@ -1,0 +1,72 @@
+{
+ "_note": "GENERATED from _Hub/pricing/tmh_pricing_catalogue.json -> temmy_checkout_bundles (decided 2026-10-05). Do not edit by hand; re-copy when the catalogue changes.",
+ "bundles": [
+  {
+   "n": 1,
+   "label": "Renewal Only",
+   "recommended": false,
+   "lines": [
+    {
+     "sku": "RENEWAL_UK",
+     "rrp": 299,
+     "baseline": 199
+    }
+   ],
+   "online_discount": 50,
+   "gross_at_rrp": 299,
+   "TOTAL_DISCOUNT_SHOWN": 150,
+   "CLIENT_PAYS_TODAY": 149,
+   "then_monthly": 0
+  },
+  {
+   "n": 2,
+   "label": "Recommended \u2014 UK Renewal + Monitoring & Defence",
+   "recommended": true,
+   "lines": [
+    {
+     "sku": "RENEWAL_UK",
+     "rrp": 299,
+     "baseline": 199
+    },
+    {
+     "sku": "PLAN_REGISTERED",
+     "rrp": 99,
+     "baseline": 59
+    }
+   ],
+   "online_discount": 199,
+   "gross_at_rrp": 398,
+   "TOTAL_DISCOUNT_SHOWN": 339,
+   "CLIENT_PAYS_TODAY": 59,
+   "then_monthly": 59
+  },
+  {
+   "n": 3,
+   "label": "On a Budget \u2014 UK Renewal + Annual Review",
+   "recommended": false,
+   "lines": [
+    {
+     "sku": "RENEWAL_UK",
+     "rrp": 299,
+     "baseline": 199
+    },
+    {
+     "sku": "MON_ANNUAL",
+     "rrp": 29,
+     "baseline": 14
+    }
+   ],
+   "online_discount": 100,
+   "gross_at_rrp": 328,
+   "TOTAL_DISCOUNT_SHOWN": 215,
+   "CLIENT_PAYS_TODAY": 113,
+   "then_monthly": 14
+  }
+ ],
+ "ukipo": {
+  "source": "UKIPO fees from 1 April 2026 (online): renewal \u00a3245 including one class, \u00a360 each further class, late renewal fee \u00a360. Verify against gov.uk before launch.",
+  "renewal_first_class": 245,
+  "each_further_class": 60,
+  "late_fee": 60
+ }
+}
