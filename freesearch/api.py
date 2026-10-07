@@ -143,6 +143,13 @@ _PAGES = {
     # Zoho, Xero or Stripe — these links exist so nobody has to remember
     # the flag.
     '/demo': 'demo.html',
+    # Renewal search (Jonathan, 7 Oct): "Not sure whether you need to renew?
+    # Check your trademarks". Built like the Free Search box; searches
+    # TemmyDB/Heart by mark name/number or applicant name/number and lists the
+    # marks with their renewal band (RENEWAL_PROCESS_MAP §3). Read-only.
+    # Embeddable: <script src=".../embed.js" data-widget="renewal-search">.
+    '/renewal-search': 'renewal-search.html',
+    '/renewals': 'renewal-search.html',
 }
 
 # Pages that require the staff token. Everything else on this host is public
@@ -1791,6 +1798,15 @@ class _Handler(BaseHTTPRequestHandler):
             except Exception as e:                  # degrade loudly, JSON-shaped
                 out = {'ok': False, 'error': f'class-search failed: {e}',
                        'status': 500}
+            self._send(out, out.get('status', 200))
+            return
+        if path == '/renewal-lookup':
+            # Data for /renewal-search. GET: a lookup, nothing written.
+            try:
+                from . import renewals as _ren
+            except ImportError:
+                import renewals as _ren
+            out = _ren.handle(params, _make_client())
             self._send(out, out.get('status', 200))
             return
         if path == '/jurisdictions':
