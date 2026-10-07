@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check your trademark renewals — The Trademark Helpline</title>
+<!--
+  RENEWAL SEARCH (Jonathan, 7 Oct 2026). Website entry point for renewals,
+  built like the Free Search box. Spec, verbatim:
+    CTA: "Not sure whether you need to renew check your trademarks"
+    The placeholder scrolls: "Type in your: Trademark Name, Trademark Number,
+      Applicant Name or Applicant Number"
+    "Want to speed up your search? Choose a Search Type" — ticking a type
+      changes the placeholder to only what was selected ("Type your trademark
+      name") and scrolls as normal.
+    Whichever way, it searches Temmy/Heart and shows a list to select from.
+  Data: GET /renewal-lookup (freesearch/renewals.py). Read-only.
+  Band rules: _Hub/handoffs/RENEWAL_PROCESS_MAP_2026-10-03.md §3.
+  NEXT (not built yet): the §8a actions on the selected marks.
+-->
+<link rel="stylesheet" href="/braudit.css">
+<script src="/demo-banner.js" defer></script>
+<script src="/tool-events.js"></script>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:var(--font);color:var(--ink);background:transparent}
+  .wrap{background:var(--white);border:1px solid var(--line);border-radius:var(--r-xl);
+    box-shadow:var(--shadow);padding:22px 22px 18px;max-width:980px;margin:0 auto}
+  body.embed .wrap{max-width:none}
+  .eyebrow{font-family:var(--font-display);font-size:12px;font-weight:800;letter-spacing:1.4px;
+    text-transform:uppercase;color:var(--pink);margin:0 0 6px}
+  h1{margin:0 0 6px;font-size:1.55rem;font-weight:800;color:var(--navy);letter-spacing:-.4px}
+  p.lead{margin:0 0 16px;font-size:.96rem;color:var(--slate);line-height:1.5}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  input[type=text]{flex:1 1 280px;min-width:0;padding:14px 16px;font-size:1.04rem;
+    font-family:var(--font);border:2px solid #a9b8c5;border-radius:10px;color:var(--ink);
+    background:#fff;font-weight:500;box-shadow:inset 0 1px 2px rgba(28,45,59,.06);
+    transition:border-color .15s,box-shadow .15s}
+  input[type=text]::placeholder{color:#4f5d6b;font-weight:400}
+  input[type=text]:hover{border-color:var(--navy)}
+  input[type=text]:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 4px rgba(229,22,82,.14)}
+  button.go{flex:0 0 auto;padding:12px 26px;font-size:1rem;font-family:var(--font);font-weight:700;
+    color:#fff;background:var(--pink);border:0;border-radius:10px;cursor:pointer;transition:background .15s ease}
+  button.go:hover{background:var(--pink-hover)}
+  button.go:disabled{opacity:.6;cursor:progress}
+  @media (max-width:480px){ button.go{width:100%} }
+
+  .types{margin:14px 0 0}
+  .types .q{font-size:.88rem;color:var(--slate);margin:0 0 8px;font-weight:600}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border:1.5px solid var(--field-line);
+    border-radius:var(--r-pill);font-size:.88rem;cursor:pointer;user-select:none;background:#fff;color:var(--navy)}
+  .chip input{accent-color:var(--pink);margin:0}
+  .chip:has(input:checked){border-color:var(--pink);background:var(--pink-tint)}
+  .err{margin:12px 0 0;font-size:.9rem;color:var(--pink-dark);display:none}
+  .err.on{display:block}
+
+  /* results */
+  #out{margin-top:18px}
+  .loading{display:flex;align-items:center;gap:10px;color:var(--quiet);font-size:.92rem;padding:14px 2px}
+  .spin{width:18px;height:18px;border:3px solid var(--line);border-top-color:var(--pink);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  h2.sec{font-size:1.05rem;color:var(--navy);margin:20px 0 10px;font-weight:800}
+  .hint{font-size:.85rem;color:var(--quiet)}
+  .owners{display:grid;gap:8px}
+  .owner{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--line);
+    border-radius:var(--r-md);padding:12px 14px;background:var(--panel-soft)}
+  .owner b{color:var(--navy)}
+  .owner button{flex:0 0 auto;padding:8px 14px;border-radius:8px;border:1.5px solid var(--navy);background:#fff;
+    color:var(--navy);font-weight:700;font-family:var(--font);cursor:pointer}
+  .owner button:hover{background:var(--navy);color:#fff}
+  .owner.open{border-color:var(--navy)}
+
+  .marks{display:grid;gap:8px}
+  .mark{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;border:1px solid var(--line);
+    border-radius:var(--r-md);padding:12px 14px;background:#fff;cursor:pointer}
+  .mark:hover{border-color:#b9c4ce}
+  .mark.sel{border-color:var(--pink);background:var(--pink-tint)}
+  .mark.dis{cursor:default;background:var(--panel-soft)}
+  .mark input{width:18px;height:18px;margin-top:3px;accent-color:var(--pink)}
+  .mark .nm{font-weight:800;color:var(--navy);font-size:1rem}
+  .mark .meta{font-size:.84rem;color:var(--slate);margin-top:3px;line-height:1.45}
+  .mark .say{font-size:.84rem;color:var(--quiet);margin-top:5px}
+  .badge{display:inline-block;font-size:.76rem;font-weight:800;padding:4px 10px;border-radius:var(--r-pill);white-space:nowrap}
+  .t-urgent{background:var(--pill-high-bg);color:var(--pill-high-fg)}
+  .t-soon{background:var(--pill-med-bg);color:var(--pill-med-fg)}
+  .t-ok{background:var(--pill-low-bg);color:var(--pill-low-fg)}
+  .t-ended,.t-info{background:var(--pill-neg-bg);color:var(--pill-neg-fg)}
+  .exp{font-size:.8rem;color:var(--quiet);text-align:right;margin-top:6px}
+  details.more{margin-top:10px}
+  details.more summary{cursor:pointer;color:var(--navy);font-weight:700;font-size:.9rem;padding:6px 0}
+  .empty{padding:14px;border:1px dashed var(--pink-line);border-radius:var(--r-md);color:var(--slate);font-size:.92rem;background:var(--pink-tint)}
+
+  .selbar{position:sticky;bottom:0;margin-top:16px;display:none;align-items:center;justify-content:space-between;gap:12px;
+    background:var(--navy);color:#fff;border-radius:var(--r-md);padding:12px 16px;box-shadow:var(--shadow)}
+  .selbar.on{display:flex}
+  .selbar b{font-size:1rem}
+  .selbar span{color:var(--on-navy);font-size:.86rem}
+  @media (max-width:560px){ .mark{grid-template-columns:auto 1fr} .mark .right{grid-column:2} .exp{text-align:left} }
+</style>
+<script src="/partner-ref.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">Trademark renewals</p>
+  <h1>Not sure whether you need to renew?</h1>
+  <p class="lead">Check your trademarks. Search the UK register and we will show you when each mark is due for renewal and what to do next.</p>
+
+  <div class="row">
+    <input id="q" type="text" autocomplete="off" aria-label="Trademark name, trademark number, applicant name or applicant number"
+           placeholder="Type in your trademark name, trademark number, applicant name or applicant number">
+    <button id="go" class="go" type="button">Check my trademarks</button>
+  </div>
+
+  <div class="types">
+    <p class="q">Want to speed up your search? Choose a search type</p>
+    <div class="chips" id="types">
+      <label class="chip"><input type="checkbox" value="mark_name">Trademark Name</label>
+      <label class="chip"><input type="checkbox" value="mark_number">Trademark Number</label>
+      <label class="chip"><input type="checkbox" value="applicant_name">Applicant Name</label>
+      <label class="chip"><input type="checkbox" value="applicant_number">Applicant Number</label>
+    </div>
+  </div>
+  <p class="err" id="err" role="alert"></p>
+
+  <div id="out" aria-live="polite"></div>
+
+  <div class="selbar" id="selbar">
+    <div><b id="selcount">0 marks selected</b><br><span>Next you will choose how to renew them.</span></div>
+  </div>
+
+  <div data-tmh-help="strip" data-temmy="question" style="margin-top:22px"
+       data-help-title="Need some help with a renewal?"></div>
+</div>
+<script src="/help-line.js" defer></script>
+
+<script>
+const P = new URLSearchParams(location.search);
+if (P.get('embed') === '1') document.body.classList.add('embed');
+const LABEL = {mark_name:'Trademark Name', mark_number:'Trademark Number',
+               applicant_name:'Applicant Name', applicant_number:'Applicant Number'};
+const elQ = document.getElementById('q'), elGo = document.getElementById('go'),
+      elErr = document.getElementById('err'), elOut = document.getElementById('out');
+const selected = new Map();          // number -> mark
+
+function chosen(){ return [...document.querySelectorAll('#types input:checked')].map(i=>i.value); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmtDate(iso){ if(!iso) return ''; const d=new Date(iso+'T00:00:00');
+  return isNaN(d)?iso:d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); }
+
+/* ---- the placeholder scrolls ---------------------------------------------
+   No type ticked: "Type in your Trademark Name" -> "...Trademark Number" ->
+   "...Applicant Name" -> "...Applicant Number", typed and deleted in turn.
+   Types ticked: only those, and the static text names only those
+   ("Type your trademark name"). Same rules as the Free Search box: it never
+   touches the value, stops on focus or typing, honours reduced motion, and
+   idles in a hidden tab. */
+const Typer = (function(){
+  let words = [], prefix = '', w = 0, i = 0, del = false, timer = null, stopped = false;
+  let reduced = false;
+  try{ reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
+  function staticText(){
+    const c = chosen();
+    if(!c.length) return 'Type in your trademark name, trademark number, applicant name or applicant number';
+    const names = c.map(k=>LABEL[k].toLowerCase());
+    return 'Type your ' + (names.length===1 ? names[0] : names.slice(0,-1).join(', ') + ' or ' + names[names.length-1]);
+  }
+  function setup(){
+    const c = chosen();
+    words = (c.length ? c : Object.keys(LABEL)).map(k=>LABEL[k]);
+    prefix = c.length ? 'Type your ' : 'Type in your ';
+    if(c.length) words = words.map(x=>x.toLowerCase());
+    w = 0; i = 0; del = false;
+  }
+  function tick(){
+    if(stopped) return;
+    if(document.hidden){ timer = setTimeout(tick, 600); return; }
+    const word = words[w];
+    i = del ? i - 1 : i + 1;
+    elQ.setAttribute('placeholder', prefix + word.slice(0, i) + (del ? '' : '…'));
+    let wait = del ? 35 : 70;
+    if(!del && i === word.length){ del = true; wait = 1300; }
+    else if(del && i === 0){ del = false; w = (w + 1) % words.length; wait = 240; }
+    timer = setTimeout(tick, wait);
+  }
+  function start(){
+    if(timer) clearTimeout(timer);
+    elQ.setAttribute('placeholder', staticText());
+    if(reduced || stopped) return;
+    setup(); timer = setTimeout(tick, 700);
+  }
+  function stop(){ stopped = true; if(timer) clearTimeout(timer); elQ.setAttribute('placeholder', staticText()); }
+  ['focus','input','keydown','paste'].forEach(ev=>elQ.addEventListener(ev, stop, {once:true}));
+  return {start, restart(){ if(stopped){ elQ.setAttribute('placeholder', staticText()); } else start(); }};
+})();
+document.querySelectorAll('#types input').forEach(i=>i.addEventListener('change', ()=>Typer.restart()));
+Typer.start();
+
+/* ---- search ------------------------------------------------------------ */
+function fail(msg){ elErr.textContent = msg; elErr.classList.add('on'); }
+async function lookup(q, types){
+  const u = '/renewal-lookup?q=' + encodeURIComponent(q) + (types.length ? '&types=' + types.join(',') : '');
+  const r = await fetch(u); return r.json();
+}
+
+async function run(){
+  const q = (elQ.value||'').trim();
+  if(q.length < 2){ elQ.focus(); fail('Type at least two characters to search.'); return; }
+  elErr.classList.remove('on');
+  elGo.disabled = true; elGo.textContent = 'Checking…';
+  elOut.innerHTML = '<div class="loading"><div class="spin"></div>Searching the UK register…</div>';
+  if(window.tmhTool) tmhTool.step('search_submitted');
+  let d;
+  try{ d = await lookup(q, chosen()); }catch(e){ d = {ok:false, error:'We could not reach the register just now. Please try again.'}; }
+  elGo.disabled = false; elGo.textContent = 'Check my trademarks';
+  if(!d || !d.ok){ elOut.innerHTML = ''; fail((d && d.error) || 'Something went wrong. Please try again.'); return; }
+  render(d);
+  if(window.tmhTool) tmhTool.step('results_shown');
+}
+
+function markCard(m){
+  const b = m.band || {}, can = !!b.renewable_online, on = selected.has(m.number);
+  const cls = (m.classes||[]).length ? 'Class' + (m.classes.length>1?'es ':' ') + m.classes.join(', ') : '';
+  const expLine = m.expiry_date ? (b.key==='late'||b.key==='removed' ? 'Expired ' : 'Expires ') + fmtDate(m.expiry_date) : '';
+  return '<div class="mark'+(on?' sel':'')+(can?'':' dis')+'" data-n="'+esc(m.number)+'">'+
+    (can ? '<input type="checkbox" aria-label="Select '+esc(m.name)+'"'+(on?' checked':'')+'>' : '<span></span>')+
+    '<div><div class="nm">'+esc(m.name)+'</div>'+
+      '<div class="meta">'+esc(m.number)+(m.applicant?' &middot; '+esc(m.applicant):'')+(cls?' &middot; '+esc(cls):'')+'</div>'+
+      '<div class="say">'+esc(b.say||'')+'</div></div>'+
+    '<div class="right"><span class="badge t-'+esc(b.tone||'info')+'">'+esc(b.label||'')+'</span>'+
+      '<div class="exp">'+esc(expLine)+'</div></div></div>';
+}
+
+let MARKS = {};
+function marksBlock(list, title){
+  list.forEach(m=>{ MARKS[m.number] = m; });
+  const live = list.filter(m=>m.band && m.band.renewable_online),
+        rest = list.filter(m=>!(m.band && m.band.renewable_online));
+  let h = title ? '<h2 class="sec">'+title+'</h2>' : '';
+  if(live.length){
+    h += '<p class="hint">Tick the marks you want to renew.</p><div class="marks">'+live.map(markCard).join('')+'</div>';
+  } else if(rest.length){
+    h += '<div class="empty">None of these marks can be renewed online. Have a look below, or talk to us and we will check them for you.</div>';
+  }
+  if(rest.length){
+    h += '<details class="more"'+(live.length?'':' open')+'><summary>'+rest.length+' mark'+(rest.length>1?'s':'')+
+         ' that can’t be renewed online</summary><div class="marks">'+rest.map(markCard).join('')+'</div></details>';
+  }
+  return h;
+}
+
+function render(d){
+  MARKS = {};
+  let h = '';
+  const byNum = (d.marks||[]).filter(m=>m.matched_by==='mark_number'),
+        byName = (d.marks||[]).filter(m=>m.matched_by==='mark_name'),
+        byOwner = (d.marks||[]).filter(m=>m.matched_by==='applicant_number');
+  if(byNum.length) h += marksBlock(byNum, 'Trademark number match');
+  if(byName.length) h += marksBlock(byName, 'Trademarks matching “'+esc(d.query)+'”');
+  if(byOwner.length) h += marksBlock(byOwner, 'Trademarks owned by '+esc(d.owner && d.owner.name || 'this applicant') +
+                           (d.owner && d.owner.ipo_identifier ? ' <span class="hint">(applicant '+esc(d.owner.ipo_identifier)+')</span>' : ''));
+  if((d.owners||[]).length){
+    h += '<h2 class="sec">Applicants matching “'+esc(d.query)+'”</h2>'+
+         '<p class="hint">One business can appear more than once on the register. Open each to see its trademarks.</p><div class="owners">'+
+         d.owners.map(o=>'<div class="owner" data-ipo="'+esc(o.ipo_identifier)+'"><div><b>'+esc(o.name)+'</b><div class="hint">'+
+            esc([o.address,o.postcode].filter(Boolean).join(', '))+' &middot; applicant '+esc(o.ipo_identifier)+' &middot; '+
+            o.trademark_count+' trademark'+(o.trademark_count===1?'':'s')+'</div></div>'+
+            '<button type="button">Show trademarks</button></div><div class="ownmarks" data-for="'+esc(o.ipo_identifier)+'"></div>').join('')+'</div>';
+  }
+  if(!h){
+    h = '<div class="empty">We couldn’t find anything for “'+esc(d.query)+'”'+
+        (d.types && d.types.length ? ' as a '+d.types.map(t=>LABEL[t].toLowerCase()).join(' or ') : '')+
+        '. Check the spelling, try another search type, or talk to us and we will find it for you.</div>';
+  }
+  if((d.failed||[]).length) h += '<p class="hint">Part of the search did not complete. Try again in a moment.</p>';
+  elOut.innerHTML = h;
+  syncSel();
+}
+
+/* owners: load their marks inline */
+elOut.addEventListener('click', async function(e){
+  const btn = e.target.closest('.owner button');
+  if(btn){
+    const card = btn.closest('.owner'), ipo = card.dataset.ipo,
+          box = elOut.querySelector('.ownmarks[data-for="'+CSS.escape(ipo)+'"]');
+    if(card.classList.contains('open')){ card.classList.remove('open'); box.innerHTML=''; btn.textContent='Show trademarks'; return; }
+    btn.disabled = true; btn.textContent = 'Loading…';
+    let d; try{ d = await lookup(ipo, ['applicant_number']); }catch(err){ d = null; }
+    btn.disabled = false;
+    if(!d || !d.ok){ btn.textContent = 'Try again'; return; }
+    card.classList.add('open'); btn.textContent = 'Hide trademarks';
+    box.innerHTML = '<div style="margin:8px 0 6px 14px">'+marksBlock(d.marks||[], '')+'</div>';
+    syncSel();
+    return;
+  }
+  const row = e.target.closest('.mark');
+  if(!row || row.classList.contains('dis')) return;
+  const n = row.dataset.n, cb = row.querySelector('input');
+  if(e.target !== cb) cb.checked = !cb.checked;
+  if(cb.checked) selected.set(n, MARKS[n]); else selected.delete(n);
+  syncSel();
+});
+
+function syncSel(){
+  elOut.querySelectorAll('.mark').forEach(r=>{
+    const on = selected.has(r.dataset.n); r.classList.toggle('sel', on);
+    const cb = r.querySelector('input'); if(cb) cb.checked = on;
+  });
+  const n = selected.size;
+  document.getElementById('selcount').textContent = n + ' mark' + (n===1?'':'s') + ' selected';
+  document.getElementById('selbar').classList.toggle('on', n > 0);
+  window.RENEWAL_SELECTED = [...selected.values()];     // for the next step (§8a)
+}
+
+elGo.addEventListener('click', run);
+elQ.addEventListener('keydown', e=>{ if(e.key === 'Enter') run(); });
+
+/* deep link: ?q=...&types=... runs straight away (WordPress hand-off later) */
+(function(){
+  const q = P.get('q'), t = (P.get('types')||'').split(',').filter(Boolean);
+  t.forEach(v=>{ const i = document.querySelector('#types input[value="'+v+'"]'); if(i) i.checked = true; });
+  if(t.length) Typer.restart();
+  if(q){ elQ.value = q; run(); }
+})();
+
+/* embed.js contract: report height, and ready once drawn */
+(function(){
+  function send(){ const h = Math.ceil(document.querySelector('.wrap').getBoundingClientRect().height + 8);
+    try{ window.parent.postMessage({brauditHeight:h}, '*'); }catch(e){} }
+  try{ new ResizeObserver(send).observe(document.querySelector('.wrap')); }catch(e){ setInterval(send, 800); }
+  window.addEventListener('load', function(){ send(); try{ window.parent.postMessage({brauditReady:true}, '*'); }catch(e){} });
+})();
+</script>
+</body>
+</html>
