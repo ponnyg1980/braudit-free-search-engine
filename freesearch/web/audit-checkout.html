@@ -585,13 +585,22 @@
       <p class="sub" style="margin-top:0">These help our advisers prepare the right audit for you.</p>
 
       <label class="fld">Who is this Clearance Audit for?</label>
-      <select id="ff-who">
+      <select id="ff-who" onchange="document.getElementById('ff-role-wrap').classList.toggle('hidden',!/client I represent/i.test(this.value))">
         <option value="">Please choose&hellip;</option>
         <option>For me</option>
         <option>For my company</option>
         <option>For my employer</option>
         <option>For a client I represent</option>
       </select>
+
+      <div id="ff-role-wrap" class="hidden">
+        <label class="fld">How do you define your role?</label>
+        <select id="ff-role">
+          <option value="">Please choose&hellip;</option>
+          <option value="Trademark Attorney or Solicitor">I am a Trademark Attorney or Solicitor</option>
+          <option value="Independent consultant">Other independent consultant</option>
+        </select>
+      </div>
 
       <label class="fld">What is the main reason for the audit?</label>
       <select id="ff-reason">
@@ -1813,11 +1822,14 @@ function submitFactFind(){
   const g=id=>document.getElementById(id).value;
   logEvent('audit_checkout_factfind','audit_done',{
     account_type:g('ff-who')||null,           /* Account Types — Accounts */
+    rep_role:g('ff-role')||null,              /* Partner Type: Attorney/Solicitor = Representative, consultant = Reseller */
     review_type:g('ff-reason')||null,         /* Review Type — Client Relationships */
     primary_motivation:g('ff-motive')||null,  /* Primary Motivation — Deals */
     enquiry_notes:g('ff-notes').trim()||null  /* what prompted your trademark enquiry — Deals */
   },{});
-  crm('factfind',{account_type:g('ff-who')||'',review_type:g('ff-reason')||'',
+  if(/client I represent/i.test(g('ff-who'))&&!g('ff-role')){
+    const r=document.getElementById('ff-role');r.focus();r.style.borderColor='#b4123f';return;}
+  crm('factfind',{account_type:g('ff-who')||'',rep_role:/client I represent/i.test(g('ff-who'))?g('ff-role'):'',review_type:g('ff-reason')||'',
     primary_motivation:g('ff-motive')||'',enquiry_notes:g('ff-notes').trim()});
   document.getElementById('ff-done').classList.remove('hidden');
 }
