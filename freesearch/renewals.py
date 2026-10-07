@@ -240,12 +240,130 @@ def search(client, q: str, types: list[str] | None = None) -> dict:
             'marks': uniq, 'owners': owners, 'owner': owner, 'failed': failed}
 
 
+# --------------------------------------------------------------------------
+# "View this trademark" and "View all trademarks" (Jonathan, 7 Oct)
+# --------------------------------------------------------------------------
+
+_STATE = {'registered': 'Registered', 'published': 'Published', 'filed': 'Filed',
+          'examination': 'Examination', 'opposed': 'Opposed', 'withdrawn': 'Withdrawn',
+          'refused': 'Refused', 'dead': 'Dead', 'expired': 'Expired', 'removed': 'Removed',
+          'surrendered': 'Surrendered', 'cancelled': 'Cancelled', 'renewed': 'Renewed'}
+
+
+def _addr(a: dict) -> str:
+    a = a or {}
+    parts = [a.get(k) for k in ('care_of', 'premises', 'line_1', 'line_2', 'line_3', 'line_4',
+                                'locality', 'region', 'postcode')]
+    out = ', '.join(_s(p) for p in parts if _s(p))
+    c = _s(a.get('country'))
+    return out + (', ' + c if c and c not in ('GB', 'UK') else '')
+
+
+def mark_detail(client, number: str) -> dict | None:
+    """Everything about one mark EXCEPT the representative (§4.1). Built field
+    by field from an allow-list, so nothing new Temmy adds (contacts, cognism
+    ids, representatives) can leak through by accident."""
+    try:
+        from . import class_headings as ch
+    except ImportError:
+        import class_headings as ch
+    n = _num(number)
+    if not n:
+        return None
+    try:
+        d = client.get_trademark(n)
+    except Exception:
+        d = None
+    if not isinstance(d, dict) or not d.get('application_number'):
+        return None
+    m = d.get('mark') or {}
+    classes = []
+    for c in d.get('nice_class_trademarks') or []:
+        if not isinstance(c, dict) or c.get('removed_on') or c.get('active') is False:
+            continue
+        try:
+            num = int(c.get('number'))
+        except (TypeError, ValueError):
+            continue
+        classes.append({'n': num, 'heading': ch.heading(num),
+                        'spec': _s(c.get('goods_services_description'))})
+    if not classes:
+        classes = [{'n': int(x), 'heading': ch.heading(int(x)), 'spec': ''}
+                   for x in (d.get('classes') or []) if str(x).isdigit()]
+    classes.sort(key=lambda c: c['n'])
+    owners = []
+    for a in d.get('applicants') or []:
+        if not isinstance(a, dict):
+            continue
+        owners.append({'name': _s(a.get('name')), 'ipo_identifier': a.get('ipo_identifier'),
+                       'kind': _s(a.get('kind')), 'company_number': _s(a.get('company_number')),
+                       'country': _s(a.get('incorporation_country_code') or a.get('nationality_code')),
+                       'address': _addr(a.get('address'))})
+    history = []
+    for t in d.get('trademark_transitions') or []:
+        if not isinstance(t, dict) or t.get('removed_on'):
+            continue
+        st = _s(t.get('to_state')).lower()
+        dte = _s((t.get('metadata') or {}).get('date') or t.get('added_on'))[:10]
+        history.append({'state': _STATE.get(st, st.replace('_', ' ').title()), 'date': dte})
+    history.sort(key=lambda h: h['date'], reverse=True)
+    status = _s(d.get('status'))
+    expiry = _s(d.get('expiry_date'))[:10]
+    return {
+        'number': _s(d.get('application_number')),
+        'name': _s(m.get('verbal_element_text')) or '(figurative mark)',
+        'feature': _s(m.get('feature')), 'kind': _s(m.get('kind_mark')),
+        'description': _s(m.get('description')),
+        'image_url': _s(d.get('image_url')),
+        'status': status,
+        'dates': {'filed': _s(d.get('application_date_time'))[:10],
+                  'published': _s(d.get('publication_date'))[:10],
+                  'registered': _s(d.get('registration_date'))[:10],
+                  'expiry': expiry,
+                  'last_updated': _s(d.get('last_updated_on'))[:10]},
+        'band': band(expiry, status),
+        'classes': classes, 'owners': owners, 'history': history,
+        'ukipo_url': 'https://trademarks.ipo.gov.uk/ipo-tmcase/page/Results/1/' + _s(d.get('application_number')),
+    }
+
+
+def portfolio(client, ipo) -> dict | None:
+    owner, marks = _marks_by_owner(client, ipo)
+    if owner is None:
+        return None
+    marks.sort(key=lambda m: (m['band']['order'], m['band'].get('days_to_expiry', 99999)))
+    counts = {}
+    for m in marks:
+        counts[m['band']['key']] = counts.get(m['band']['key'], 0) + 1
+    return {'owner': owner, 'marks': marks, 'counts': counts}
+
+
 def handle(params: dict, client) -> dict:
     raw = params.get('types') or params.get('type') or ''
     if isinstance(raw, list):
         raw = ','.join(raw)
     types = [t.strip() for t in str(raw).split(',') if t.strip()]
     try:
+        action = str(params.get('action', '') or '')
+        if action == 'mark':
+            m = mark_detail(client, str(params.get('number', '')))
+            return {'ok': True, 'status': 200, 'mark': m} if m else \
+                {'ok': False, 'status': 404, 'error': 'We could not find that trademark.'}
+        if action == 'portfolio':
+            ipo, others = params.get('ipo'), []
+            if not ipo and params.get('number'):
+                # "View all trademarks" from a mark: the portfolio of its
+                # (first) owner. Joint owners are offered as switches.
+                m = mark_detail(client, str(params.get('number')))
+                owners = [o for o in (m or {}).get('owners', []) if o.get('ipo_identifier')]
+                if not owners:
+                    return {'ok': False, 'status': 404, 'error': 'We could not find the owner of that trademark.'}
+                ipo, others = owners[0]['ipo_identifier'], owners[1:]
+            p = portfolio(client, ipo)
+            if p:
+                p['other_owners'] = others
+            return {'ok': True, 'status': 200, **p} if p else \
+                {'ok': False, 'status': 404, 'error': 'We could not find that applicant.'}
         return search(client, str(params.get('q', '')), types)
     except Exception as e:                       # degrade loudly, JSON-shaped
         return {'ok': False, 'status': 500, 'error': f'renewal search failed: {e}'}
