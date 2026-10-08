@@ -642,7 +642,7 @@ function openIntl(intl){
   document.getElementById('intl-marks').textContent = (intl.length===1?'Trademark ':'Trademarks ') + names.join(', ');
   const u = new URL('https://bookings.thetrademarkhelpline.com/'); u.searchParams.set('tm', intl.join(',')); u.hash = '/webinitialcall';
   document.getElementById('intl-book').href = u.toString();
-  document.getElementById('intl-other').hidden = selNums().length === intl.length;
+  document.getElementById('intl-other').style.display = selNums().length === intl.length ? 'none' : '';
   document.getElementById('intl').classList.add('on');
 }
 function openMessage(){
