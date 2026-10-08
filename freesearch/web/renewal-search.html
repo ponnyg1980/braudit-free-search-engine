@@ -236,6 +236,20 @@
       <button type="button" data-act="chat">Chat with us</button>
     </div>
   </div>
+  <div class="modal" id="intl" role="dialog" aria-modal="true" aria-labelledby="intl-h">
+    <div class="box">
+      <h3 id="intl-h">A quick call first</h3>
+      <p id="intl-marks" class="hint" style="margin:0 0 10px"></p>
+      <p style="margin:0;line-height:1.55"><b>Note:</b> This is a registration which may have been made as part of a global application.
+        We are able to assist you with this, however we would first need to clarify some simple information to ensure we can advise you correctly.
+        Please schedule a call with one of us. It will only take 5 to 10 minutes of your time to clarify the situation in full.</p>
+      <div class="acts" style="justify-content:flex-end;margin-top:16px">
+        <button type="button" class="btn" id="intl-other" data-act="intl-continue" hidden>Continue with my other marks</button>
+        <button type="button" class="btn" data-act="intl-close">Close</button>
+        <a class="btn pink" id="intl-book" href="https://bookings.thetrademarkhelpline.com/#/webinitialcall" target="_blank" rel="noopener" style="text-decoration:none">Book a call</a>
+      </div>
+    </div>
+  </div>
   <div class="modal" id="msg" role="dialog" aria-modal="true" aria-labelledby="msg-h">
     <div class="box">
       <h3 id="msg-h">Message us about these renewals</h3>
@@ -422,7 +436,16 @@ document.addEventListener('click', function(e){
            history.pushState({view:'search'}, '', u); show({view:'search'}); }
   }
   else if(act==='prio' || act==='list'){ PVIEW = act; drawPortfolio(); }
-  else if(act==='renew') go({view:'renew', nums:selNums().join(',')});
+  else if(act==='renew'){
+    // UK008 = international registration designating the UK (WIPO, not the
+    // UKIPO). Never priced online: a popup asks them to book a call (8 Oct).
+    const intl = selNums().filter(n=>/^UK008/i.test(n));
+    if(intl.length){ openIntl(intl); return; }
+    go({view:'renew', nums:selNums().join(',')});
+  }
+  else if(act==='intl-close') document.getElementById('intl').classList.remove('on');
+  else if(act==='intl-continue'){ document.getElementById('intl').classList.remove('on');
+    go({view:'renew', nums:selNums().filter(n=>!/^UK008/i.test(n)).join(',')}); }
   else if(act==='message') openMessage();
   else if(act==='msg-cancel') document.getElementById('msg').classList.remove('on');
   else if(act==='msg-send') sendMessage();
@@ -614,6 +637,14 @@ function syncActions(){
 /* Message Us: editable box pre-filled with the ticked numbers (§8a).
    NOT YET WIRED to Zoho (note on the Account + Task + copy to the client):
    until it is, Send opens an email to support@ as the fallback the map allows. */
+function openIntl(intl){
+  const names = intl.map(n=>{ const m = selected.get(n)||{}; return n + (m.name?' '+m.name:''); });
+  document.getElementById('intl-marks').textContent = (intl.length===1?'Trademark ':'Trademarks ') + names.join(', ');
+  const u = new URL('https://bookings.thetrademarkhelpline.com/'); u.searchParams.set('tm', intl.join(',')); u.hash = '/webinitialcall';
+  document.getElementById('intl-book').href = u.toString();
+  document.getElementById('intl-other').hidden = selNums().length === intl.length;
+  document.getElementById('intl').classList.add('on');
+}
 function openMessage(){
   document.getElementById('m-text').value = "I'd like to renew: " + selText() + '.';
   document.getElementById('m-err').classList.remove('on');
