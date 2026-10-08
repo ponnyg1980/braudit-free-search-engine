@@ -392,6 +392,12 @@ def quote(client, numbers: list[str]) -> dict:
             skipped.append({'number': num, 'why': 'not found'})
             continue
         b = m['band']
+        if m['number'].upper().startswith('UK008'):
+            # International registration designating the UK: renewed through
+            # WIPO, not the UKIPO, so never priced online (Jonathan, 8 Oct).
+            skipped.append({'number': m['number'], 'name': m['name'], 'why': 'International registration: book a call',
+                            'international': True})
+            continue
         if not b.get('renewable_online'):
             skipped.append({'number': m['number'], 'name': m['name'], 'why': b['label']})
             continue
