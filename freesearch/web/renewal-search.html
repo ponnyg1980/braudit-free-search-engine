@@ -412,9 +412,19 @@ function render(d){
             '<button type="button" data-act="owner" data-ipo="'+esc(o.ipo_identifier)+'">Show trademarks</button></div>').join('')+'</div>', false);
   }
   if(!h){
-    h = '<div class="empty">We couldn’t find anything for “'+esc(d.query)+'”'+
-        (d.types && d.types.length ? ' as a '+d.types.map(t=>LABEL[t].toLowerCase()).join(' or ') : '')+
-        '. Check the spelling, try another search type, or talk to us and we will find it for you.</div>';
+    // Nothing found (9 Oct, Culture Hosts UK00003247289): TemmyDB does not
+    // hold every mark yet, so "not found" must not read as "does not exist".
+    // Offer a call or a message, and record the search so the gap can be backfilled.
+    const isNum = /\d{4,}/.test(d.query||'');
+    NOTFOUND = d.query;
+    h = '<div class="empty"><b>We couldn\u2019t find \u201c'+esc(d.query)+'\u201d on our copy of the register.</b><br>'+
+        (isNum ? 'Our copy of the UK register does not hold every trademark yet, so this does not mean the mark does not exist. '
+               : 'Check the spelling or try another search type. Our copy of the UK register does not hold every trademark yet. ')+
+        'Book a call or send us the details and we will check it for you.'+
+        '<div class="acts" style="margin-top:12px"><a class="btn pink" style="text-decoration:none" target="_blank" rel="noopener" href="'+esc(bookUrl([d.query]))+'">Book a call</a>'+
+        '<button type="button" class="btn" data-act="message-nf">Send us the details</button>'+
+        '<a class="btn" style="text-decoration:none" href="tel:+441618335400">Call 0161 833 5400</a></div></div>';
+    logEvent('renewal_not_found', {query:d.query, types:d.types||[], auto:!!d.auto, looks_like_number:isNum});
   }
   if((d.failed||[]).length) h += '<p class="hint">Part of the search did not complete. Try again in a moment.</p>';
   elOut.innerHTML = h;
@@ -447,6 +457,7 @@ document.addEventListener('click', function(e){
   else if(act==='intl-continue'){ document.getElementById('intl').classList.remove('on');
     go({view:'renew', nums:selNums().filter(n=>!/^UK008/i.test(n)).join(',')}); }
   else if(act==='message') openMessage();
+  else if(act==='message-nf') openMessage('Please check trademark ' + NOTFOUND + ' for me. I could not find it on your renewal search.');
   else if(act==='msg-cancel') document.getElementById('msg').classList.remove('on');
   else if(act==='msg-send') sendMessage();
   else if(act==='chat') openChat();
@@ -623,7 +634,27 @@ function drawPortfolio(){
 
 
 /* ===== ACTIONS ON THE SELECTION (§8a) ===================================== */
-let QUOTE = null, CHOICE = 0;
+let QUOTE = null, CHOICE = 0, NOTFOUND = '';
+function bookUrl(nums){ const u = new URL('https://bookings.thetrademarkhelpline.com/'); if(nums && nums.length) u.searchParams.set('tm', nums.join(',')); u.hash = '/webinitialcall'; return u.toString(); }
+
+/* Visit record (journey_sessions source 'renewal_search'). Minted lazily on the
+   first event, never blocks the page, demo tenant never reaches Zoho. For now
+   only not-found searches are recorded (backfill list); full tracking of
+   ticks and actions comes later (Jonathan, 8 Oct: functionality first). */
+const JOURNEY = P.get('journey') || 'https://jwanlhdmhgmbybcdhvkx.supabase.co/functions/v1/journey';
+let SID = null, SID_P = null;
+function session(){
+  if(SID) return Promise.resolve(SID);
+  if(!SID_P) SID_P = fetch(JOURNEY + '/session/start', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({tenant_id: (P.get('demo')==='1' ? 'demo' : (P.get('tenant')||'tmh')), source:'renewal_search'})})
+    .then(r=>r.json()).then(d=>{ SID = d && d.ok ? d.session_id : null; return SID; }).catch(()=>null);
+  return SID_P;
+}
+function logEvent(type, payload){
+  session().then(sid=>{ if(!sid) return;
+    fetch(JOURNEY + '/session/event', {method:'POST', headers:{'Content-Type':'application/json'}, keepalive:true,
+      body: JSON.stringify({session_id:sid, event_type:type, screen:'renewal_search', payload:payload||{}})}).catch(()=>{}); });
+}
 function selNums(){ return [...selected.keys()]; }
 function selText(){ return [...selected.values()].map(m=>(m.number||'')+(m.name?' '+m.name:'')).join(', '); }
 function money(n){ return '£'+Number(n).toLocaleString('en-GB'); }
@@ -645,8 +676,8 @@ function openIntl(intl){
   document.getElementById('intl-other').style.display = selNums().length === intl.length ? 'none' : '';
   document.getElementById('intl').classList.add('on');
 }
-function openMessage(){
-  document.getElementById('m-text').value = "I'd like to renew: " + selText() + '.';
+function openMessage(text){
+  document.getElementById('m-text').value = text || ("I'd like to renew: " + selText() + '.');
   document.getElementById('m-err').classList.remove('on');
   document.getElementById('msg').classList.add('on');
 }
@@ -654,7 +685,7 @@ function sendMessage(){
   const g = id=>document.getElementById(id).value.trim(), err = document.getElementById('m-err');
   if(!g('m-name') || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(g('m-email'))){ err.textContent='Please add your name and a valid email so we can reply.'; err.classList.add('on'); return; }
   const body = g('m-text') + '\n\n' + g('m-name') + (g('m-phone') ? '\n' + g('m-phone') : '') + '\n' + g('m-email');
-  location.href = 'mailto:support@thetrademarkhelpline.com?subject=' + encodeURIComponent('Trademark renewal: ' + selNums().join(', ')) +
+  location.href = 'mailto:support@thetrademarkhelpline.com?subject=' + encodeURIComponent('Trademark renewal: ' + (selNums().join(', ') || NOTFOUND || '')) +
                   '&body=' + encodeURIComponent(body);
   document.getElementById('msg').classList.remove('on');
 }
