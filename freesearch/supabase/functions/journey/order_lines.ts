@@ -226,6 +226,10 @@ export function xeroDate(v: unknown, fallback: string): string {
 /** What Xero RETURNED -> the Deluge `order_lines` payload. Money values are
  *  Xero's, never recomputed from what was sent; `meta` says what each line
  *  IS. Also returns the three Deal money figures (§9). */
+/** Start of the description-only line that names the accepted Terms of
+ *  Service on the Xero invoice (handover 28 Sep 2026). */
+export const TERMS_LINE_PREFIX = "Terms: ";
+
 export function buildZohoOrder(opts: {
   invoice: XeroInvoiceIn; meta: LineMeta[]; sent: XeroLineOut[];
   vatExempt: boolean; paid: boolean; paidDate: string; today: string;
@@ -235,7 +239,10 @@ export function buildZohoOrder(opts: {
       dealMoney: Record<string, number>; warnings: string[] } {
   const inv = opts.invoice;
   const warnings: string[] = [];
-  const xl = inv.LineItems ?? [];
+  // The description-only Terms line (28 Sep 2026) carries no money and is
+  // not an order line: leave it on the invoice, out of Zoho.
+  const xl = (inv.LineItems ?? []).filter((l) =>
+    !String(l.Description ?? "").startsWith(TERMS_LINE_PREFIX));
   if (xl.length !== opts.meta.length) {
     warnings.push(`Xero returned ${xl.length} lines for ${opts.meta.length} sent`);
   }
