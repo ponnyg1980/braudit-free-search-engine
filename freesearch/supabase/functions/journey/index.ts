@@ -81,10 +81,15 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { accountFor, asTier, buildXeroLines, buildZohoOrder, isForbidden, isWorldwide,
-  type Tier, type XeroInvoiceIn } from "./order_lines.ts";
+  type Tier, type XeroInvoiceIn, TERMS_LINE_PREFIX } from "./order_lines.ts";
 
 const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
   .split(",").map((s) => s.trim()).filter(Boolean);
+// tools.thetrademarkhelpline.com (6 Oct 2026): the search engine's TMH-branded
+// address, so partners never see onrender. Added in code because this token
+// cannot set function secrets; only extends a non-empty list (an empty list
+// already means "allow all").
+if (ALLOWED_ORIGINS.length) ALLOWED_ORIGINS.push("https://tools.thetrademarkhelpline.com");
 const TENANT_ALLOWLIST = new Set(
   (Deno.env.get("TENANT_ALLOWLIST") ?? "tmh").split(",").map((s) => s.trim()),
 );
@@ -96,7 +101,7 @@ const ZOHO_FLOW_URL = Deno.env.get("ZOHO_FLOW_URL") ?? "";
 // Account, never a picklist value). Raw UTMs are ALSO stored on every lead
 // regardless, so an unmapped campaign is never lost.
 const UTM_SOURCE_MAP: Record<string, { source: string; group: string }> = {
-  your_business_magazine: { source: "Your Business", group: "Press Advertising" },
+  your_business_magazine: { source: "Your Business", group: "Press & Advertising" },
 };
 
 // ---------------------------------------------------------------------------
@@ -132,6 +137,7 @@ const XERO_LEAD_SOURCE_OPTIONS = new Set([
 const ZOHO_GROUP_TO_XERO_LEAD_SOURCE: Record<string, string> = {
   // everything that arrived through the website, however it got there
   "Website Forms": "House - Web",
+  "Direct / Unknown": "House - Web",   // website default since the 11 Oct tidy
   "Website Chat": "House - Web",
   "Google Organic": "House - Web",
   "Google Ads": "House - Web",
@@ -152,11 +158,26 @@ const ZOHO_GROUP_TO_XERO_LEAD_SOURCE: Record<string, string> = {
   // Press Advertising, Other.
 };
 
+// STAFF CONSULTANT (Jonathan, 5 Oct 2026: "Consultant is not logged on the Xero
+// invoice record"). The staff member who placed the order, by login email, mapped
+// to the Consultant options that exist in Xero today (checked 5 Oct: Alex, Jon,
+// Martin, Matt, Steve, Web). Saad, Kayleigh and Laura have no Xero option yet --
+// add one in Xero and a line here; until then their orders stay untracked rather
+// than guessed.
+const STAFF_XERO_CONSULTANT: Record<string, string> = {
+  "alex@thetrademarkhelpline.com": "Alex",
+  "jon@thetrademarkhelpline.com": "Jon",
+  "matt@thetrademarkhelpline.com": "Matt",
+};
 /** Tracking to stamp on every line of an invoice, or [] when we cannot say. */
-function xeroTracking(isClientOrder: boolean, zohoGroup: string):
+function xeroTracking(isClientOrder: boolean, zohoGroup: string, staffEmail = ""):
     { Name: string; Option: string }[] {
   const out: { Name: string; Option: string }[] = [];
   if (isClientOrder) out.push({ Name: "Consultant", Option: "Web" });
+  else {
+    const c = STAFF_XERO_CONSULTANT[staffEmail.trim().toLowerCase()];
+    if (c) out.push({ Name: "Consultant", Option: c });
+  }
   const ls = ZOHO_GROUP_TO_XERO_LEAD_SOURCE[zohoGroup];
   if (ls && XERO_LEAD_SOURCE_OPTIONS.has(ls)) {
     out.push({ Name: "Lead Source", Option: ls });
@@ -275,6 +296,34 @@ function pick(src: Record<string, unknown>, allow: Set<string>) {
   return out;
 }
 
+// Terms of Service accepted for a session (handover 28 Sep 2026), shaped for
+// order_complete. The latest acceptance wins (a re-priced order re-renders).
+// Returns {} when none is recorded, so older sessions pass through unchanged.
+async function termsFields(sid: string): Promise<Record<string, unknown>> {
+  try {
+    const { data } = await admin.from("terms_acceptances")
+      .select("id, document, accepted_at, turnaround_days, jurisdictions, buying_as_consumer, consumer_consent_at")
+      .eq("session_id", sid).order("accepted_at", { ascending: false }).limit(1);
+    const t = data?.[0];
+    if (!t) return {};
+    const iso = (v: unknown) => v
+      ? new Date(String(v)).toISOString().replace(/\.\d{3}Z$/, "+00:00") : undefined;
+    return {
+      terms_accepted: t.document,
+      terms_accepted_at: iso(t.accepted_at),
+      terms_copy_url: "https://braudit-free-search.onrender.com/terms/accepted?id=" + t.id,
+      turnaround_days: t.turnaround_days,
+      terms_jurisdictions: Array.isArray(t.jurisdictions) && t.jurisdictions.length
+        ? (t.jurisdictions as string[]).join(";") : undefined,
+      buying_as_consumer: t.buying_as_consumer === null ? undefined
+        : (t.buying_as_consumer ? "true" : "false"),
+      consumer_consent_at: iso(t.consumer_consent_at),
+    };
+  } catch (_e) {
+    return {};
+  }
+}
+
 // Fire-and-forget POST — never awaited by the caller's response, never
 // throws. Same contract as tmh_report_lead()'s wp_remote_post calls: the
 // browser's own request must never hang or fail because a downstream system
@@ -293,7 +342,7 @@ function fireAndForget(url: string, body: Record<string, unknown>) {
   if (!target) return; // genuinely not configured — a deliberate no-op
   const p = fetch(target, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(stripLong(body)),
   }).then((r) => {
     if (!r.ok) console.error("zoho push failed:", r.status);
   }).catch((e) => console.error("zoho push error:", (e as Error).message));
@@ -562,7 +611,69 @@ function fmtTerms(input: unknown): string {
     if (seen.has(k)) continue;
     seen.add(k); out.push(t);
   }
-  return out.join("; ").slice(0, 30000);
+  // Never cut (7 Oct 2026). The .slice(0, 30000) that stood here silently dropped the
+  // end of long specifications (Elite Limited class 42 kept 30,000 of 120,698).
+  // Over-long classes leave here whole; stripLong() at the Zoho boundary sends
+  // part 1 and the audit engine writes the continuation rows.
+  return out.join("; ");
+}
+
+// --- LONG CLASSES (Jonathan, 7 Oct 2026) -----------------------------------
+// Zoho holds 32,000 characters per Specific_Terms; whole-class specifications
+// run to 180,000. Approved structure: continuation rows on the class block
+// (Part_Number / Part_Count). Deluge writes what fits - part 1, cut only
+// between terms - and the full list is stored here and handed to the audit
+// engine (POST /scope-long), which rewrites that class as parts 1..n. The
+// engine READS the text back from GET /scope-long, so nothing it writes can
+// come from anywhere but this database.
+const PART_MAX = 30000;
+const AUDIT_ENGINE = Deno.env.get("AUDIT_ENGINE_URL") ?? "https://audit.thetrademarkhelpline.com";
+function firstPart(t: string): string {
+  if (t.length <= PART_MAX) return t;
+  // parts keep their trailing ";" and are joined with a space (uk_monitor/terms_parts.py)
+  const cut = t.lastIndexOf(";", PART_MAX - 1);
+  return (cut > 0 ? t.slice(0, cut + 1) : t.slice(0, PART_MAX)).trim();
+}
+function stripLong(body: Record<string, unknown>): Record<string, unknown> {
+  const long: { n: number; full: string }[] = [];
+  let sid = "", dealId = "", leadId = "";
+  const walk = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === "object") {
+      const o: Record<string, unknown> = {};
+      for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+        if (k === "session_id" && typeof x === "string" && !sid) sid = x;
+        if (k === "zoho_deal_id" && x && !dealId) dealId = String(x);
+        if (k === "zoho_lead_id" && x && !leadId) leadId = String(x);
+        o[k] = walk(x);
+      }
+      const tt = o.terms_text;
+      if (typeof tt === "string" && tt.length > PART_MAX) {
+        long.push({ n: Number(o.n), full: tt });
+        o.terms_text = firstPart(tt);
+      }
+      return o;
+    }
+    return v;
+  };
+  const out = walk(body) as Record<string, unknown>;
+  if (long.length && sid) {
+    const p = (async () => {
+      await admin.from("journey_events").insert({ session_id: sid, event_type: "scope_long",
+        payload: { classes: long, zoho_deal_id: dealId || undefined, zoho_lead_id: leadId || undefined } });
+      const r = await fetch(AUDIT_ENGINE + "/scope-long", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sid }) });
+      if (!r.ok) console.error("scope-long handoff failed:", r.status);
+    })().catch((e) => console.error("scope-long error:", (e as Error).message));
+    try {
+      // deno-lint-ignore no-explicit-any
+      (globalThis as any).EdgeRuntime?.waitUntil?.(p);
+    } catch (_e) { /* best effort */ }
+  } else if (long.length) {
+    console.error("long class with no session id - part 1 only written", long.map((x) => x.n));
+  }
+  return out;
 }
 
 function zohoScopeBlock(session: Record<string, unknown>) {
@@ -645,14 +756,14 @@ function zohoScopeBlock(session: Record<string, unknown>) {
 // through the payload so the Deluge upsert can attach it to the "your
 // classes & terms" email. Built HERE because Deluge string literals cannot
 // express newlines; real \r\n survives JSON -> toMap().
+// Classes ONLY since 2 Oct 2026 (Jonathan: "We do not want to display terms
+// to clients, only classes"). The terms still reach Zoho on the scope asset as
+// Draft, for a TMH team member to check; the client approves them later in the
+// trademark application draft.
 function classCsv(scope: { classes?: { n: number; label: string; terms?: string[] }[] }): string {
   const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const lines = ["Class,Description,Term"];
-  for (const c of scope.classes ?? []) {
-    const terms = c.terms ?? [];
-    if (!terms.length) lines.push([esc(c.n), esc(c.label), '""'].join(","));
-    for (const t of terms) lines.push([esc(c.n), esc(c.label), esc(t)].join(","));
-  }
+  const lines = ["Class,Description"];
+  for (const c of scope.classes ?? []) lines.push([esc(c.n), esc(c.label)].join(","));
   return lines.join("\r\n");
 }
 
@@ -818,7 +929,11 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
     Lead_Source: utmCampaignMap ? utmCampaignMap.source
       : session.source === "quick_search" ? "Quick Search"
       : session.source === "class_tools" ? "Class Tools" : "Free Search",
-    Lead_Source_Group: utmCampaignMap ? utmCampaignMap.group : "Website Forms",
+    // Lead flow build (12 Oct 2026): "Website Forms" is a RETIRED Source Group
+    // value (picklist tidy 11 Oct). Only a mapped campaign sets the group;
+    // otherwise it is left empty and FN-1 source_resolve fills it from the
+    // referrer / landing URL. Never send a value that is not on the live list.
+    Lead_Source_Group: utmCampaignMap ? utmCampaignMap.group : undefined,
     UTM_Source: utmSource || undefined,
     UTM_Medium: String(utm.medium ?? "").trim() || undefined,
     UTM_Campaign: String(utm.campaign ?? "").trim() || undefined,
@@ -844,6 +959,40 @@ function zohoLeadFields(session: Record<string, unknown>, sessionId: string) {
 // site into resolution — same mistake the spec explicitly warns against —
 // so this mapping is deliberately explicit, not a generic "grab whatever's
 // in class_source.value".
+// PARTNER REF CODE (A7a, 3 Oct 2026 -- handoffs/PARTNER_PAGES_FOR_SEARCH_BUILDER
+// §2, INTRODUCER_ZOHO_BUILD_SPEC §7). The page logs ?ref= as a
+// partner_ref_captured event; the EARLIEST one on the session wins (first
+// touch). Normalised exactly as the spec says -- trim, lowercase, a-z 0-9 and
+// '-' only, 20 chars (Leads/Deals.Partner_Ref_Code_Used is text 20) -- and
+// NEVER validated against the partner list: Zoho's resolve function decides
+// whether it is a live partner. Absent = "" (callers send nothing, never a
+// default partner).
+function normRef(raw: unknown): string {
+  return String(raw ?? "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 20);
+}
+// rid (3 Oct): a brand audit opened straight from a partner's own site has no
+// search session, so partner-ref.js records the code against the REQUEST.
+// The session's code wins when both exist (it is the earlier touch).
+async function earliestRef(sid: string, rid = ""): Promise<string> {
+  for (const [col, val] of [["session_id", sid], ["request_id", rid]] as const) {
+    if (!val) continue;
+    try {
+      const { data } = await admin.from("journey_events").select("payload")
+        .eq(col, val).eq("event_type", "partner_ref_captured")
+        .order("created_at", { ascending: true }).limit(1);
+      const c = normRef((data?.[0]?.payload as Record<string, unknown>)?.code);
+      if (c) return c;
+    } catch (_e) { /* next */ }
+  }
+  return "";
+}
+// Spread into a Lead's zoho_fields. Only ever ADDS the field; the Deluge
+// upsert keeps an existing Lead's value (first touch wins across sessions).
+async function partnerRefField(sid: string, rid = ""): Promise<Record<string, string>> {
+  const code = await earliestRef(sid, rid);
+  return code ? { Partner_Ref_Code_Used: code } : {};
+}
+
 async function runEnrichment(session: Record<string, unknown>):
     Promise<{ found: boolean; engineResult: Record<string, unknown> }> {
   const session_id = String(session.session_id);
@@ -921,7 +1070,8 @@ serve(async (req) => {
     const { error } = await admin.from("journey_sessions").insert({
       session_id,
       tenant_id: tenant,
-      source: ["brand_audit_direct", "quick_search", "class_tools"].includes(String(body.source))
+      // renewal_search (9 Oct): the login-free Renewal Search logs its own visits.
+      source: ["brand_audit_direct", "quick_search", "class_tools", "renewal_search"].includes(String(body.source))
         ? String(body.source) : "free_search",
       name: body.name ?? null,
       trading_name: body.trading_name ?? null,
@@ -1031,6 +1181,7 @@ serve(async (req) => {
           trading_now: session.trading_now, planning_to_trade: session.planning_to_trade,
           // Zoho-ready: Flow maps this object straight into the Leads upsert.
           zoho_fields: { ...zohoLeadFields(session, session_id),
+            ...(await partnerRefField(session_id)),
             Brand_Audit_Link: await auditLink(session_id),
             // Staff launch-audit link (Jonathan, 9 Sep): opens the STAFF
             // enquiry form on this same session — search data pre-filled,
@@ -1078,6 +1229,7 @@ serve(async (req) => {
             lead_source_hint: "Search Result Only",
             zoho_fields: {
               ...zohoLeadFields(session, session_id),
+              ...(await partnerRefField(session_id)),
               // A found contact, not a given one: different source value (an
               // existing picklist entry for exactly this shape), Email_Source
               // Resolver, and the consent basis stays Legitimate Interests —
@@ -1138,6 +1290,27 @@ serve(async (req) => {
   }
 
   // --- session (GET) ---------------------------------------------------------------
+  // The full text of this session's long classes, for the audit engine to write
+  // as continuation rows. Public like /session (a session id is a UUID).
+  if (req.method === "GET" && path === "/scope-long") {
+    const id = url.searchParams.get("id");
+    if (!id) return json({ ok: false, error: "id required" }, 400, origin);
+    const { data } = await admin.from("journey_events").select("payload, created_at")
+      .eq("session_id", id).eq("event_type", "scope_long")
+      .order("created_at", { ascending: false }).limit(20);
+    const latest: Record<string, string> = {};
+    let deal = "", lead = "";
+    for (const e of data ?? []) {
+      const pl = (e.payload ?? {}) as Record<string, unknown>;
+      if (!deal && pl.zoho_deal_id) deal = String(pl.zoho_deal_id);
+      if (!lead && pl.zoho_lead_id) lead = String(pl.zoho_lead_id);
+      for (const c of (Array.isArray(pl.classes) ? pl.classes : []) as { n: number; full: string }[]) {
+        if (!(String(c.n) in latest)) latest[String(c.n)] = c.full;
+      }
+    }
+    return json({ ok: true, classes: latest, zoho_deal_id: deal || null, zoho_lead_id: lead || null }, 200, origin);
+  }
+
   if (req.method === "GET" && path === "/session") {
     const id = url.searchParams.get("id");
     if (!id) return json({ ok: false, error: "id required" }, 400, origin);
@@ -1490,6 +1663,7 @@ serve(async (req) => {
         zoho_fields: {
           ...zohoLeadFields(reqRow as Record<string, unknown>,
                             String(reqRow.session_id ?? request_id)),
+          ...(await partnerRefField(String(reqRow.session_id ?? ""), request_id)),
           Lead_Source: "Request Brand Audit Website Form",
           Email_Source: "Report Form",
         },
@@ -1550,6 +1724,7 @@ serve(async (req) => {
         lead_source_hint: "Search Result Only",
         zoho_fields: {
           ...zohoLeadFields(session, session_id),
+          ...(await partnerRefField(session_id)),
           // A found contact, not a given one: different source value (an
           // existing picklist entry for exactly this shape), Email_Source
           // Resolver, and the consent basis stays Legitimate Interests —
@@ -1641,7 +1816,7 @@ serve(async (req) => {
     try {
       const r = await fetch(ZOHO_CHECKOUT_URL, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(stripLong(payload)),
       });
       const text = await r.text();
       // Zoho wraps the function's return value twice: an envelope, whose
@@ -1747,6 +1922,8 @@ serve(async (req) => {
   const XERO_SCOPES =
     "accounting.contacts accounting.invoices accounting.payments";
 
+  let lastXeroError = "";
+  let xeroCaller = "";            // set by each /xero/* route from the request's "caller" field
   async function xeroAccessToken(): Promise<string | null> {
     const cid = (Deno.env.get("XERO_CLIENT_ID") ?? "").trim();
     const sec = (Deno.env.get("XERO_CLIENT_SECRET") ?? "").trim();
@@ -1780,7 +1957,8 @@ serve(async (req) => {
   async function xeroApi(path: string, method: string, body?: unknown,
                          idem?: string): Promise<{ ok: boolean; data: unknown }> {
     const at = await xeroAccessToken();
-    if (!at) return { ok: false, data: "xero not configured" };
+    if (!at) { lastXeroError = "Xero token refused (client credentials)"; console.log("[xero] " + lastXeroError);
+               return { ok: false, data: "xero not configured" }; }
     const headers: Record<string, string> = {
       "Authorization": "Bearer " + at,
       "Accept": "application/json",
@@ -1792,6 +1970,24 @@ serve(async (req) => {
     });
     let data: unknown = null;
     try { data = await res.json(); } catch (_e) { /* empty body */ }
+    // Per-caller log (Jonathan, 10 Oct 2026): every Xero call, who asked, and what Xero says is left today.
+    // A day_remaining drop bigger than our own logged calls = something else using the same Xero app.
+    try {
+      const n = (h: string) => { const v = res.headers.get(h); return v === null || v === "" ? null : Number(v); };
+      await admin.from("xero_call_log").insert({
+        route: url.pathname.replace(/^\/journey/, "") || "/", caller: xeroCaller.slice(0, 120) || null,
+        method, xero_path: path.split("?")[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, ":id").slice(0, 120),
+        status: res.status, day_remaining: n("X-DayLimit-Remaining"), minute_remaining: n("X-MinLimit-Remaining"),
+        detail: res.ok ? null : (res.headers.get("X-Rate-Limit-Problem") ?? null),
+      });
+    } catch (_e) { /* logging must never break billing */ }
+    if (!res.ok) {
+      // say WHY in the logs and to the caller (10 Oct: every lookup failed from 14:51 with no reason shown)
+      const d = data as Record<string, unknown> | null;
+      lastXeroError = `Xero ${res.status}${res.headers.get("X-Rate-Limit-Problem") ? " rate limit (" + res.headers.get("X-Rate-Limit-Problem") + ", retry after " + (res.headers.get("Retry-After") ?? "?") + "s, day remaining " + (res.headers.get("X-DayLimit-Remaining") ?? "?") + ")" : ""}: ` +
+        String(d?.Detail ?? d?.Message ?? d?.Title ?? (typeof data === "string" ? data : "")).slice(0, 200);
+      console.log(`[xero] ${method} ${path.split("?")[0]} -> ${lastXeroError}`);
+    }
     return { ok: res.ok, data };
   }
 
@@ -1806,15 +2002,8 @@ serve(async (req) => {
   // Quick Audit's register layers, else the client wizard's trading answers.
   // api.py prices the charge with THIS answer and the invoice reuses it, so
   // what is charged and what is invoiced cannot disagree.
-  async function earliestRef(sid: string): Promise<string> {
-    try {
-      const { data } = await admin.from("journey_events").select("payload")
-        .eq("session_id", sid).eq("event_type", "partner_ref_captured")
-        .order("created_at", { ascending: true }).limit(1);
-      const code = String((data?.[0]?.payload as Record<string, unknown>)?.code ?? "").trim();
-      return /^[A-Za-z0-9_-]{2,40}$/.test(code) ? code : "";
-    } catch (_e) { return ""; }
-  }
+  // earliestRef() lives at module level (above runEnrichment) since 3 Oct --
+  // the Lead pushes need it too.
   function orderWorldwide(sess: Record<string, unknown> | null,
                           enq: Record<string, unknown> | null): boolean {
     if (enq) {
@@ -1872,9 +2061,68 @@ serve(async (req) => {
   if (req.method === "POST" && path === "/pricing/tier") {
     const body = await readJson(req);
     if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
     const sid = String(body?.session_id ?? "").trim();
     if (!sid) return json({ ok: false, error: "session_id required" }, 400, origin);
     return json({ ok: true, ...(await resolveTier(sid)) }, 200, origin);
+  }
+
+  // POST /terms/record -- engine-authenticated. api.py renders the Clearance
+  // Audit terms with THIS order's values and records the exact copy here
+  // before any payment is taken (Terms of Service handover, 28 Sep 2026).
+  // Idempotent on (session_id, sha256): a retry returns the same row.
+  if (req.method === "POST" && path === "/terms/record") {
+    const b = await readJson(req);
+    if (!xeroKeyOk(b)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    const sid = String(b?.session_id ?? "").trim();
+    const sha = String(b?.sha256 ?? "").trim();
+    const htm = String(b?.rendered_html ?? "");
+    if (!sid || !/^[0-9a-f]{64}$/.test(sha) || !htm) {
+      return json({ ok: false, error: "session_id, sha256 and rendered_html required" }, 400, origin);
+    }
+    const arr = (v: unknown) => Array.isArray(v) ? v.map(String) : [];
+    const row = {
+      session_id: sid, document: String(b?.document ?? ""), version: String(b?.version ?? ""),
+      sha256: sha, rendered_html: htm,
+      turnaround_days: Number(b?.turnaround_days ?? 5),
+      worldwide: Boolean(b?.worldwide),
+      jurisdictions: arr(b?.jurisdictions),
+      current_jurisdictions: arr(b?.current_jurisdictions),
+      planning_jurisdictions: arr(b?.planning_jurisdictions),
+      buying_as_consumer: b?.buying_as_consumer == null ? null : Boolean(b?.buying_as_consumer),
+      consumer_consent_at: b?.consumer_consent_at ? String(b.consumer_consent_at) : null,
+      accepted_at: String(b?.accepted_at ?? new Date().toISOString()),
+      accepted_by: String(b?.accepted_by ?? "client"),
+      source: String(b?.source ?? "client_checkout"),
+    };
+    const { data: had } = await admin.from("terms_acceptances").select("id")
+      .eq("session_id", sid).eq("sha256", sha).limit(1);
+    let id = String(had?.[0]?.id ?? "");
+    if (!id) {
+      const { data: ins, error } = await admin.from("terms_acceptances")
+        .insert(row).select("id").single();
+      if (error) return json({ ok: false, error: error.message }, 500, origin);
+      id = String(ins?.id ?? "");
+      await admin.from("journey_events").insert({ session_id: sid,
+        event_type: "terms_accepted", payload: { id, document: row.document,
+          sha256: sha, turnaround_days: row.turnaround_days,
+          jurisdictions: row.jurisdictions, buying_as_consumer: row.buying_as_consumer,
+          accepted_by: row.accepted_by, source: row.source } });
+    }
+    return json({ ok: true, id }, 200, origin);
+  }
+
+  // GET /terms/copy?id=<uuid> -- the copy the client accepted, exactly as
+  // stored. The uuid is the capability (unguessable), as for /report/<id>.
+  if (req.method === "GET" && path === "/terms/copy") {
+    const id = String(url.searchParams.get("id") ?? "").trim();
+    if (!/^[0-9a-f-]{36}$/.test(id)) return json({ ok: false, error: "bad id" }, 400, origin);
+    const { data } = await admin.from("terms_acceptances")
+      .select("rendered_html, document, accepted_at").eq("id", id).limit(1);
+    const r = data?.[0];
+    if (!r) return json({ ok: false, error: "not found" }, 404, origin);
+    return json({ ok: true, html: r.rendered_html, document: r.document,
+                  accepted_at: r.accepted_at }, 200, origin);
   }
 
   // POST /xero/connect — health probe. The custom connection needs no
@@ -1883,10 +2131,36 @@ serve(async (req) => {
   if (req.method === "POST" && path === "/xero/connect") {
     const body = await readJson(req);
     if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
     const probe = await xeroApi("/Contacts?page=1&pageSize=1", "GET");
     return json({ ok: probe.ok,
                   error: probe.ok ? undefined : String(probe.data).slice(0, 200) },
                 probe.ok ? 200 : 502, origin);
+  }
+
+  // POST /xero/usage {key, hours?} — read-only: our Xero calls by route/caller over the window, plus
+  // Xero's own "left today" figure, so we can see whether another app is eating the shared limit.
+  if (req.method === "POST" && path === "/xero/usage") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    const hours = Math.min(48, Math.max(1, Number(body?.hours ?? 24)));
+    const since = new Date(Date.now() - hours * 3600_000).toISOString();
+    const { data: rows } = await admin.from("xero_call_log")
+      .select("at,route,caller,status,day_remaining").gte("at", since).order("at", { ascending: true }).limit(20000);
+    const by: Record<string, { calls: number; failed: number }> = {};
+    for (const r of rows ?? []) {
+      const k = `${r.route} | ${r.caller ?? "-"}`;
+      by[k] = by[k] ?? { calls: 0, failed: 0 };
+      by[k].calls++; if (Number(r.status) >= 400) by[k].failed++;
+    }
+    const withRem = (rows ?? []).filter((r) => r.day_remaining !== null);
+    const first = withRem[0], last = withRem[withRem.length - 1];
+    const ours = first && last ? withRem.filter((r) => r.at > first.at && r.at <= last.at).length : 0;
+    const used = first && last ? Number(first.day_remaining) - Number(last.day_remaining) : null;
+    return json({ ok: true, hours, our_calls: (rows ?? []).length, by_caller: by,
+                  day_remaining_now: last?.day_remaining ?? null,
+                  xero_used_between_first_and_last: used, ours_in_that_span: ours,
+                  others_in_that_span: used === null ? null : Math.max(0, used - ours) }, 200, origin);
   }
 
   // POST /xero/process — raise the invoice for one session's order.
@@ -1895,6 +2169,7 @@ serve(async (req) => {
   if (req.method === "POST" && path === "/xero/process") {
     const body = await readJson(req);
     if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
     const sid = String(body?.session_id ?? "").trim();
     const kind = String(body?.kind ?? "") === "invoice" ? "invoice" : "paid";
     if (!sid) return json({ ok: false, error: "session_id required" }, 400, origin);
@@ -2096,8 +2371,11 @@ serve(async (req) => {
     {
       const utmX = ((lrX.utm ?? {}) as Record<string, unknown>);
       const utmSrcX = String(utmX.source ?? "").trim().toLowerCase();
-      const grp = UTM_SOURCE_MAP[utmSrcX]?.group ?? "Website Forms";
-      const tracking = xeroTracking(!enqX, grp);
+      // Staff orders: the Lead Source Group the staff member chose on the form
+      // (5 Oct 2026), not the website default.
+      const enqLsg = String((enqX?.leadSource ?? "") as string).trim();
+      const grp = (enqX && enqLsg) ? enqLsg : (UTM_SOURCE_MAP[utmSrcX]?.group ?? "Direct / Unknown");
+      const tracking = xeroTracking(!enqX, grp, String(p.staff_email ?? ""));
       if (tracking.length) for (const it of items) it.Tracking = tracking;
       else {
         await admin.from("journey_events").insert({ session_id: sid,
@@ -2107,6 +2385,24 @@ serve(async (req) => {
       }
     }
 
+    // TERMS OF SERVICE on the invoice (Jonathan, 28 Sep 2026: "just add to the
+    // Xero invoices, they are there anyway"). A description-only line: no
+    // amount, no account, no tracking, and buildZohoOrder leaves it out of the
+    // Zoho Order. Only when a copy was recorded for this order.
+    {
+      const tf = await termsFields(sid);
+      if (tf.terms_copy_url) {
+        const when = tf.terms_accepted_at
+          ? new Date(String(tf.terms_accepted_at)).toLocaleDateString("en-GB",
+              { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" })
+          : "";
+        items.push({ Description: TERMS_LINE_PREFIX + String(tf.terms_accepted)
+          .replace(" ToS ", " Terms of Service ")
+          + (when ? ", accepted " + when : "") + ". Your copy: " + String(tf.terms_copy_url)
+          + ". These sit alongside our general Terms and Conditions of Service: "
+          + "https://www.thetrademarkhelpline.com/terms-and-conditions/" });
+      }
+    }
     const inv: Record<string, unknown> = {
       Type: "ACCREC", Status: "AUTHORISED",
       Contact: { ContactID: contactId },
@@ -2319,6 +2615,9 @@ serve(async (req) => {
         const searchTypes = hasImage ? "word;image" : "word";
         fireAndForget(ZOHO_CHECKOUT_URL, {
           stage: "order_complete", session_id: sid, kind,
+          // Terms of Service accepted at order (28 Sep 2026) -> Deal fields,
+          // turnaround N for Audit_Deadline on approval.
+          ...(await termsFields(sid)),
           search_types: searchTypes,
           zoho_deal_id: String(zids?.deal_id ?? ""),
           zoho_contact_id: String(link2.contact_id ?? ""),
@@ -2351,12 +2650,30 @@ serve(async (req) => {
           // Scope_Responsibility. Read from the STORED enquiry, the same
           // source _staff_gate reads for G-03, so the Deal and the gate can
           // never disagree about who is picking the classes.
+          // TERMS APPROVAL (Jonathan, 2 Oct 2026): a staff member ticked "terms
+          // checked and approved" on the stored enquiry -> scope asset
+          // Terms_Status = Approved by TMH. Absent -> Draft (research waits).
+          terms_approved_by: (() => {
+            const ta = ((enq2 as Record<string, unknown>)?.termsApproval ?? {}) as Record<string, unknown>;
+            return ta.approved === true ? String(p.staff_email || ta.by || "staff") : undefined;
+          })(),
           scope_responsibility: (() => {
             const r = String((enq2 as Record<string, unknown>)?.scopeResp ?? "client");
             return { client: "Client supplied",
                      tmh_all: "TMH to pick classes and terms",
                      tmh_terms: "TMH to pick terms" }[r] ?? "Client supplied";
           })(),
+          // Billing account guard (25 Sep 2026): the name the Xero contact was
+          // raised under. order_complete finds or creates the Deal's Account
+          // from it when the order names none, and holds the Deal otherwise.
+          billing_entity: String(p.billing_entity ?? "").trim() || undefined,
+          // SJ-1/SJ-2 (25 Sep 2026): Deals.Payment_Method. Card only when Stripe
+          // took it; an invoice is a bank transfer (there is no DD option on
+          // the forms); a staff-recorded payment captures no method, so none
+          // is written rather than a guess.
+          now: new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00"),
+          payment_method: kind === "invoice" ? "Invoice - bank transfer"
+            : (p.stripe_session || p.payment_intent ? "Card - one-off (Stripe)" : undefined),
           billing_kind: String(billX.kind ?? ""),
           company_number: String(billX.company_number ?? ""),
           billing_addr1: String(billX.addr1 ?? billX.addr ?? ""),
@@ -2434,6 +2751,368 @@ serve(async (req) => {
                 200, origin);
   }
 
+  // ======================= ORDER BILLING (Jonathan, 8 Oct 2026) =============
+  // "progress from Quote/Proposal, to order/deals/single invoice" -- approved
+  // "approved and emailed like online checkout". The audit app (droplet) builds
+  // the lines from the Zoho Order and calls these with the shared key; this
+  // function stays the ONE Xero writer. Rules carried over from /xero/process:
+  // never 608/609/610 on a line, never write Xero contact persons (the billing
+  // person goes on the contact's main FirstName/LastName/EmailAddress), tracking
+  // on every line, Simple Invoice theme, emailed.
+  //
+  // NEW CONTACTS ARE NEVER CREATED SILENTLY (Jonathan, 8 Oct: "Must not create
+  // new accounts without quick, note to say this is a new account"): with no
+  // match the call returns needs_confirm, and the page shows the warning; only
+  // a second call with allow_create=true creates it.
+  type XC = { ContactID: string; Name?: string; EmailAddress?: string };
+  async function findOrderContact(c: Record<string, unknown>):
+      Promise<{ contact: XC | null; matched_by: string; failed?: string }> {
+    // 10 Oct 2026: a FAILED lookup (rate limit, outage) must never read as "not in Xero" - that would
+    // create a duplicate contact. Any failure stops the search and is reported.
+    let failed = "";
+    const one = async (where: string) => {
+      if (failed) return null;
+      const q = await xeroApi(`/Contacts?where=${encodeURIComponent(where)}`, "GET");
+      if (!q.ok) { failed = lastXeroError || "Xero contact lookup failed"; return null; }
+      const hits = (q.data as { Contacts?: (XC & { ContactStatus?: string })[] })?.Contacts ?? [];
+      return hits.find((h) => h.ContactStatus !== "ARCHIVED") ?? null;
+    };
+    const id = String(c.xero_contact_id ?? "").trim();
+    if (/^[0-9a-f-]{36}$/i.test(id)) {
+      const q = await xeroApi(`/Contacts/${id}`, "GET");
+      const h = (q.data as { Contacts?: XC[] })?.Contacts?.[0];
+      if (q.ok && h) return { contact: h, matched_by: "account" };
+      if (!q.ok && !/^Xero 404/.test(lastXeroError)) return { contact: null, matched_by: "", failed: lastXeroError };
+    }
+    const email = String(c.email ?? "").trim().replace(/"/g, "");
+    if (email) { const h = await one(`EmailAddress=="${email}"`); if (h) return { contact: h, matched_by: "email" }; }
+    const coNo = String(c.company_number ?? "").replace(/\s+/g, "").toUpperCase().replace(/"/g, "");
+    if (coNo) { const h = await one(`CompanyNumber=="${coNo}"`); if (h) return { contact: h, matched_by: "company_number" }; }
+    const name = String(c.name ?? "").trim().replace(/"/g, "");
+    if (name) { const h = await one(`Name=="${name}"`); if (h) return { contact: h, matched_by: "name" }; }
+    return { contact: null, matched_by: "", failed: failed || undefined };
+  }
+
+  // POST /xero/order
+  //   {key, order_id, reference, mode: "check"|"raise", allow_create?, set_person?,
+  //    contact:{xero_contact_id?, name, email, first?, last?, company_number?, address?},
+  //    lines:[{Description, Quantity, UnitAmount, AccountCode, TaxType, ItemCode?}],
+  //    date?, due_date?, staff_email?, lead_source_group?, email_invoice?}
+  // check -> which Xero contact would be used (read only).
+  // raise -> AUTHORISED invoice, emailed; returns ids + LineItemIDs in line order.
+  if (req.method === "POST" && path === "/xero/order") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
+    // mode "statuses": read-only - status and amounts for up to 50 invoices in ONE Xero call.
+    // 10 Oct: the paid check made one call per invoice every 30 min and helped exhaust the
+    // 5,000/day Xero limit shared by every TMH Xero job. Stops at once on a 429.
+    if (String(body?.mode ?? "") === "statuses") {
+      const ids = (Array.isArray(body?.invoice_ids) ? body.invoice_ids : []).map((x: unknown) => String(x).trim())
+        .filter((x: string) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 50);
+      if (!ids.length) return json({ ok: false, error: "invoice_ids required" }, 400, origin);
+      const g = await xeroApi(`/Invoices?IDs=${ids.join(",")}&summaryOnly=true`, "GET");
+      if (!g.ok) return json({ ok: false, error: "Xero lookup failed", xero: lastXeroError }, 502, origin);
+      const inv = (g.data as { Invoices?: (XeroInvoiceIn & { InvoiceID?: string; Status?: string; AmountPaid?: number;
+        AmountDue?: number; AmountCredited?: number; FullyPaidOnDate?: string; InvoiceNumber?: string })[] })?.Invoices ?? [];
+      const out: Record<string, unknown> = {};
+      for (const i of inv) {
+        const fp = String(i.FullyPaidOnDate ?? "").match(/\/Date\((\d+)/);
+        out[String(i.InvoiceID)] = { status: i.Status, invoice_number: i.InvoiceNumber,
+          amount_paid: i.AmountPaid ?? 0, amount_due: i.AmountDue ?? 0, amount_credited: i.AmountCredited ?? 0,
+          fully_paid_on: fp ? new Date(Number(fp[1])).toISOString().slice(0, 10) : null };
+      }
+      return json({ ok: true, invoices: out }, 200, origin);
+    }
+    // mode "link": read-only - the pay-online link and status for an invoice already raised (resend).
+    if (String(body?.mode ?? "") === "link") {
+      const iid = String(body?.invoice_id ?? "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(iid)) return json({ ok: false, error: "invoice_id required" }, 400, origin);
+      const g = await xeroApi(`/Invoices/${iid}`, "GET");
+      const cur = (g.data as { Invoices?: (XeroInvoiceIn & { Status?: string; AmountPaid?: number; AmountDue?: number;
+        AmountCredited?: number; FullyPaidOnDate?: string; DateString?: string; DueDateString?: string })[] })?.Invoices?.[0];
+      if (!g.ok || !cur) return json({ ok: false, error: g.ok ? "invoice not found" : "Xero lookup failed", xero: lastXeroError }, g.ok ? 404 : 502, origin);
+      const ou = body?.with_link === false ? { ok: false, data: null }
+        : await xeroApi(`/Invoices/${iid}/OnlineInvoice`, "GET").catch(() => ({ ok: false, data: null }));
+      // FullyPaidOnDate comes as /Date(ms+0000)/ - send an ISO date
+      const fp = /\/Date\((\d+)/.exec(String(cur.FullyPaidOnDate ?? ""));
+      return json({ ok: true, status: cur.Status, invoice_number: cur.InvoiceNumber, total: cur.Total,
+        amount_paid: cur.AmountPaid ?? 0, amount_due: cur.AmountDue ?? 0, amount_credited: cur.AmountCredited ?? 0,
+        fully_paid_on: fp ? new Date(Number(fp[1])).toISOString().slice(0, 10) : "",
+        date: cur.DateString ?? cur.Date, due_date: cur.DueDateString ?? cur.DueDate,
+        online_invoice_url: String((ou.data as { OnlineInvoices?: { OnlineInvoiceUrl?: string }[] })
+          ?.OnlineInvoices?.[0]?.OnlineInvoiceUrl ?? ""),
+        // the item codes on the invoice (11 Oct 2026: legacy subscriptions are identified by Xero's own codes)
+        lines: ((cur as { LineItems?: Record<string, unknown>[] }).LineItems ?? []).map((l) => ({
+          item_code: l.ItemCode ?? null, description: l.Description, unit_amount: l.UnitAmount,
+          quantity: l.Quantity, account_code: l.AccountCode })),
+        repeating_invoice_id: (cur as { RepeatingInvoiceID?: string }).RepeatingInvoiceID ?? null }, 200, origin);
+    }
+    const orderId = String(body?.order_id ?? "").trim();
+    const ref = String(body?.reference ?? "").trim().replace(/"/g, "");
+    const c = (body?.contact ?? {}) as Record<string, unknown>;
+    if (!orderId || !ref) return json({ ok: false, error: "order_id and reference required" }, 400, origin);
+
+    const found = await findOrderContact(c);
+    if (found.failed) return json({ ok: false, error: "could not check Xero for the contact", xero: found.failed }, 502, origin);
+    if (String(body?.mode ?? "raise") === "check") {
+      return json({ ok: true, contact: found.contact, matched_by: found.matched_by,
+                    new_contact: !found.contact }, 200, origin);
+    }
+
+    // Already raised? (double click, retry, a second tab). Xero is the record.
+    // Voided ones are counted so a void-and-replace gets a FRESH idempotency
+    // key -- otherwise Xero would hand back the voided invoice (found 8 Oct).
+    let voidedBefore = 0;
+    {
+      const q = await xeroApi(`/Invoices?where=${encodeURIComponent(
+        `Reference=="${ref}" AND Type=="ACCREC"`)}`, "GET");
+      if (!q.ok) return json({ ok: false, error: "could not check Xero for an existing invoice", xero: lastXeroError }, 502, origin);
+      const all = (q.data as { Invoices?: (XeroInvoiceIn & { Status?: string })[] })?.Invoices ?? [];
+      voidedBefore = all.filter((i) => i.Status === "VOIDED" || i.Status === "DELETED").length;
+      const hit = all.find((i) => i.Status !== "VOIDED" && i.Status !== "DELETED");
+      if (hit) {
+        const ou = await xeroApi(`/Invoices/${hit.InvoiceID}/OnlineInvoice`, "GET").catch(() => ({ ok: false, data: null }));
+        return json({ ok: true, already: true, invoice_id: hit.InvoiceID,
+          invoice_number: hit.InvoiceNumber, total: hit.Total, date: hit.Date, due_date: hit.DueDate,
+          online_invoice_url: String((ou.data as { OnlineInvoices?: { OnlineInvoiceUrl?: string }[] })
+            ?.OnlineInvoices?.[0]?.OnlineInvoiceUrl ?? ""),
+          line_items: hit.LineItems ?? [] }, 200, origin);
+      }
+    }
+
+    const raw = Array.isArray(body?.lines) ? body!.lines as Record<string, unknown>[] : [];
+    if (!raw.length) return json({ ok: false, error: "no lines" }, 400, origin);
+    const items: Record<string, unknown>[] = [];
+    for (const l of raw) {
+      const code = String(l.AccountCode ?? "").trim();
+      const tax = String(l.TaxType ?? "").trim();
+      if (!code || isForbidden(code)) {
+        return json({ ok: false, error: `account code ${code || "(blank)"} cannot go on an invoice line` }, 400, origin);
+      }
+      if (!["OUTPUT2", "NONE", "ZERORATEDOUTPUT", "EXEMPTOUTPUT"].includes(tax)) {
+        return json({ ok: false, error: `tax type ${tax || "(blank)"} not allowed` }, 400, origin);
+      }
+      const it: Record<string, unknown> = {
+        Description: String(l.Description ?? "").slice(0, 4000),
+        Quantity: Number(l.Quantity ?? 1) || 1,
+        UnitAmount: Math.round(Number(l.UnitAmount ?? 0) * 100) / 100,
+        AccountCode: code, TaxType: tax,
+      };
+      if (l.ItemCode) it.ItemCode = String(l.ItemCode);
+      items.push(it);
+    }
+
+    let contactId = found.contact?.ContactID ?? "";
+    let created = false;
+    const first = String(c.first ?? "").trim(), last = String(c.last ?? "").trim();
+    const email = String(c.email ?? "").trim();
+    if (!contactId) {
+      if (body?.allow_create !== true) {
+        return json({ ok: false, needs_confirm: "new_contact", name: c.name ?? "" }, 409, origin);
+      }
+      const a = (c.address ?? {}) as Record<string, unknown>;
+      const addr = String(a.line1 ?? "").trim() ? [{ AddressType: "POBOX",
+        AddressLine1: String(a.line1), AddressLine2: String(a.line2 ?? "") || undefined,
+        City: String(a.city ?? "") || undefined, Region: String(a.region ?? "") || undefined,
+        PostalCode: String(a.postcode ?? "") || undefined, Country: String(a.country ?? "") || undefined }] : undefined;
+      const r = await xeroApi("/Contacts", "POST", { Contacts: [{ Name: String(c.name ?? "").trim(),
+        EmailAddress: email || undefined, FirstName: first || undefined, LastName: last || undefined,
+        CompanyNumber: String(c.company_number ?? "").trim() || undefined, Addresses: addr }] },
+        `order_contact_${orderId}`);
+      const m = (r.data as { Contacts?: XC[] })?.Contacts?.[0];
+      if (!r.ok || !m) return json({ ok: false, error: "could not create Xero contact",
+        detail: JSON.stringify(r.data).slice(0, 300) }, 502, origin);
+      contactId = m.ContactID; created = true;
+    } else if (body?.set_person === true && (first || last || email)) {
+      // "Who do we send invoices to?" -- the billing person becomes the
+      // contact's MAIN person (never a ContactPersons entry).
+      await xeroApi("/Contacts", "POST", { Contacts: [{ ContactID: contactId,
+        FirstName: first || undefined, LastName: last || undefined,
+        EmailAddress: email || undefined }] }).catch(() => undefined);
+    }
+
+    const tracking = xeroTracking(false, String(body?.lead_source_group ?? ""),
+                                  String(body?.staff_email ?? ""));
+    if (tracking.length) for (const it of items) it.Tracking = tracking;
+    const today = new Date().toISOString().slice(0, 10);
+    const okDate = (s: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(s ?? "")) ? String(s) : "";
+    const inv: Record<string, unknown> = {
+      Type: "ACCREC", Status: "AUTHORISED", Contact: { ContactID: contactId },
+      Date: okDate(body?.date) || today, DueDate: okDate(body?.due_date) || today,
+      Reference: ref, LineAmountTypes: "Exclusive", LineItems: items,
+    };
+    // Payment method -> branding theme (Jonathan, 9 Oct 2026). The theme decides the Pay buttons on
+    // Xero's online invoice and whether GoCardless collects it. Only these three are accepted.
+    const ORDER_THEMES: Record<string, string> = {
+      invoice: "0cf4ed8c-6992-4e0e-90f1-1c6d743cdd39",       // Stripe + GoCardless + PayPal + bank
+      direct_debit: "3e4f79fc-c730-45ca-b1b4-89786cf37c59",  // GoCardless
+      card: "092e00b1-3d07-4071-8db8-9b711902dc3a",          // Stripe
+    };
+    const pm = String(body?.payment_method ?? "invoice");
+    if (!ORDER_THEMES[pm]) return json({ ok: false, error: `unknown payment method ${pm}` }, 400, origin);
+    const theme = ORDER_THEMES[pm];
+    if (theme) inv.BrandingThemeID = theme;
+    const made = await xeroApi("/Invoices", "POST", { Invoices: [inv] }, `order_invoice_${orderId}_${voidedBefore}`);
+    const invoice = (made.data as { Invoices?: XeroInvoiceIn[] })?.Invoices?.[0];
+    if (!made.ok || !invoice) {
+      return json({ ok: false, error: "invoice creation failed",
+                    detail: JSON.stringify(made.data).slice(0, 500) }, 502, origin);
+    }
+    let emailed = false;
+    if (body?.email_invoice !== false && (Deno.env.get("XERO_EMAIL_INVOICES") ?? "true") !== "false") {
+      const e = await xeroApi(`/Invoices/${invoice.InvoiceID}/Email`, "POST", {}).catch(() => ({ ok: false }));
+      emailed = !!e.ok;
+    }
+    // The client's "pay online" page, for the TMH-letterhead PDF (Jonathan, 9 Oct 2026).
+    let onlineUrl = "";
+    {
+      const ou = await xeroApi(`/Invoices/${invoice.InvoiceID}/OnlineInvoice`, "GET").catch(() => ({ ok: false, data: null }));
+      onlineUrl = String((ou.data as { OnlineInvoices?: { OnlineInvoiceUrl?: string }[] })
+        ?.OnlineInvoices?.[0]?.OnlineInvoiceUrl ?? "");
+    }
+    return json({ ok: true, invoice_id: invoice.InvoiceID, invoice_number: invoice.InvoiceNumber,
+      online_invoice_url: onlineUrl,
+      total: invoice.Total, sub_total: invoice.SubTotal, total_tax: invoice.TotalTax,
+      date: invoice.Date, due_date: invoice.DueDate, contact_id: contactId,
+      contact_created: created, matched_by: created ? "created" : found.matched_by,
+      emailed, tracked: tracking.length > 0, line_items: invoice.LineItems ?? [] }, 200, origin);
+  }
+
+  // POST /xero/order/void {key, invoice_id, reason}
+  // Approved 8 Oct: void only when NOTHING has been paid or credited; otherwise
+  // the answer is a credit note. Xero refuses a paid void anyway -- this checks
+  // first so the message is plain English.
+  if (req.method === "POST" && path === "/xero/order/void") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
+    const id = String(body?.invoice_id ?? "").trim();
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ ok: false, error: "invoice_id required" }, 400, origin);
+    const g = await xeroApi(`/Invoices/${id}`, "GET");
+    const cur = (g.data as { Invoices?: (XeroInvoiceIn & { Status?: string; AmountPaid?: number;
+      AmountCredited?: number })[] })?.Invoices?.[0];
+    if (!g.ok || !cur) return json({ ok: false, error: g.ok ? "invoice not found" : "Xero lookup failed", xero: lastXeroError }, g.ok ? 404 : 502, origin);
+    if (cur.Status === "VOIDED") return json({ ok: true, already: true, status: "VOIDED" }, 200, origin);
+    if ((cur.AmountPaid ?? 0) > 0 || (cur.AmountCredited ?? 0) > 0 || cur.Status === "PAID") {
+      return json({ ok: false, error: "paid_or_credited", status: cur.Status,
+        amount_paid: cur.AmountPaid ?? 0, amount_credited: cur.AmountCredited ?? 0,
+        message: "Money has been received or credited on this invoice, so it cannot be voided. Use a credit note." }, 409, origin);
+    }
+    const reason = String(body?.reason ?? "").trim().slice(0, 200);
+    const v = await xeroApi(`/Invoices/${id}`, "POST", { Invoices: [{ InvoiceID: id, Status: "VOIDED" }] });
+    if (!v.ok) return json({ ok: false, error: "void failed", detail: JSON.stringify(v.data).slice(0, 400) }, 502, origin);
+    if (reason) {
+      await xeroApi(`/Invoices/${id}/History`, "PUT",
+        { HistoryRecords: [{ Details: "Voided from TMH: " + reason }] }).catch(() => undefined);
+    }
+    return json({ ok: true, status: "VOIDED", invoice_number: cur.InvoiceNumber }, 200, origin);
+  }
+
+  // POST /xero/repeating {key, id} -- read-only: one repeating invoice template (live services, 11 Oct 2026).
+  if (req.method === "POST" && path === "/xero/repeating") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
+    const id = String(body?.id ?? "").trim();
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ ok: false, error: "id required" }, 400, origin);
+    const g = await xeroApi(`/RepeatingInvoices/${id}`, "GET");
+    if (!g.ok) return json({ ok: false, error: "Xero lookup failed", xero: lastXeroError }, 502, origin);
+    const r = ((g.data as { RepeatingInvoices?: Record<string, unknown>[] })?.RepeatingInvoices ?? [])[0];
+    if (!r) return json({ ok: false, error: "not found" }, 404, origin);
+    return json({ ok: true, id: r.RepeatingInvoiceID, status: r.Status, reference: r.Reference, total: r.Total,
+                  schedule: r.Schedule, contact: (r.Contact as Record<string, unknown> | undefined)?.Name,
+                  lines: ((r.LineItems as Record<string, unknown>[]) ?? []).map((l) => ({ item_code: l.ItemCode, description: l.Description, unit_amount: l.UnitAmount })) }, 200, origin);
+  }
+
+  // POST /xero/items {key} -- read-only: Xero's item codes (Jonathan 11 Oct: legacy products map to the
+  // item codes already in Xero, no new ones). One Xero call.
+  if (req.method === "POST" && path === "/xero/items") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
+    const g = await xeroApi("/Items", "GET");
+    if (!g.ok) return json({ ok: false, error: "Xero lookup failed", xero: lastXeroError }, 502, origin);
+    const items = ((g.data as { Items?: Record<string, unknown>[] })?.Items ?? []).map((i) => ({
+      code: i.Code, name: i.Name, description: i.Description, sold: i.IsSold,
+      price: (i.SalesDetails as Record<string, unknown> | undefined)?.UnitPrice,
+      account: (i.SalesDetails as Record<string, unknown> | undefined)?.AccountCode,
+      tax: (i.SalesDetails as Record<string, unknown> | undefined)?.TaxType }));
+    return json({ ok: true, items }, 200, origin);
+  }
+
+  // POST /xero/order/credit {key, invoice_id, lines, reason, reference, allocate, request_id}
+  // Credit notes (build item 5, Jonathan 10 Oct 2026: "Write, with an approver's code" -- the approval
+  // is checked by the audit app BEFORE it calls this). Rules:
+  //   * same line rules as raising (never 608/609/610, allowed tax types only, tracking on every line);
+  //   * the credit can never exceed what is left on the invoice (total - already credited);
+  //   * unpaid invoice + allocate=true -> allocated to that invoice (they owe less);
+  //     paid invoice -> left unallocated = credit on the account (a refund is a person's job, never ours);
+  //   * idempotent on request_id, and a History note on the invoice.
+  if (req.method === "POST" && path === "/xero/order/credit") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
+    const id = String(body?.invoice_id ?? "").trim();
+    const rid = String(body?.request_id ?? "").trim().replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80);
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !rid) return json({ ok: false, error: "invoice_id and request_id required" }, 400, origin);
+    const g = await xeroApi(`/Invoices/${id}`, "GET");
+    const cur = (g.data as { Invoices?: (XeroInvoiceIn & { Status?: string; AmountPaid?: number; AmountDue?: number;
+      AmountCredited?: number; Total?: number; Contact?: { ContactID?: string }; InvoiceNumber?: string;
+      LineAmountTypes?: string })[] })?.Invoices?.[0];
+    if (!g.ok || !cur) return json({ ok: false, error: g.ok ? "invoice not found" : "Xero lookup failed", xero: lastXeroError }, g.ok ? 404 : 502, origin);
+    if (!["AUTHORISED", "PAID"].includes(String(cur.Status))) {
+      return json({ ok: false, error: `${cur.InvoiceNumber} is ${cur.Status} - only an approved or paid invoice can be credited` }, 409, origin);
+    }
+    const raw = Array.isArray(body?.lines) ? body!.lines as Record<string, unknown>[] : [];
+    if (!raw.length) return json({ ok: false, error: "no lines" }, 400, origin);
+    const items: Record<string, unknown>[] = [];
+    let gross = 0;
+    for (const l of raw) {
+      const code = String(l.AccountCode ?? "").trim();
+      const tax = String(l.TaxType ?? "").trim();
+      if (!code || isForbidden(code)) return json({ ok: false, error: `account code ${code || "(blank)"} cannot go on a credit note` }, 400, origin);
+      if (!["OUTPUT2", "NONE", "ZERORATEDOUTPUT", "EXEMPTOUTPUT"].includes(tax)) return json({ ok: false, error: `tax type ${tax || "(blank)"} not allowed` }, 400, origin);
+      const amt = Math.round(Number(l.UnitAmount ?? 0) * 100) / 100;
+      const qty = Number(l.Quantity ?? 1) || 1;
+      if (!(amt * qty > 0)) return json({ ok: false, error: "credit lines must be positive amounts" }, 400, origin);
+      gross += amt * qty * (tax === "OUTPUT2" ? 1.2 : 1);
+      items.push({ Description: String(l.Description ?? "").slice(0, 4000), Quantity: qty, UnitAmount: amt, AccountCode: code, TaxType: tax });
+    }
+    gross = Math.round(gross * 100) / 100;
+    const room = Math.round(((cur.Total ?? 0) - (cur.AmountCredited ?? 0)) * 100) / 100;
+    if (gross > room + 0.01) {
+      return json({ ok: false, error: `the credit (£${gross.toFixed(2)}) is more than is left on ${cur.InvoiceNumber} (£${room.toFixed(2)})` }, 409, origin);
+    }
+    const tracking = xeroTracking(false, String(body?.lead_source_group ?? ""), String(body?.staff_email ?? ""));
+    if (tracking.length) for (const it of items) it.Tracking = tracking;
+    const today = new Date().toISOString().slice(0, 10);
+    const ref = String(body?.reference ?? `Credit for ${cur.InvoiceNumber}`).slice(0, 255);
+    const cn = await xeroApi("/CreditNotes", "POST", { CreditNotes: [{ Type: "ACCRECCREDIT", Status: "AUTHORISED",
+      Contact: { ContactID: cur.Contact?.ContactID }, Date: today, Reference: ref,
+      LineAmountTypes: "Exclusive", LineItems: items }] }, `order_credit_${rid}`);
+    const note = (cn.data as { CreditNotes?: { CreditNoteID?: string; CreditNoteNumber?: string; Total?: number }[] })?.CreditNotes?.[0];
+    if (!cn.ok || !note?.CreditNoteID) {
+      return json({ ok: false, error: "credit note failed", xero: lastXeroError, detail: JSON.stringify(cn.data).slice(0, 400) }, 502, origin);
+    }
+    let allocated = 0, allocError = "";
+    const due = Math.round(Number(cur.AmountDue ?? 0) * 100) / 100;
+    if (body?.allocate === true && cur.Status === "AUTHORISED" && due > 0) {
+      allocated = Math.min(Number(note.Total ?? gross), due);
+      const al = await xeroApi(`/CreditNotes/${note.CreditNoteID}/Allocations`, "PUT",
+        { Allocations: [{ Invoice: { InvoiceID: id }, Amount: allocated, Date: today }] }, `order_credit_alloc_${rid}`);
+      if (!al.ok) { allocError = lastXeroError || "allocation failed"; allocated = 0; }
+    }
+    const reason = String(body?.reason ?? "").trim().slice(0, 200);
+    await xeroApi(`/Invoices/${id}/History`, "PUT", { HistoryRecords: [{ Details:
+      `Credit note ${note.CreditNoteNumber} (£${Number(note.Total ?? gross).toFixed(2)}) from TMH` +
+      (allocated ? `, allocated £${allocated.toFixed(2)} to this invoice` : ", held as account credit") +
+      (reason ? `: ${reason}` : "") }] }).catch(() => undefined);
+    return json({ ok: true, credit_note_id: note.CreditNoteID, credit_note_number: note.CreditNoteNumber,
+                  total: note.Total ?? gross, allocated, allocation_error: allocError || undefined,
+                  invoice_number: cur.InvoiceNumber, invoice_status_before: cur.Status }, 200, origin);
+  }
+
   // POST /xero/reconcile -- the bookkeeper (13 Sep 2026, Jonathan). Invoice-route
   // orders (GoCardless, bank transfer) are marked Paid only when Xero says the
   // invoice is PAID. Finds every xero_invoice_created(kind=invoice) without a
@@ -2445,6 +3124,7 @@ serve(async (req) => {
   if (req.method === "POST" && path === "/xero/reconcile") {
     const body = await readJson(req);
     if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
     const dry = body?.dry_run === true;
     const limit = Math.min(Number(body?.limit ?? 50) || 50, 200);
     const since = new Date(Date.now() - 180 * 86400 * 1000).toISOString();
@@ -2490,6 +3170,8 @@ serve(async (req) => {
         if (ZOHO_CHECKOUT_URL) {
           fireAndForget(ZOHO_CHECKOUT_URL, {
             stage: "order_complete", kind: "paid", session_id: row.session_id,
+            ...(await termsFields(String(row.session_id))),
+            now: new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00"),
             zoho_deal_id: String(zids?.deal_id ?? ""),
             invoice_number: item.invoice_number,
             search_types: hasImage ? "word;image" : "word",
@@ -2512,6 +3194,7 @@ serve(async (req) => {
   if (req.method === "POST" && path === "/staff/lookup") {
     const body = await readJson(req);
     if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
     if (!ZOHO_CHECKOUT_URL) return json({ ok: false, error: "not configured" }, 200, origin);
     try {
       const r = await fetch(ZOHO_CHECKOUT_URL, {
@@ -2552,9 +3235,40 @@ serve(async (req) => {
   //   * `deal.frozen` reports whether Braudit_Frozen_At is stamped. Past
   //     freeze a criteria change means a NEW search_context_id, the contract's
   //     409 case. We surface the fact; the form decides.
+  // POST /staff/terms-approve -- a TMH team member has checked the classes
+  // and terms (Jonathan, 2 Oct 2026). api.py checks the staff token and sends
+  // the staff member's email; this relays to Deluge stage terms_approve,
+  // which marks the scope asset Approved by TMH and releases the research
+  // gate if that was all it was waiting for.
+  if (req.method === "POST" && path === "/staff/terms-approve") {
+    const body = await readJson(req);
+    if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
+    if (!ZOHO_CHECKOUT_URL) return json({ ok: false, error: "not configured" }, 200, origin);
+    const dealId = String(body?.deal_id ?? "").trim();
+    const by = String(body?.approved_by ?? "").trim();
+    if (!/^\d+$/.test(dealId) || !by) {
+      return json({ ok: false, error: "deal_id and approved_by required" }, 400, origin);
+    }
+    try {
+      const r = await fetch(ZOHO_CHECKOUT_URL, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: "terms_approve", zoho_deal_id: dealId, approved_by: by,
+          now: new Date().toISOString().replace(/\.\d{3}Z$/, "+00:00") }),
+      });
+      const parsed = JSON.parse(await r.text());
+      const det = parsed?.details as Record<string, unknown> | undefined;
+      const o = (typeof det?.output === "string" ? JSON.parse(det.output as string) : parsed) ?? {};
+      return json({ ok: !o.error, ...o }, 200, origin);
+    } catch (_e) {
+      return json({ ok: false, error: "zoho unreachable" }, 200, origin);
+    }
+  }
+
   if (req.method === "POST" && path === "/staff/deal") {
     const body = await readJson(req);
     if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
     if (!ZOHO_CHECKOUT_URL) return json({ ok: false, error: "not configured" }, 200, origin);
     const dealId = String(body?.deal_id ?? "").trim();
     if (!/^\d+$/.test(dealId)) {
@@ -2583,7 +3297,23 @@ serve(async (req) => {
         // -- a list, because a mark can have any number of applicants.
         applicants: Array.isArray(o.applicants) ? o.applicants : [],
         images: Array.isArray(o.images) ? o.images : [],
-        scope: Array.isArray(o.scope) ? o.scope : [],
+        // A long class is several continuation rows (7 Oct 2026): join them, in part
+        // order, so the staff form edits and re-saves the WHOLE list, never part n.
+        scope: (Array.isArray(o.scope) ? o.scope : []).map((sa) => {
+          const a = (sa ?? {}) as Record<string, unknown>;
+          const rows = (Array.isArray(a.terms) ? a.terms : []) as Record<string, unknown>[];
+          const by = new Map<string, Record<string, unknown>[]>();
+          for (const r of rows) {
+            const k = String(r.class_no ?? "");
+            by.set(k, [...(by.get(k) ?? []), r]);
+          }
+          const terms = [...by.values()].map((g) => {
+            g.sort((x, y) => Number(x.part ?? 1) - Number(y.part ?? 1));
+            return { ...g[0], terms: g.map((x) => String(x.terms ?? "").trim()).filter(Boolean).join(" "),
+                     parts: g.length };
+          });
+          return { ...a, terms };
+        }),
         exclusions: Array.isArray(o.exclusions) ? o.exclusions : [],
         error: o.error ?? null,
       }, 200, origin);
@@ -2604,6 +3334,7 @@ serve(async (req) => {
   if (req.method === "POST" && path === "/staff/searches") {
     const body = await readJson(req);
     if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
     const emails = (Array.isArray(body?.emails) ? body.emails : [])
       .map((e: unknown) => String(e ?? "").trim().toLowerCase())
       .filter((e: string) => e.includes("@")).slice(0, 25);
@@ -2640,6 +3371,7 @@ serve(async (req) => {
   if (req.method === "POST" && path === "/fasttrack/decide") {
     const body = await readJson(req);
     if (!xeroKeyOk(body)) return json({ ok: false, error: "forbidden" }, 403, origin);
+    xeroCaller = String(body?.caller ?? req.headers.get("user-agent") ?? "").trim();
     const sid = String(body?.session_id ?? "").trim();
     const action = String(body?.action ?? "") === "approve" ? "approve" : "reject";
     if (!sid) return json({ ok: false, error: "session_id required" }, 400, origin);
