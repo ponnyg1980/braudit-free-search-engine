@@ -89,7 +89,11 @@ string standalone.tmh_sector_report_lead(string crmAPIRequest)
 		fields.put("Phone",p.get("phone").toString().trim());
 	}
 	fields.put("Lead_Source","Sector Report");
-	fields.put("Lead_Source_Group","Industry Report");
+	// "Industry Report" is a RETIRED Source Group value (tidy, 11 Oct 2026).
+	// The group is left to FN-1 source_resolve (or Existing Contact/Account
+	// below); the action itself is the Capture Method.
+	fields.put("Capture_Method","Download");
+	fields.put("Capture_Form","Industry Trademark Report");
 	if(p.get("company_number") != null && p.get("company_number").toString() != "")
 	{
 		fields.put("Company_Number1",p.get("company_number").toString());
@@ -184,6 +188,18 @@ string standalone.tmh_sector_report_lead(string crmAPIRequest)
 		desc = desc + dline;
 	}
 	fields.put("Description",desc);
+	// ------- Lead flow rule (Jonathan, 11 Oct 2026; built 12 Oct) -------
+	// Paying for ongoing services -> Task on the Account, no Lead.
+	actR = "Sector report download";
+	if(p.get("industry_label") != null && p.get("industry_label").toString() != "")
+	{
+		actR = actR + " (" + p.get("industry_label").toString() + ")";
+	}
+	routeR = standalone.tmh_lead_route(em,actR);
+	if(routeR.startsWith("paying:"))
+	{
+		return "ok:" + ev + ":paying:" + routeR.getSuffix("paying:") + ":task";
+	}
 	// Existing-client detection — identical to the search wizards, so a
 	// report run by someone we already know is flagged, not mislabelled.
 	foundC = zoho.crm.searchRecords("Contacts","(Email:equals:" + em + ")");
@@ -209,9 +225,17 @@ string standalone.tmh_sector_report_lead(string crmAPIRequest)
 	{
 		leadId = foundL.get(0).get("id").toString();
 		ur = zoho.crm.updateRecord("Leads",leadId.toLong(),fields,trg);
+		// Existing open Lead: re-engage once, on the gate ("lead") event; the
+		// "completed" event that follows minutes later is the same visit.
+		if(ev == "lead")
+		{
+			reR = standalone.tmh_lead_reengage(leadId,actR);
+			info "reengage:" + reR;
+		}
 	}
 	else
 	{
+		fields.put("Lead_Status","New");
 		cr = zoho.crm.createRecord("Leads",fields,trg);
 		if(cr.get("id") != null)
 		{
