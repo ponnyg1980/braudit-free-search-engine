@@ -1665,6 +1665,42 @@ class _Handler(BaseHTTPRequestHandler):
             # see Portal_Identity_in_Search_Spec.md §5.
             self._send_raw(_STAFF_GATE_HTML.encode(), 'text/html; charset=utf-8')
             return
+        if path.startswith('/q/'):
+            # QR codes (Lead Engine, 12 Oct 2026). Every Cerebrum contact has a
+            # permanent code printed or emailed as tools.thetrademarkhelpline.com/q/<code>;
+            # its destination changes daily (Watch report, renewal, portal,
+            # industry report, free search). This host has no access to TMH
+            # Analytics, so the scan is forwarded to the audit host, which looks
+            # the code up, logs the scan and redirects (audit_engine /q/<code>).
+            code = path[3:]
+            if code.lower().endswith('.png'):
+                code = code[:-4].upper()
+                if re.fullmatch(r'[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{7}', code):
+                    import io as _io
+                    import segno
+                    qr = segno.make(f'https://tools.thetrademarkhelpline.com/q/{code}', error='m')
+                    w = qr.symbol_size(scale=1, border=4)[0]
+                    buf = _io.BytesIO()
+                    qr.save(buf, kind='png', scale=max(1, 600 // w), border=4,
+                            dark='#000000', light='#ffffff')
+                    body = buf.getvalue()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'image/png')
+                    self.send_header('Content-Length', str(len(body)))
+                    # the image for a code never changes
+                    self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
+                    self.end_headers()
+                    self.wfile.write(body)
+                else:
+                    self._send({'ok': False, 'error': 'not found'}, 404)
+                return
+            self.send_response(302)
+            self.send_header('Location', 'https://audit.thetrademarkhelpline.com/q/'
+                             + re.sub(r'[^A-Za-z0-9]', '', code)[:12].upper())
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Robots-Tag', 'noindex')
+            self.end_headers()
+            return
         if path in _PAGES or path.startswith('/report/'):
             # /report/<session-uuid> is the pretty unique-URL form of the
             # search report; the page reads the id from the path itself.
