@@ -68,13 +68,25 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		// One asset per (deal, mark): re-running the button for the same
 		// mark updates its rows instead of breeding duplicates.
 		assetD = "";
-		foundD = zoho.crm.searchRecords("G_S_Scope_Assets","(Deal.id:equals:" + dealTgt + ")");
-		for each ad in foundD
+		// Related list, not searchRecords: search lags on rows created
+		// seconds earlier (proven 16 Sep) and would breed a duplicate.
+		foundD = zoho.crm.getRelatedRecords("G_S_Scope_Assets","Deals",dealTgt.toLong());
+		if(foundD != null)
 		{
-			if(assetD == "" && ad.get("Asset_Type") == "Deal Search" && ad.get("Name") == nameD)
+			for each ad in foundD
 			{
-				assetD = ad.get("id").toString();
+				if(assetD == "" && ad.get("Asset_Type") == "Deal Search" && ad.get("Name") == nameD)
+				{
+					assetD = ad.get("id").toString();
+				}
 			}
+		}
+		// The asset links to BOTH the Deal and its Account (17 Sep).
+		accD = "";
+		dRecD = zoho.crm.getRecordById("Deals",dealTgt.toLong());
+		if(dRecD.get("Account_Name") != null)
+		{
+			accD = ifnull(dRecD.get("Account_Name").get("id"),"").toString();
 		}
 		if(assetD == "")
 		{
@@ -84,6 +96,10 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 			amD.put("Asset_Type","Deal Search");
 			amD.put("Asset_Status","Active");
 			amD.put("Register",reg);
+			if(accD != "")
+			{
+				amD.put("Account",accD.toLong());
+			}
 			if(extraT != "")
 			{
 				amD.put("Additional_Terms_Request",extraT);
@@ -103,15 +119,26 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 				return "deal:asset create failed";
 			}
 		}
-		existingD = Map();
-		foundRD = zoho.crm.searchRecords("G_S_Scope_Classes_Terms","(Scope_Asset.id:equals:" + assetD + ")");
-		for each rd in foundRD
+		if(assetD != "" && accD != "")
 		{
-			if(rd.get("Nice_Class_Number_Snapshot") != null)
+			upA = Map();
+			upA.put("Account",accD.toLong());
+			zoho.crm.updateRecord("G_S_Scope_Assets",assetD.toLong(),upA);
+		}
+		existingD = Map();
+		foundRD = zoho.crm.getRelatedRecords("G_S_Scope_Classes_Terms","G_S_Scope_Assets",assetD.toLong());
+		if(foundRD != null)
+		{
+			for each rd in foundRD
 			{
-				existingD.put(rd.get("Nice_Class_Number_Snapshot").toString(),rd.get("id").toString());
+				if(rd.get("Nice_Class_Number_Snapshot") != null)
+				{
+					existingD.put(rd.get("Nice_Class_Number_Snapshot").toString(),rd.get("id").toString());
+				}
 			}
 		}
+		keptD = List();
+		ordD = 0;
 		madeD = 0;
 		clsD = scopeD.get("classes");
 		if(clsD != null)
@@ -131,10 +158,17 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 					{
 						termsD = cd.get("terms_text").toString();
 					}
+					ordD = ordD + 1;
+					keptD.add(nD.toLong().toString());
 					rMapD = Map();
 					rMapD.put("Nice_Class_Number_Snapshot",nD.toLong());
 					rMapD.put("Nice_Class_Reference",1964745000114603017 + nD.toLong());
 					rMapD.put("Register_Snapshot",reg);
+					rMapD.put("Display_Order",ordD);
+					if(cd.get("display_order") != null)
+					{
+						rMapD.put("Display_Order",cd.get("display_order").toLong());
+					}
 					if(cd.get("terms_source") != null)
 					{
 						rMapD.put("Terms_Source",cd.get("terms_source").toString());
@@ -147,10 +181,7 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 					{
 						rMapD.put("Class_Description_Snapshot",cd.get("label").toString());
 					}
-					if(termsD != "")
-					{
-						rMapD.put("Specific_Terms",termsD);
-					}
+					rMapD.put("Specific_Terms",termsD);
 					if(existingD.get(nnD.toLong().toString()) != null)
 					{
 						ridD = existingD.get(nnD.toLong().toString());
@@ -165,132 +196,32 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 						}
 						rMapD.put("Name",rowNameD);
 						rMapD.put("Scope_Asset",assetD.toLong());
-						crD = zoho.crm.createRecord("G_S_Scope_Classes_Terms",rMapD);
-						if(crD.get("id") != null)
-						{
-							madeD = madeD + 1;
-						}
-					}
-				}
-			}
-		}
-		// ------- Mirror into the Deal's Classes Terms SUB-FORM (22 Aug) ------
-		// The Deals sub-form still drives live automations, so every tool
-		// writes BOTH: the G S rows above (source of truth) AND the sub-form.
-		// Merge rule: a sub-form row covering exactly ONE class that we are
-		// writing is replaced in place (same row id); every other row
-		// (multi-class, "All Classes", manually added) is left untouched.
-		clsPick = Map();
-		clsPick.put("1","1 - Chemicals");
-		clsPick.put("2","2 - Colourants");
-		clsPick.put("3","3 - Toiletries");
-		clsPick.put("4","4 - Fuels");
-		clsPick.put("5","5 - Preparations");
-		clsPick.put("6","6 - Metal");
-		clsPick.put("7","7 - Machinery");
-		clsPick.put("8","8 - Tools");
-		clsPick.put("9","9 - Scientific Devices");
-		clsPick.put("10","10 - Therapeutic Devices");
-		clsPick.put("11","11 - Heating Components");
-		clsPick.put("12","12 - Vehicles");
-		clsPick.put("13","13 - Weapons & Explosives");
-		clsPick.put("14","14 - Jewellery & Precious Minerals");
-		clsPick.put("15","15 - Musical Instruments");
-		clsPick.put("16","16 - Artistic Materials");
-		clsPick.put("17","17 - Piping & Tubing");
-		clsPick.put("18","18 - Accessories & Leather");
-		clsPick.put("19","19 - Construction Materials");
-		clsPick.put("20","20 - Decorative Fittings & Furniture");
-		clsPick.put("21","21 - Household Utensils");
-		clsPick.put("22","22 - Raw Fibres");
-		clsPick.put("23","23 - Yarns & Threads");
-		clsPick.put("24","24 - Textiles");
-		clsPick.put("25","25 - Clothing");
-		clsPick.put("26","26 - Accessories Components");
-		clsPick.put("27","27 - Floor & Wall Coverings");
-		clsPick.put("28","28 - Sports Equipment & Toys");
-		clsPick.put("29","29 - Raw and Prepared Food");
-		clsPick.put("30","30 - Convenience Food");
-		clsPick.put("31","31 - Agriculture & Livestock");
-		clsPick.put("32","32 - Beer & Non-Alcoholic Beverages");
-		clsPick.put("33","33 - Alcoholic Beverages");
-		clsPick.put("34","34 - Tobacco & Lighting Articles");
-		clsPick.put("35","35 - Business Services");
-		clsPick.put("36","36 - Financial Services");
-		clsPick.put("37","37 - Building & Construction");
-		clsPick.put("38","38 - Telecoms");
-		clsPick.put("39","39 - Transport");
-		clsPick.put("40","40 - Various Chemical Treatment & Energy Production");
-		clsPick.put("41","41 - Education");
-		clsPick.put("42","42 - I.T.");
-		clsPick.put("43","43 - Hospitality");
-		clsPick.put("44","44 - Animal, Environmental & Human Health Care");
-		clsPick.put("45","45 - Personal & Social, Legal & Security Services");
-		ourCls = Map();
-		for each cd2 in scopeD.get("classes")
-		{
-			n2 = cd2.get("n");
-			if(n2 != null && clsPick.get(n2.toLong().toString()) != null)
-			{
-				t2 = "";
-				if(cd2.get("terms_text") != null)
-				{
-					t2 = cd2.get("terms_text").toString();
-				}
-				rw = Map();
-				lst = List();
-				lst.add(clsPick.get(n2.toLong().toString()));
-				rw.put("Classes",lst);
-				rw.put("Terms1",t2);
-				ourCls.put(n2.toLong().toString(),rw);
-			}
-		}
-		subNote = "";
-		if(ourCls.isEmpty() == false)
-		{
-			dRec2 = zoho.crm.getRecordById("Deals",dealTgt.toLong());
-			subNew = List();
-			exSub = dRec2.get("Classes_Terms");
-			if(exSub != null)
-			{
-				for each er in exSub
-				{
-					keep = true;
-					ecl = er.get("Classes");
-					if(ecl != null && ecl.size() == 1)
-					{
-						e1 = ecl.get(0).toString();
-						if(e1.contains(" - "))
-						{
-							eNum = e1.getPrefix(" - ").trim();
-							if(ourCls.get(eNum) != null)
-							{
-								tmpRw = ourCls.get(eNum);
-							tmpRw.put("id",er.get("id"));
-							ourCls.put(eNum,tmpRw);
-								keep = false;
+									crD = zoho.crm.createRecord("G_S_Scope_Classes_Terms",rMapD);
+									if(crD.get("id") != null)
+									{
+										madeD = madeD + 1;
+									}
+								}
 							}
 						}
-					}
-					if(keep)
-					{
-						// id-only row = leave this row exactly as it is
-						// (omitting it would DELETE it).
-						kr = Map();
-						kr.put("id",er.get("id"));
-						subNew.add(kr);
-					}
-				}
-			}
-			for each k2 in ourCls.keys()
-			{
-				subNew.add(ourCls.get(k2));
-			}
-			sfMap = Map();
-			sfMap.put("Classes_Terms",subNew);
-			sfU = zoho.crm.updateRecord("Deals",dealTgt.toLong(),sfMap);
-			subNote = ":subform=" + subNew.size();
-		}
+						// FINAL scope (17 Sep): classes the visitor removed before sending
+						// are deleted from the asset, never left behind.
+						lst_exD = existingD.keys();
+						for each exD in lst_exD
+						{
+							if(keptD.contains(exD) == false)
+							{
+								delD = Map();
+								delD.put("module","G_S_Scope_Classes_Terms");
+								delD.put("id",existingD.get(exD));
+								zoho.crm.invokeConnector("crm.delete",delD);
+							}
+						}
+						}
+		// ------- Sub-form mirror: RETIRED (Jonathan, 17 Sep 2026) ------------
+		// The Deals Classes_Terms sub-form is no longer written; the G S Scope
+		// Asset above is the one source of truth.
+		subNote = "";
 		return "ok:deal:" + dealTgt + ":scope=" + assetD + ":rows+" + madeD + subNote;
 	}
 	fields = payload.get("zoho_fields");
@@ -309,6 +240,33 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 	if(fields.get("Email") != null)
 	{
 		emAll = fields.get("Email").toString();
+	}
+	// ------- Lead flow rule (Jonathan, 11 Oct 2026; built 12 Oct) -------
+	// "Client is paying for ongoing services - Task, client has no paid
+	// subscriptions - Lead." tmh_lead_route answers paying / existing / new.
+	// Paying: it has already raised a Task on the Account; write NO Lead.
+	lsrcR = ifnull(fields.get("Lead_Source"),"").toString();
+	actR = "Free search";
+	if(lsrcR == "Quick Search")
+	{
+		actR = "Quick search";
+	}
+	else if(lsrcR == "Class Tools")
+	{
+		actR = "Class builder";
+	}
+	if(fields.get("Search_Term") != null && fields.get("Search_Term").toString() != "")
+	{
+		actR = actR + ": " + fields.get("Search_Term").toString();
+	}
+	routeR = "new";
+	if(emAll != "")
+	{
+		routeR = standalone.tmh_lead_route(emAll,actR);
+	}
+	if(routeR.startsWith("paying:"))
+	{
+		return "ok:paying:" + routeR.getSuffix("paying:") + ":task";
 	}
 	if(emAll != "")
 	{
@@ -330,6 +288,28 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 	if(payload.get("zoho_lead_id") != null)
 	{
 		leadId = payload.get("zoho_lead_id").toString();
+	}
+	// The Lead this SESSION already wrote to. A later push for the same
+	// session is not a fresh engagement and must not re-engage.
+	sessLeadR = leadId;
+	// Email owner wins (3 Oct 2026, found testing A7a). A session's own
+	// resolver Lead has no email. If the visitor's address already belongs
+	// to ANOTHER Lead (a returning visitor), writing it onto the resolver
+	// Lead is rejected by Zoho (Email is unique) and the push is lost without
+	// an error. Update the Lead that owns the address; leave the resolver
+	// Lead as it is.
+	if(leadId != "" && emAll != "")
+	{
+		foundE = zoho.crm.searchRecords("Leads","(Email:equals:" + emAll + ")");
+		if(foundE.size() > 0)
+		{
+			ownId = foundE.get(0).get("id").toString();
+			if(ownId != leadId)
+			{
+				info "email owned by lead " + ownId + "; updating it, not " + leadId;
+				leadId = ownId;
+			}
+		}
 	}
 	// Dedupe on Email (unique, case-insensitive on Leads): the "look for
 	// the email within Zoho before creating the search item" step.
@@ -356,16 +336,33 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		// writes, so both paths request workflow triggers explicitly.
 		trg = Map();
 		trg.put("trigger",{"workflow"});
+		// Partner ref code (3 Oct 2026, A7a): first touch wins. A Lead that
+		// already carries a Partner_Ref_Code_Used keeps it; a later session
+		// with a different ref never overwrites the partner that introduced them.
+		if(fields.get("Partner_Ref_Code_Used") != null)
+		{
+			curL = zoho.crm.getRecordById("Leads",leadId.toLong());
+			curRef = ifnull(curL.get("Partner_Ref_Code_Used"),"");
+			if(curRef.toString() != "")
+			{
+				fields.remove("Partner_Ref_Code_Used");
+			}
+		}
 		up = zoho.crm.updateRecord("Leads",leadId.toLong(),fields,trg);
 		info "update:" + up.get("id");
+		// Existing open Lead engaging again (not this session's own repeat
+		// push): note + "New - Re-engaging" via the ONE rule (Do Not Contact
+		// keeps its status and gets a Task instead).
+		if(routeR.startsWith("existing:") && leadId != sessLeadR)
+		{
+			reR = standalone.tmh_lead_reengage(leadId,actR);
+			info "reengage:" + reR;
+		}
 	}
 	else
 	{
-		ls = payload.get("lead_status");
-		if(ls != null && ls != "")
-		{
-			fields.put("Lead_Status",ls);
-		}
+		// A new person always starts at "New" (12 Oct 2026; never a retired value).
+		fields.put("Lead_Status","New");
 		trg = Map();
 		trg.put("trigger",{"workflow"});
 		cr = zoho.crm.createRecord("Leads",fields,trg);
@@ -495,12 +492,15 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 		// names keeps three separate class/term sets on one lead; re-pushes
 		// of the same brand reuse its asset).
 		assetId = "";
-		foundA = zoho.crm.searchRecords("G_S_Scope_Assets","(Lead.id:equals:" + leadId + ")");
-		for each a in foundA
+		foundA = zoho.crm.getRelatedRecords("G_S_Scope_Assets","Leads",leadId.toLong());
+		if(foundA != null)
 		{
-			if(assetId == "" && a.get("Asset_Type") == "Deal Search" && a.get("Name") == assetName)
+			for each a in foundA
 			{
-				assetId = a.get("id").toString();
+				if(assetId == "" && a.get("Asset_Type") == "Deal Search" && a.get("Name") == assetName)
+				{
+					assetId = a.get("id").toString();
+				}
 			}
 		}
 		sess = "";
@@ -553,14 +553,19 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 			// Existing class rows for this asset -> class number => row id,
 			// so a re-push updates instead of breeding duplicates.
 			existing = Map();
-			foundR = zoho.crm.searchRecords("G_S_Scope_Classes_Terms","(Scope_Asset.id:equals:" + assetId + ")");
-			for each rrow in foundR
+			foundR = zoho.crm.getRelatedRecords("G_S_Scope_Classes_Terms","G_S_Scope_Assets",assetId.toLong());
+			if(foundR != null)
 			{
-				if(rrow.get("Nice_Class_Number_Snapshot") != null)
+				for each rrow in foundR
 				{
-					existing.put(rrow.get("Nice_Class_Number_Snapshot").toString(),rrow.get("id").toString());
+					if(rrow.get("Nice_Class_Number_Snapshot") != null)
+					{
+						existing.put(rrow.get("Nice_Class_Number_Snapshot").toString(),rrow.get("id").toString());
+					}
 				}
 			}
+			keptL = List();
+			ordL = 0;
 			madeRows = 0;
 			clsList = scope.get("classes");
 			if(clsList != null)
@@ -593,12 +598,19 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 								termsTxt = termsTxt + t.toString();
 							}
 						}
+						ordL = ordL + 1;
+						keptL.add(n.toLong().toString());
 						rMap = Map();
 						rMap.put("Nice_Class_Number_Snapshot",n.toLong());
 						// Nice Class Reference records are contiguous:
 						// class N = 1964745000114603017 + N (COQL-verified 19 Aug).
 						rMap.put("Nice_Class_Reference",1964745000114603017 + n.toLong());
 						rMap.put("Register_Snapshot",reg);
+						rMap.put("Display_Order",ordL);
+						if(c.get("display_order") != null)
+						{
+							rMap.put("Display_Order",c.get("display_order").toLong());
+						}
 						if(c.get("terms_source") != null)
 						{
 							rMap.put("Terms_Source",c.get("terms_source").toString());
@@ -611,10 +623,7 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 						{
 							rMap.put("Class_Description_Snapshot",c.get("label").toString());
 						}
-						if(termsTxt != "")
-						{
-							rMap.put("Specific_Terms",termsTxt);
-						}
+						rMap.put("Specific_Terms",termsTxt);
 						if(existing.get(nn.toLong().toString()) != null)
 						{
 							rid = existing.get(nn.toLong().toString());
@@ -629,16 +638,28 @@ string standalone.tmh_freesearch_upsert(string crmAPIRequest)
 							}
 							rMap.put("Name",rowName);
 							rMap.put("Scope_Asset",assetId.toLong());
-							crr = zoho.crm.createRecord("G_S_Scope_Classes_Terms",rMap);
-							if(crr.get("id") != null)
-							{
-								madeRows = madeRows + 1;
+											crr = zoho.crm.createRecord("G_S_Scope_Classes_Terms",rMap);
+											if(crr.get("id") != null)
+											{
+												madeRows = madeRows + 1;
+											}
+										}
+									}
+								}
+								// FINAL scope (17 Sep): removed classes leave the asset.
+								lst_exL = existing.keys();
+								for each exL in lst_exL
+								{
+									if(keptL.contains(exL) == false)
+									{
+										delL = Map();
+										delL.put("module","G_S_Scope_Classes_Terms");
+										delL.put("id",existing.get(exL));
+										zoho.crm.invokeConnector("crm.delete",delL);
+									}
+								}
 							}
-						}
-					}
-				}
-			}
-			scopeNote = scopeNote + ":scope=" + assetId + ":rows+" + madeRows;
+							scopeNote = scopeNote + ":scope=" + assetId + ":rows+" + madeRows;
 		}
 	}
 	}
