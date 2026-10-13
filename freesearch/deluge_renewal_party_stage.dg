@@ -1,0 +1,290 @@
+	//
+	// ----------------------------------------------- stage: renewal_party (search-journey, 13 Oct 2026)
+	// Website Renewal Search -> renewal engine. Finds or creates the visitor's Contact and the
+	// Applicant Account the renewal is quoted on. Never creates a Lead (a renewal is an order).
+	// A mark we already hold is quoted on ITS Account only when this visitor belongs to it
+	// (Contact on it, Contact on its parent, or linked through Contacts_X_Accounts); otherwise the
+	// visitor's own Account is used and the engine refuses ("held for a different client").
+	// refused != "": the engine refused - raise a Task for Laura and stop.
+	else if(stg == "renewal_party" && emIn != "")
+	{
+		rpFirst = "";
+		if(p.get("first_name") != null)
+		{
+			rpFirst = p.get("first_name").toString().trim();
+		}
+		rpLast = "";
+		if(p.get("last_name") != null)
+		{
+			rpLast = p.get("last_name").toString().trim();
+		}
+		if(rpLast == "")
+		{
+			rpLast = emIn;
+		}
+		rpPhone = "";
+		if(p.get("phone") != null)
+		{
+			rpPhone = p.get("phone").toString().trim();
+		}
+		rpCo = "";
+		if(p.get("company_name") != null)
+		{
+			rpCo = p.get("company_name").toString().trim();
+		}
+		rpCoNo = "";
+		if(p.get("company_number") != null)
+		{
+			rpCoNo = p.get("company_number").toString().trim().toUpperCase().remove(" ");
+		}
+		rpMarks = List();
+		if(p.get("marks") != null)
+		{
+			rpMarks = p.get("marks").toList();
+		}
+		rpMarkTxt = "";
+		for each rpm in rpMarks
+		{
+			if(rpMarkTxt != "")
+			{
+				rpMarkTxt = rpMarkTxt + ", ";
+			}
+			rpMarkTxt = rpMarkTxt + rpm.toString();
+		}
+		rpRefused = "";
+		if(p.get("refused") != null)
+		{
+			rpRefused = p.get("refused").toString();
+		}
+		rpContact = contactId;
+		rpAcc = accountId;
+		rpHow = "";
+		// 1. Contact by exact email (starts_with is the net, the full address is the check).
+		if(rpContact == "")
+		{
+			rpFoundC = zoho.crm.searchRecords("Contacts","(Email:starts_with:" + emPre + ")");
+			for each rpc in rpFoundC
+			{
+				if(rpContact == "" && rpc.get("Email") != null)
+				{
+					if(rpc.get("Email").toString().equalsIgnoreCase(emIn))
+					{
+						rpContact = rpc.get("id").toString();
+						if(rpc.get("Account_Name") != null)
+						{
+							rpAcc = rpc.get("Account_Name").get("id").toString();
+						}
+						rpHow = "existing contact";
+					}
+				}
+			}
+		}
+		// 2. An open Lead for this email: convert it (one person, one record).
+		if(rpContact == "")
+		{
+			rpLead = "";
+			rpFoundL = zoho.crm.searchRecords("Leads","(Email:starts_with:" + emPre + ")");
+			for each rpl in rpFoundL
+			{
+				if(rpLead == "" && rpl.get("Email") != null)
+				{
+					if(rpl.get("Email").toString().equalsIgnoreCase(emIn))
+					{
+						rpLead = rpl.get("id").toString();
+					}
+				}
+			}
+			if(rpLead != "")
+			{
+				rpCv = Map();
+				rpCv.put("overwrite",false);
+				rpCv.put("notify_lead_owner",false);
+				rpCv.put("notify_new_entity_owner",false);
+				rpConv = zoho.crm.convertLead(rpLead.toLong(),rpCv);
+				if(rpConv.get("Contacts") != null)
+				{
+					rpContact = rpConv.get("Contacts").toString();
+					rpHow = "lead converted";
+				}
+				if(rpConv.get("Accounts") != null)
+				{
+					rpAcc = rpConv.get("Accounts").toString();
+				}
+			}
+		}
+		// 3. The Account: company number, then exact name, else create it.
+		if(rpAcc == "" && rpCoNo != "")
+		{
+			rpFa = zoho.crm.searchRecords("Accounts","(Company_URN:equals:" + rpCoNo + ")");
+			for each rpa in rpFa
+			{
+				if(rpAcc == "")
+				{
+					rpAcc = rpa.get("id").toString();
+				}
+			}
+		}
+		rpAccName = rpCo;
+		if(rpAccName == "")
+		{
+			rpAccName = (rpFirst + " " + rpLast).trim();
+		}
+		if(rpAcc == "" && rpCo != "")
+		{
+			rpFb = zoho.crm.searchRecords("Accounts","(Account_Name:equals:" + rpCo + ")");
+			for each rpb in rpFb
+			{
+				if(rpAcc == "" && rpb.get("Account_Name") != null)
+				{
+					if(rpb.get("Account_Name").toString().equalsIgnoreCase(rpCo))
+					{
+						rpAcc = rpb.get("id").toString();
+					}
+				}
+			}
+		}
+		if(rpAcc == "")
+		{
+			rpNa = Map();
+			rpNa.put("Account_Name",rpAccName);
+			if(rpCoNo != "")
+			{
+				rpNa.put("Company_URN",rpCoNo);
+			}
+			rpTypes = List();
+			rpTypes.add("Trademark Applicant");
+			rpTypes.add("Billing Account");
+			rpNa.put("Account_Type_2",rpTypes);
+			rpNa.put("Description","Created by the website Renewal Search (" + rpMarkTxt + ").");
+			rpNac = zoho.crm.createRecord("Accounts",rpNa);
+			if(rpNac.get("id") != null)
+			{
+				rpAcc = rpNac.get("id").toString();
+			}
+		}
+		// 4. No Contact yet: create it on the Account.
+		if(rpContact == "")
+		{
+			rpCm = Map();
+			rpCm.put("First_Name",rpFirst);
+			rpCm.put("Last_Name",rpLast);
+			rpCm.put("Email",emIn);
+			if(rpPhone != "")
+			{
+				rpCm.put("Phone",rpPhone);
+			}
+			if(rpAcc != "")
+			{
+				rpCm.put("Account_Name",rpAcc);
+			}
+			rpCc = zoho.crm.createRecord("Contacts",rpCm);
+			if(rpCc.get("id") != null)
+			{
+				rpContact = rpCc.get("id").toString();
+				rpHow = "contact created";
+			}
+		}
+		else if(rpAcc != "")
+		{
+			rpCr = zoho.crm.getRecordById("Contacts",rpContact.toLong());
+			if(rpCr.get("Account_Name") == null)
+			{
+				rpCu = Map();
+				rpCu.put("Account_Name",rpAcc);
+				zoho.crm.updateRecord("Contacts",rpContact.toLong(),rpCu);
+			}
+		}
+		// 5. A mark we already hold: use ITS Account when this visitor belongs to it.
+		rpOwner = "";
+		rpOwnerOk = false;
+		for each rpm2 in rpMarks
+		{
+			if(rpOwner == "")
+			{
+				rpT = zoho.crm.searchRecords("Trademark","(Name:equals:" + rpm2.toString() + ")");
+				for each rpt in rpT
+				{
+					if(rpOwner == "" && rpt.get("Account_URN") != null)
+					{
+						rpOwner = rpt.get("Account_URN").get("id").toString();
+					}
+				}
+			}
+		}
+		if(rpOwner != "")
+		{
+			if(rpOwner == rpAcc)
+			{
+				rpOwnerOk = true;
+			}
+			else
+			{
+				rpOr = zoho.crm.getRecordById("Accounts",rpOwner.toLong());
+				if(rpOr.get("Parent_Account") != null)
+				{
+					if(rpOr.get("Parent_Account").get("id").toString() == rpAcc)
+					{
+						rpOwnerOk = true;
+					}
+				}
+				if(rpOwnerOk == false && rpContact != "")
+				{
+					rpLinks = zoho.crm.getRelatedRecords("Contacts19","Accounts",rpOwner.toLong());
+					for each rpk in rpLinks
+					{
+						if(rpk.get("Associated_Contacts") != null)
+						{
+							if(rpk.get("Associated_Contacts").get("id").toString() == rpContact)
+							{
+								rpOwnerOk = true;
+							}
+						}
+					}
+				}
+			}
+			if(rpOwnerOk)
+			{
+				rpAcc = rpOwner;
+			}
+		}
+		// 6. The engine refused: a person checks it.
+		if(rpRefused != "" && rpContact != "")
+		{
+			rpTk = Map();
+			rpTk.put("Subject","Website renewal request needs checking: " + rpMarkTxt);
+			rpTk.put("Who_Id",rpContact);
+			if(rpAcc != "")
+			{
+				rpTk.put("What_Id",rpAcc);
+				rpTk.put("$se_module","Accounts");
+			}
+			rpTk.put("Owner","1964745000036444001");
+			rpTk.put("Due_Date",zoho.currentdate.addDay(1));
+			rpTk.put("Priority","High");
+			rpTk.put("Description","The website Renewal Search could not quote this automatically: " + rpRefused + nl + "Marks: " + rpMarkTxt + nl + "Email: " + emIn + nl + "Company given: " + rpCo + " " + rpCoNo);
+			rpTkR = zoho.crm.createRecord("Tasks",rpTk);
+			if(rpTkR.get("id") != null)
+			{
+				res.put("task",rpTkR.get("id").toString());
+			}
+			else
+			{
+				res.put("task_error",rpTkR.toString());
+			}
+		}
+		if(rpContact != "" && rpRefused == "")
+		{
+			rpNt = Map();
+			rpNt.put("Parent_Id",rpContact);
+			rpNt.put("se_module","Contacts");
+			rpNt.put("Note_Title","[Renewal] Website renewal request");
+			rpNt.put("Note_Content","Started a renewal on the website Renewal Search for: " + rpMarkTxt + ".");
+			zoho.crm.createRecord("Notes",rpNt);
+		}
+		res.put("ok",true);
+		res.put("zoho_contact_id",rpContact);
+		res.put("zoho_account_id",rpAcc);
+		res.put("contact_how",rpHow);
+		res.put("owner_account",rpOwner);
+		res.put("owner_match",rpOwnerOk);
+	}
