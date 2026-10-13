@@ -1859,6 +1859,142 @@ serve(async (req) => {
     }
   }
 
+  // --- Renewal Search -> renewal engine (search-journey, 13 Oct 2026) ----------
+  // Handoff _Hub/handoffs/RENEWALS_FOR_SEARCH_JOURNEY_2026-10-12.md. The engine on
+  // audit.thetrademarkhelpline.com prices and writes every renewal; this is the
+  // server-to-server relay so the key never reaches the browser. Prices come
+  // ONLY from the engine (renewals.py quote() is superseded). The browser can
+  // never choose a price tier: `tier` is never forwarded.
+  if (req.method === "POST" && (path === "/renewal/preview" || path === "/renewal/submit")) {
+    const body = await readJson(req) ?? {};
+    const RENEWAL_API = Deno.env.get("RENEWAL_API_BASE") ?? "https://audit.thetrademarkhelpline.com";
+    const RENEWAL_KEY = Deno.env.get("TMH_RENEWAL_KEY") ?? "";
+    if (!RENEWAL_KEY) {
+      return json({ ok: false, unavailable: true,
+        error: "Online renewal pricing is not switched on yet." }, 200, origin);
+    }
+    const OPTIONS = ["plan", "quarterly", "annual", "none"];
+    const rawMarks = Array.isArray(body.marks) ? body.marks as unknown[] : [];
+    const marks = rawMarks.slice(0, 50).map((m) => {
+      const o = (m && typeof m === "object") ? m as Record<string, unknown> : { number: m };
+      const out: Record<string, unknown> = { number: String(o.number ?? "").trim() };
+      if (o.changes && typeof o.changes === "object") out.changes = o.changes;
+      return out;
+    }).filter((m) => String(m.number).length > 0);
+    if (!marks.length) return json({ ok: false, error: "choose at least one trademark" }, 400, origin);
+    const option = OPTIONS.includes(String(body.option)) ? String(body.option) : "plan";
+    const packet: Record<string, unknown> = {
+      source: "results", marks, option,
+      audit_addon: body.audit_addon === undefined ? true : !!body.audit_addon,
+      auto_renew: !!body.auto_renew,
+    };
+    const callEngine = async (route: string, pk: Record<string, unknown>) => {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 55_000);
+      try {
+        const r = await fetch(RENEWAL_API + route, {
+          method: "POST", signal: ctl.signal,
+          headers: { "Content-Type": "application/json", "X-Renewal-Key": RENEWAL_KEY },
+          body: JSON.stringify(pk),
+        });
+        const t = await r.text();
+        let j: unknown = null;
+        try { j = JSON.parse(t); } catch { j = { raw: t.slice(0, 300) }; }
+        return { status: r.status, body: j as Record<string, unknown> };
+      } finally { clearTimeout(timer); }
+    };
+    const sid = String(body.session_id ?? "");
+    const sess = sid ? await currentSession(sid) : null;
+    const demo = !!sess && String(sess.tenant_id) === "demo";
+
+    if (path === "/renewal/preview") {
+      try {
+        const r = await callEngine("/api/renewal/preview", packet);
+        if (r.status !== 200) {
+          return json({ ok: false, status: r.status,
+            error: String((r.body as Record<string, unknown>)?.detail ?? "preview failed") }, 200, origin);
+        }
+        return json({ ok: true, preview: r.body }, 200, origin);
+      } catch (e) {
+        return json({ ok: false, error: String(e) }, 200, origin);
+      }
+    }
+
+    // ---- submit: who is renewing, then the engine writes the Deal(s) and Order
+    const ct = (body.contact && typeof body.contact === "object") ? body.contact as Record<string, unknown> : {};
+    const co = (body.company && typeof body.company === "object") ? body.company as Record<string, unknown> : {};
+    const email = String(ct.email ?? "").trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return json({ ok: false, error: "a valid email address is needed" }, 400, origin);
+    }
+    const party = {
+      stage: "renewal_party", session_id: sid, email,
+      first_name: String(ct.first_name ?? "").trim(), last_name: String(ct.last_name ?? "").trim(),
+      phone: String(ct.phone ?? "").trim(),
+      company_name: String(co.name ?? "").trim(), company_number: String(co.number ?? "").trim(),
+      marks: marks.map((m) => String(m.number)),
+    };
+    if (demo || !ZOHO_CHECKOUT_URL) {
+      if (sid) await admin.from("journey_events").insert({ session_id: sid,
+        event_type: "renewal_submit_demo", payload: { marks: party.marks, option } });
+      return json({ ok: true, demo: true, quote_url: null,
+        message: "Sandbox: nothing was sent to Zoho or the renewal engine." }, 200, origin);
+    }
+    const zohoStage = async (pl: Record<string, unknown>) => {
+      const r = await fetch(ZOHO_CHECKOUT_URL, { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(pl) });
+      const text = await r.text();
+      let parsed: Record<string, unknown> | null = null;
+      try { parsed = JSON.parse(text); } catch { parsed = null; }
+      const det = parsed?.details as Record<string, unknown> | undefined;
+      if (typeof det?.output === "string") {
+        try { return JSON.parse(det.output as string) as Record<string, unknown>; } catch { /* fall through */ }
+      }
+      return (parsed ?? {}) as Record<string, unknown>;
+    };
+    let ids: Record<string, unknown> = {};
+    try { ids = await zohoStage(party); } catch (e) {
+      return json({ ok: false, error: "could not record your details: " + String(e) }, 200, origin);
+    }
+    const accountId = String(ids.zoho_account_id ?? "");
+    const contactId = String(ids.zoho_contact_id ?? "");
+    if (!accountId || !contactId) {
+      if (sid) await admin.from("journey_events").insert({ session_id: sid,
+        event_type: "renewal_party_failed", payload: { ids } });
+      return json({ ok: false, error: "We could not set up your account. Please call us on 0161 833 5400." }, 200, origin);
+    }
+    packet.account_id = accountId;
+    packet.contact = { id: contactId,
+      name: `${party.first_name} ${party.last_name}`.trim(), email, phone: party.phone };
+    try {
+      const r = await callEngine("/api/renewal", packet);
+      const b = r.body as Record<string, unknown>;
+      if (r.status === 403 || r.status === 400) {
+        const why = String(b?.detail ?? "needs checking");
+        await zohoStage({ ...party, zoho_contact_id: contactId, zoho_account_id: accountId, refused: why });
+        if (sid) await admin.from("journey_events").insert({ session_id: sid,
+          event_type: "renewal_refused", payload: { status: r.status, why, marks: party.marks } });
+        return json({ ok: false, refused: true,
+          message: "We need to check one or more of these trademarks before we can quote. "
+            + "We've passed it to the team and someone will be in touch within one working day." }, 200, origin);
+      }
+      if (r.status !== 200) {
+        if (sid) await admin.from("journey_events").insert({ session_id: sid,
+          event_type: "renewal_engine_error", payload: { status: r.status, body: b } });
+        return json({ ok: false, error: "The renewal service did not respond. Please try again or call 0161 833 5400." }, 200, origin);
+      }
+      if (sid) await admin.from("journey_events").insert({ session_id: sid,
+        event_type: "renewal_submitted", payload: { marks: party.marks, option,
+          account_id: accountId, contact_id: contactId, owner_match: ids.owner_match ?? null,
+          order: (b.order as Record<string, unknown> | undefined)?.id ?? null,
+          quote_url: b.quote_url ?? null, problems: b.problems ?? [] } });
+      return json({ ok: true, quote_url: b.quote_url ?? null, joined: !!b.joined_proposal,
+        early: b.early ?? [], speak: b.speak ?? [] }, 200, origin);
+    } catch (e) {
+      return json({ ok: false, error: String(e) }, 200, origin);
+    }
+  }
+
   // --- zoho-linked ---------------------------------------------------------------
   // Zoho Flow posts back here once it creates a record from a zohoPayload
   // push, same pattern as Industry Report's `zoho_linked` event. Stores the
