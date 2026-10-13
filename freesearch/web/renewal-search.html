@@ -462,6 +462,10 @@ document.addEventListener('click', function(e){
   else if(act==='msg-send') sendMessage();
   else if(act==='chat') openChat();
   else if(act==='opt'){ CHOICE = +a.dataset.n; drawRenew(); }
+  else if(act==='eopt'){ ENG.option = a.dataset.o; drawEngine(); }
+  else if(act==='edetails'){ drawDetails(); scrollUp(); }
+  else if(act==='eback'){ drawEngine(); scrollUp(); }
+  else if(act==='esubmit') submitRenewal(a);
   else if(act==='sort'){ const k=a.dataset.k; PSORT = {k, d: PSORT.k===k ? -PSORT.d : 1}; drawPortfolio(); }
 }, true);
 
@@ -529,6 +533,13 @@ async function show(st){
     const nums = st.nums ? st.nums.split(',') : selNums();
     if(!nums.length){ elView.innerHTML = backBtn()+'<div class="empty">Tick at least one trademark first.</div>'; return; }
     loadingView('Working out your renewal options\u2026');
+    // Prices come from the renewal engine (12 Oct decisions). The local quote
+    // below is only the fallback while the engine connection is switched off.
+    ENG = {nums, option: ENG && ENG.option || 'plan', addon: ENG ? ENG.addon : true, changes: (ENG && ENG.changes) || {}, p:null};
+    const ep = await enginePreview();
+    if(ep && ep.ok){ ENG.p = ep.preview; drawEngine(); return; }
+    if(ep && !ep.unavailable){ elView.innerHTML = backBtn()+'<div class="empty">'+esc(ep.error||'We could not price that just now. Please try again or call 0161 833 5400.')+'</div>'; return; }
+    ENG = null;
     let d; try{ d = await (await fetch('/renewal-lookup?action=quote&numbers='+encodeURIComponent(nums.join(',')))).json(); }catch(e){ d = null; }
     if(!d || !d.ok){ elView.innerHTML = backBtn()+'<div class="empty">'+esc((d&&d.error)||'We could not price that just now. Please try again.')+'</div>'; return; }
     QUOTE = d; CHOICE = CHOICE || 2; drawRenew(); return;
@@ -735,6 +746,138 @@ function drawRenew(){
        '<div class="acts" style="margin-top:12px"><button type="button" class="btn pink" disabled>Continue: your details</button>'+
        '<span class="hint" style="align-self:center">Next: confirm your details, sign the authority, and pay.</span></div></div></div>';
   elView.innerHTML = h;
+}
+
+/* ===== RENEWAL ENGINE (search-journey, 13 Oct 2026) ======================
+   Handoff RENEWALS_FOR_SEARCH_JOURNEY_2026-10-12. The journey relays to the
+   engine on audit.thetrademarkhelpline.com (the key never reaches the browser).
+   Show RRP (renewal_anchor + monthly RRP), ONE saving, due today inc VAT, never
+   tier names. Submit sends the visitor straight to the engine's quote page. */
+let ENG = null;
+const OPT_ORDER = ['plan','quarterly','annual','none'];
+function gbp(n){ n = Number(n||0); return '£'+n.toLocaleString('en-GB',{minimumFractionDigits: n%1 ? 2 : 0, maximumFractionDigits:2}); }
+function engMarks(){
+  return ENG.nums.map(n=>{ const o = {number:n}; const c = ENG.changes[n]; if(c && Object.keys(c).length) o.changes = c; return o; });
+}
+async function enginePreview(){
+  try{
+    const sid = await session();
+    const r = await fetch(JOURNEY + '/renewal/preview', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({session_id: sid, marks: engMarks(), option: ENG.option, audit_addon: ENG.addon})});
+    return await r.json();
+  }catch(e){ return {ok:false, unavailable:true}; }
+}
+const ACT = {renew:['Due for renewal','urgent'], restore:['Overdue: late fee applies','urgent'], early:['Not due yet','ok'], speak:['Talk to us','soon']};
+function engMarkRow(m){
+  const a = ACT[m.action] || ['',''];
+  const cls = Array.isArray(m.classes) ? m.classes.join(', ') : (m.classes||'');
+  return '<div class="mark dis" style="cursor:default"><span></span><div><div class="nm">'+esc(m.label||m.number)+'</div>'+
+    '<div class="meta">'+esc(m.number||'')+(m.expiry?' &middot; expires '+esc(fmtDate(m.expiry)):'')+(cls?' &middot; Class'+(String(cls).includes(',')?'es ':' ')+esc(cls):'')+'</div>'+
+    (m.why?'<div class="say">'+esc(m.why)+'</div>':'')+'</div>'+
+    '<div class="right">'+(a[0]?'<span class="badge t-'+a[1]+'">'+a[0]+'</span>':'')+'</div></div>';
+}
+function drawEngine(){
+  const p = ENG.p || {}, q = p.quote || {}, opts = q.options || {}, marks = p.marks || [];
+  const live = marks.filter(m=>m.action==='renew' || m.action==='restore');
+  const early = marks.filter(m=>m.action==='early'), speak = marks.filter(m=>m.action==='speak');
+  let h = backBtn()+'<p class="eyebrow">Renew online</p><h1>'+(live.length ? 'Choose how to renew '+(live.length===1?'your trademark':'your '+live.length+' trademarks') : 'Your trademarks')+'</h1>';
+  h += '<div class="marks" style="margin:12px 0">'+marks.map(engMarkRow).join('')+'</div>';
+  if(early.length) h += '<p class="hint">'+(early.length===1?'One of these is':early.length+' of these are')+' not due yet. Leave your details and we will set up auto-renew, so it renews on time with nothing to remember.</p>';
+  if(speak.length) h += '<p class="hint">'+(speak.length===1?'One of these needs':speak.length+' of these need')+' a quick conversation before we can renew it. Leave your details and we will call you, or <a href="'+bookUrl(speak.map(m=>m.number))+'" target="_blank" rel="noopener">book a free call</a>.</p>';
+  if(live.length){
+    const keys = OPT_ORDER.filter(k=>opts[k]);
+    if(!keys.includes(ENG.option)) ENG.option = keys[0];
+    h += '<div class="opts">'+keys.map(k=>{ const o = opts[k];
+      const anchor = Number(o.renewal_anchor||o.renewal_rrp||0), price = Number(o.renewal||0);
+      const inc = Array.isArray(o.included) ? o.included : (o.included ? [o.included] : []);
+      const mo = Number(o.monthly||0), moR = Number(o.monthly_rrp||0);
+      return '<div class="opt'+(k==='plan'?' rec':'')+(ENG.option===k?' on':'')+'" data-act="eopt" data-o="'+k+'" role="button" tabindex="0">'+
+        (k==='plan'?'<span class="tag">Recommended</span>':'')+
+        '<h3>'+esc(o.title||k)+'</h3>'+
+        '<div>'+(anchor>price?'<span class="was">'+gbp(anchor)+'</span>':'')+(Number(o.saving)>0?'<span class="save">Save '+gbp(o.saving)+'</span>':'')+'</div>'+
+        '<div class="today">'+(price>0?gbp(price):'Included')+' <small>'+(price>0?'renewal':'renewal fee')+'</small></div>'+
+        (inc.length?'<ul>'+inc.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+
+        '<div class="then">'+(mo>0?'Then '+(moR>mo?'<s style="color:var(--quiet);font-weight:400">'+gbp(moR)+'</s> ':'')+gbp(mo)+' a month<span>Rolling monthly. Cancel or change at any time.</span>':'Nothing more to pay')+'</div></div>'; }).join('')+'</div>';
+    const o = opts[ENG.option] || {};
+    h += '<div class="sect"><h3>What you pay today</h3><div class="in">'+
+      '<label style="display:flex;gap:10px;align-items:flex-start;font-size:.92rem;margin:4px 0 10px;cursor:pointer"><input type="checkbox" id="e-addon"'+(ENG.addon?' checked':'')+' style="margin-top:3px">'+
+      '<span><b>Add a Clearance Audit and Consultation</b> (recommended). A full check of who else is using names like yours, and a call with us to talk it through.</span></label>'+
+      '<table class="fees">'+(Number(o.today_ex_vat)?'<tr><td>Before VAT</td><td class="r">'+gbp(o.today_ex_vat)+'</td></tr>':'')+
+      (Number(o.today_vat)?'<tr><td>VAT</td><td class="r">'+gbp(o.today_vat)+'</td></tr>':'')+
+      '<tr class="tot"><td>Due today</td><td class="r">'+gbp(o.today)+'</td></tr></table>'+
+      '<p class="hint">Includes the UKIPO renewal fees'+(Number(q.official_total)?' ('+gbp(q.official_total)+')':'')+'.'+(Number(o.monthly)?' Then '+gbp(o.monthly)+' a month.':'')+'</p>'+
+      '<div class="acts" style="margin-top:12px"><button type="button" class="btn pink" data-act="edetails">Continue: your details</button>'+
+      '<span class="hint" style="align-self:center">Next: confirm who owns the trademark, then review and pay.</span></div></div></div>';
+  } else {
+    h += '<div class="acts" style="margin-top:12px"><button type="button" class="btn pink" data-act="edetails">'+(early.length && !speak.length ? 'Set up auto-renew' : 'Ask us to call you')+'</button></div>';
+  }
+  elView.innerHTML = h;
+}
+document.addEventListener('change', async function(e){
+  if(e.target.id !== 'e-addon' || !ENG) return;
+  ENG.addon = e.target.checked; e.target.disabled = true;
+  const ep = await enginePreview();
+  if(ep && ep.ok) ENG.p = ep.preview;
+  drawEngine();
+});
+function fld(id, label, type, ac){ return '<div><label for="'+id+'" style="display:block;font-size:.86rem;font-weight:700;color:var(--navy);margin:12px 0 4px">'+label+'</label>'+
+  '<input id="'+id+'" type="'+(type||'text')+'"'+(ac?' autocomplete="'+ac+'"':'')+' style="width:100%;padding:10px 12px;border:1.5px solid var(--field-line);border-radius:8px;font:inherit;font-size:.95rem;flex:none"></div>'; }
+function drawDetails(){
+  const marks = (ENG.p && ENG.p.marks) || [];
+  const g2 = 'style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 12px"';
+  let h = '<button type="button" class="back" data-act="eback">← Back</button><p class="eyebrow">Your details</p><h1>Who is renewing?</h1>'+
+    '<p class="hint">We use these to set up your renewal. Nothing is charged until you review and pay on the next page.</p>'+
+    '<div class="sect"><h3>You</h3><div class="in"><div '+g2+'>'+fld('d-first','First name','text','given-name')+fld('d-last','Last name','text','family-name')+
+    fld('d-email','Email','email','email')+fld('d-phone','Phone','tel','tel')+'</div></div></div>'+
+    '<div class="sect"><h3>The trademark owner</h3><div class="in"><p class="hint" style="margin-top:0">If the trademark is owned by a company, give its name and company number. Leave blank if you own it yourself.</p><div '+g2+'>'+
+    fld('d-co','Company name','text','organization')+fld('d-cono','Company number')+'</div></div></div>'+
+    '<div class="sect"><h3>Has anything changed?</h3><div class="in">'+
+    '<label style="display:flex;gap:10px;font-size:.92rem;cursor:pointer"><input type="checkbox" id="d-chg"> The owner’s name or address has changed since the trademark was registered</label>'+
+    '<div id="d-chgbox" hidden><div '+g2+'>'+fld('d-own','New owner name (if it changed)')+fld('d-ownno','New owner company number')+
+    fld('d-a1','Address line 1','text','address-line1')+fld('d-a2','Address line 2','text','address-line2')+fld('d-town','Town','text','address-level2')+fld('d-pc','Postcode','text','postal-code')+fld('d-ctry','Country','text','country-name')+'</div>'+
+    '<p class="hint">An address change is included in your renewal. A new owner is handled as a transfer, and we will be in touch about it.</p></div>';
+  const withCls = marks.filter(m=>(m.action==='renew'||m.action==='restore') && Array.isArray(m.classes) && m.classes.length>1);
+  if(withCls.length) h += '<p style="font-size:.92rem;margin:14px 0 4px"><b>Classes to renew.</b> Untick any class you no longer need. It will be left out of the renewal.</p>'+
+    withCls.map(m=>'<div style="margin:6px 0"><span class="hint">'+esc(m.label||m.number)+':</span> '+m.classes.map(c=>'<label style="margin-right:12px;font-size:.92rem;white-space:nowrap"><input type="checkbox" class="d-cls" data-n="'+esc(m.number)+'" value="'+esc(c)+'" checked> Class '+esc(c)+'</label>').join('')+'</div>').join('');
+  h += '</div></div>'+
+    '<p class="err" id="d-err"></p><div class="acts" style="margin-top:12px"><button type="button" class="btn pink" data-act="esubmit">Continue to review and pay</button></div>';
+  elView.innerHTML = h;
+  document.getElementById('d-chg').addEventListener('change', e=>{ document.getElementById('d-chgbox').hidden = !e.target.checked; });
+}
+async function submitRenewal(btn){
+  const g = id=>{ const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const err = document.getElementById('d-err'); err.classList.remove('on');
+  if(!g('d-first') || !g('d-last') || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(g('d-email'))){
+    err.textContent = 'Please add your first name, last name and a valid email.'; err.classList.add('on'); return; }
+  const changes = {};
+  ENG.nums.forEach(n=>{ changes[n] = {}; });
+  if(document.getElementById('d-chg').checked){
+    const addr = {line1:g('d-a1'), line2:g('d-a2'), town:g('d-town'), postcode:g('d-pc'), country:g('d-ctry')};
+    const own = {name:g('d-own'), company_number:g('d-ownno')};
+    ENG.nums.forEach(n=>{ if(addr.line1 || addr.postcode) changes[n].address = addr; if(own.name) changes[n].owner = own; });
+  }
+  document.querySelectorAll('.d-cls').forEach(c=>{ if(!c.checked){ const n = c.dataset.n;
+    (changes[n].remove_classes = changes[n].remove_classes || []).push(Number(c.value)); } });
+  ENG.changes = changes;
+  btn.disabled = true; btn.textContent = 'Setting up your renewal…';
+  let d = null;
+  try{
+    const sid = await session();
+    const r = await fetch(JOURNEY + '/renewal/submit', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({session_id: sid, marks: engMarks(), option: ENG.option, audit_addon: ENG.addon, auto_renew: false,
+        contact: {first_name:g('d-first'), last_name:g('d-last'), email:g('d-email'), phone:g('d-phone')},
+        company: {name:g('d-co'), number:g('d-cono')}})});
+    d = await r.json();
+  }catch(e){ d = null; }
+  if(d && d.ok && d.quote_url){
+    try{ window.top.location.href = d.quote_url; }catch(e){ location.href = d.quote_url; }
+    elView.innerHTML = '<div class="empty">Taking you to your quote… <a href="'+esc(d.quote_url)+'" target="_top">Open it here</a> if nothing happens.</div>';
+    return;
+  }
+  if(d && d.ok){ elView.innerHTML = '<p class="eyebrow">Thank you</p><h1>We have your details</h1><div class="empty">'+esc(d.message || 'We will be in touch within one working day about the trademarks we need to talk through.')+'</div>'; return; }
+  if(d && d.refused){ elView.innerHTML = '<p class="eyebrow">Thank you</p><h1>We will check this for you</h1><div class="empty">'+esc(d.message)+'</div>'; return; }
+  btn.disabled = false; btn.textContent = 'Continue to review and pay';
+  err.textContent = (d && d.error) || 'Something went wrong. Please try again or call 0161 833 5400.'; err.classList.add('on');
 }
 
 /* ticking in the trademark page / portfolio tables */
