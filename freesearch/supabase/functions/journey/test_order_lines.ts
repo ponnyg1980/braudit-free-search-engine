@@ -42,7 +42,7 @@ eq("web net", net(w), 99);
 const wz = echo(w, false, "Baseline", true);
 eq("web price points", wz.items.map((i) => i.Price_Point ?? null),
    ["Baseline", "Baseline", "Baseline", null, "Included", null]);
-eq("web deal money", wz.dealMoney, { RRP_Total_Fee_Amount: 746, Collecting_Fee_Invoiced: 99, Gross_Profit: 99 });
+eq("web deal money", wz.dealMoney, { Amount: 99, RRP_Total_Fee_Amount: 746, Collecting_Fee_Invoiced: 99, Gross_Profit: 99 });
 eq("web totals tie", [wz.order.Total, wz.warnings], [118.8, []]);
 
 // 2. Introduced client on Discounted (UK): each element at £119.
@@ -53,13 +53,13 @@ eq("introduced rows", rows(d), [
   ["Clearance Audit – discount applied", -60], ["Clearance Consultation", 149], ["Clearance Consultation – included", -149]]);
 const dz = echo(d, false, "Discounted", false);
 eq("introduced pp", dz.items.map((i) => i.Price_Point ?? null), ["Discounted", "Discounted", null, "Included", null]);
-eq("introduced money", dz.dealMoney, { RRP_Total_Fee_Amount: 447, Collecting_Fee_Invoiced: 238, Gross_Profit: 202.3 });
+eq("introduced money", dz.dealMoney, { Amount: 238, RRP_Total_Fee_Amount: 447, Collecting_Fee_Invoiced: 238, Gross_Profit: 202.3 });
 
 // 3. RRP-tier client: no discount line at all on the audit.
 const r = buildXeroLines({ lines: [{ l: "Name — X", p: 14900 }], marks: 1, vatExempt: true, worldwide: false,
   tier: "RRP", webException: false, consult: false });
 eq("rrp rows", rows(r), [['UK Clearance Audit – Word mark "X"', 149]]);
-eq("rrp money", echo(r, true, "RRP", false).dealMoney, { RRP_Total_Fee_Amount: 149, Collecting_Fee_Invoiced: 149, Gross_Profit: 104.3 });
+eq("rrp money", echo(r, true, "RRP", false).dealMoney, { Amount: 149, RRP_Total_Fee_Amount: 149, Collecting_Fee_Invoiced: 149, Gross_Profit: 104.3 });
 
 // 4. Staff, direct client dropped to Baseline, Worldwide, overseas; consultation
 //    charged at £99 (discount removed partly); one line raised above RRP.
@@ -72,7 +72,13 @@ eq("staff net", net(s), 149 + 250 + 99);
 const sz = echo(s, true, "Baseline", false);
 eq("staff pp", sz.items.map((i) => i.Price_Point ?? null), ["Baseline", "Baseline", null, "Baseline", null]);
 eq("staff codes", sz.items.map((i) => [i.product_code, i.Xero_Tax_Type]).slice(0, 4), [
-  ["UKTM-AUD-WW-INTL", "NONE"], ["UKTM-AUD-WW-INTL", "NONE"], ["UKTM-AUD-WW-INTL", "NONE"], ["UKTM-CONS-INTL", "NONE"]]);
+  ["UKTM-AUD-WW-INTL", "NONE"], ["UKTM-AUD-WW-INTL", "NONE"], ["DISC-SAL-INTL", "NONE"], ["UKTM-CONS-INTL", "NONE"]]);
+// Savings: Discounts account (291 overseas), linked to the fee line they reduce (A&M convention).
+eq("staff discount codes", s.items.map((i) => i.AccountCode), ["247", "247", "291", "247", "291"]);
+eq("staff reduces", sz.items.map((i) => i.reduces_key ?? null), [null, null, 0, null, 3]);
+eq("web reduces", wz.items.map((i) => i.reduces_key ?? null), [null, null, null, 0, null, 4]);
+eq("web discount codes", w.items.map((i) => i.AccountCode), ["227", "227", "227", "290", "227", "290"]);
+eq("web order service fees", [wz.order.Service_Fees, wz.order.Discount], [99, 647]);
 
 // 5. Below the floor (Super Admin override): Discounted tier, element at £80.
 const b = buildXeroLines({ lines: [{ l: "Name — Y", p: 8000 }, { l: "Audit Consultation — discounted to £0", p: 0 }],
