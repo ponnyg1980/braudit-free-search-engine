@@ -3982,6 +3982,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 					}
 				}
 				riF.put("Enquiry_Reason","Renewal");
+				// Capture Method "Renewal Search" (Jonathan, 15 Oct): the mechanism the lead engine scores as priority.
+				riF.put("Capture_Method","Renewal Search");
 				if(riLead != "")
 				{
 					zoho.crm.updateRecord("Leads",riLead.toLong(),riF);
@@ -4012,7 +4014,6 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 					}
 					riF.put("Lead_Status","New");
 					riF.put("Lead_Source","Search Result Only");
-					riF.put("Capture_Method","Website Visit");
 					riF.put("Capture_Form","Renewal Search");
 					riF.put("Data_Processing_Basis","Legitimate Interests");
 					riF.put("Free_Search_Session",sessionId);
