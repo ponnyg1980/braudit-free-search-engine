@@ -31,6 +31,9 @@ export interface LineMeta {
   charged?: number;
   /** consultation given free with the audit -> Price_Point "Included" */
   included?: boolean;
+  /** Discount lines: index (in the sent lines) of the fee line it reduces.
+   *  Every saving records its parent, as in the A&M order system (Deal_Items.Reduces). */
+  reduces?: number;
 }
 
 /** The catalogue price of a product at a tier. */
@@ -48,10 +51,10 @@ export interface XeroLineOut {
   AccountCode: string; TaxType: string; Tracking?: unknown;
 }
 
-export function accountFor(vatExempt: boolean): { code: string; tax: string } {
+export function accountFor(vatExempt: boolean): { code: string; tax: string; discount: string } {
   return vatExempt
-    ? { code: BILLING_CODES.nonuk, tax: BILLING_CODES.tax_nonuk }
-    : { code: BILLING_CODES.uk, tax: BILLING_CODES.tax_uk };
+    ? { code: BILLING_CODES.nonuk, tax: BILLING_CODES.tax_nonuk, discount: BILLING_CODES.discount_nonuk }
+    : { code: BILLING_CODES.uk, tax: BILLING_CODES.tax_uk, discount: BILLING_CODES.discount_uk };
 }
 
 export function isForbidden(code: string): boolean {
@@ -116,28 +119,29 @@ export function buildXeroLines(opts: {
   /** Legacy events only (no line list / no tier): old promo in pence. */
   discountPence?: number;
 }): { items: XeroLineOut[]; meta: LineMeta[] } {
-  const { code, tax } = accountFor(opts.vatExempt);
+  const { code, tax, discount } = accountFor(opts.vatExempt);
   const items: XeroLineOut[] = [];
   const meta: LineMeta[] = [];
   const push = (Description: string, UnitAmount: number, m: LineMeta, Quantity = 1) => {
     items.push({ Description, Quantity, UnitAmount: Math.round(UnitAmount * 100) / 100,
-                 AccountCode: code, TaxType: tax });
+                 AccountCode: m.lineType === "Discount" ? discount : code, TaxType: tax });
     meta.push(m);
+    return meta.length - 1;
   };
   const consultRrp = CATALOGUE.CONSULT_CLEARANCE.rrp;
   const consultLines = (charged: number) => {
     if (charged <= 0) {
-      push("Clearance Consultation", consultRrp,
+      const parent = push("Clearance Consultation", consultRrp,
            { sku: "CONSULT_CLEARANCE", lineType: "TMH Fee", charged: 0, included: true });
       push("Clearance Consultation – included", -consultRrp,
-           { sku: "CONSULT_CLEARANCE", lineType: "Discount" });
+           { sku: "CONSULT_CLEARANCE", lineType: "Discount", reduces: parent });
       return;
     }
     const unit = Math.max(consultRrp, charged);
-    push("Clearance Consultation", unit, { sku: "CONSULT_CLEARANCE", lineType: "TMH Fee", charged });
+    const parent = push("Clearance Consultation", unit, { sku: "CONSULT_CLEARANCE", lineType: "TMH Fee", charged });
     if (unit - charged > 0.004) {
       push("Clearance Consultation – discount applied", -(unit - charged),
-           { sku: "CONSULT_CLEARANCE", lineType: "Discount" });
+           { sku: "CONSULT_CLEARANCE", lineType: "Discount", reduces: parent });
     }
   };
 
@@ -155,12 +159,14 @@ export function buildXeroLines(opts: {
   let consultCharged: number | null = null;
   let audUnits = 0, audCharged = 0;
   let audSku: Sku | null = null;
+  let audFirst = -1;
   for (const x of opts.lines) {
     const c = classify(x.l, opts.worldwide);
     const charged = x.p / 100;
     if (c.sku === "CONSULT_CLEARANCE") { consultCharged = charged; continue; }
     const unit = Math.max(CATALOGUE[c.sku].rrp, charged);
-    push(c.desc, unit, { sku: c.sku, lineType: "TMH Fee", charged });
+    const at = push(c.desc, unit, { sku: c.sku, lineType: "TMH Fee", charged });
+    if (audFirst < 0) audFirst = at;
     audUnits += unit; audCharged += charged; audSku = audSku ?? c.sku;
   }
   if (audSku) {
@@ -169,7 +175,7 @@ export function buildXeroLines(opts: {
     if (off > 0.004) {
       push(opts.webException ? "Clearance Audit Promotion applied"
                              : "Clearance Audit – discount applied",
-           -off, { sku: audSku, lineType: "Discount" });
+           -off, { sku: audSku, lineType: "Discount", reduces: audFirst });
     }
     if (opts.webException) {
       // Spread the £99 over the elements so Price_Point sees the real charge.
@@ -253,27 +259,33 @@ export function buildZohoOrder(opts: {
       const j = opts.sent.findIndex((s) => s.Description === l.Description);
       if (j >= 0) k = j;
     }
-    return { l, m: opts.meta[k] ?? opts.meta[0] };
+    return { l, m: opts.meta[k] ?? opts.meta[0], k };
   });
   const sum = (t: LineType) => pairs.filter((p) => p.m.lineType === t)
     .reduce((a, p) => a + Number(p.l.LineAmount ?? 0), 0);
   const feeSum = sum("TMH Fee");
   const discSum = sum("Discount");                                     // negative
   let rrpTotal = 0;
-  const items = pairs.map(({ l, m }) => {
+  const items = pairs.map(({ l, m, k }) => {
     const amount = r2(Number(l.LineAmount ?? 0));
     const tax = r2(Number(l.TaxAmount ?? 0));
     const qty = Number(l.Quantity ?? 1) || 1;
-    const listPrice = m.lineType === "Discount" ? 0 : CATALOGUE[m.sku].rrp;
+    // A&M convention: a saving line's List Price is its own (negative) amount.
+    const listPrice = m.lineType === "Discount" ? amount : CATALOGUE[m.sku].rrp;
     if (m.lineType === "TMH Fee") rrpTotal += listPrice * qty;
     const rec: Record<string, unknown> = {
       Xero_Line_ID: l.LineItemID ?? "",
-      product_code: opts.vatExempt ? CATALOGUE[m.sku].product_code_intl
-                                   : CATALOGUE[m.sku].product_code_dom,
+      // Savings sit on the Discount Sales product (DISC-SAL-UK / -INTL), as in A&M.
+      product_code: m.lineType === "Discount"
+        ? (opts.vatExempt ? BILLING_CODES.discount_product_intl : BILLING_CODES.discount_product_dom)
+        : (opts.vatExempt ? CATALOGUE[m.sku].product_code_intl : CATALOGUE[m.sku].product_code_dom),
+      line_key: k,
+      reduces_key: m.lineType === "Discount" && typeof m.reduces === "number" ? m.reduces : undefined,
       Description: String(l.Description ?? "").slice(0, 2000),
       Quantity: m.lineType === "Discount" ? 1 : qty,
       List_Price: listPrice,
-      Amount: amount, Discount: 0, Tax: tax, Total: r2(amount + tax),
+      // Total is NET, as on every A&M line (Amount = Total); VAT sits in Tax.
+      Amount: amount, Discount: 0, Tax: tax, Total: amount,
       Line_Type: m.lineType,
       Xero_Account_Code: String(l.AccountCode ?? ""),
       Xero_Tax_Type: String(l.TaxType ?? ""),
@@ -296,7 +308,8 @@ export function buildZohoOrder(opts: {
     Discount: r2(Math.abs(discSum) + Number(inv.TotalDiscount ?? 0)),
     VAT: r2(Number(inv.TotalTax ?? 0)),
     Total: r2(Number(inv.Total ?? 0)),
-    Service_Fees: r2(feeSum),
+    // Service Fees = net TMH fees after savings, as on A&M Orders (Discount carries the savings).
+    Service_Fees: r2(feeSum + discSum),
     Net_Service_Fees: r2(Number(inv.SubTotal ?? 0)),
     Official_Fees: 0,
     Xero_Sync_Time: opts.nowIso,
@@ -304,7 +317,7 @@ export function buildZohoOrder(opts: {
   };
   if (opts.paid && opts.paidDate) order.Paid_Date = opts.paidDate;
   if (opts.stripeId) order.Stripe_Invoice_ID = opts.stripeId;
-  const sumTotal = r2(items.reduce((a, i) => a + Number(i.Total), 0));
+  const sumTotal = r2(items.reduce((a, i) => a + Number(i.Total) + Number(i.Tax), 0));
   if (Math.abs(sumTotal - Number(order.Total)) > 0.011) {
     warnings.push(`line totals ${sumTotal} != invoice total ${order.Total}`);
     order.Xero_Sync_Details = [order.Xero_Sync_Details, warnings.at(-1)].filter(Boolean).join(" | ");
@@ -314,6 +327,9 @@ export function buildZohoOrder(opts: {
   // until the commission ledger exists.
   const collecting = r2(feeSum + discSum);
   const dealMoney = {
+    // Deal Amount = the net fees this Deal is invoiced (Jonathan, 15 Oct: the amount
+    // did not pull through to the Deal). Same meaning as A&M: "Amount = their lines".
+    Amount: collecting,
     RRP_Total_Fee_Amount: r2(rrpTotal),
     Collecting_Fee_Invoiced: collecting,
     Gross_Profit: r2(collecting * (1 - COMMISSION_RATE[opts.webException ? "Baseline" : opts.tier])),
