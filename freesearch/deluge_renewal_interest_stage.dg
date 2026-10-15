@@ -1,0 +1,275 @@
+	else if(stg == "renewal_interest")
+	{
+		// ------------------------------------------- stage: renewal_interest (search-journey, 15 Oct 2026)
+		// Jonathan, 15 Oct: "somebody running a search for a specific applicant or trademark tells us a
+		// lot. That is a lead that we can go and source (with the lead engine) and reach out to if they
+		// don't go any further." Called by the journey when a Renewal Search visitor opens a mark, an
+		// owner's portfolio, or prices a renewal. The LEAD IS THE TRADEMARK OWNER (from the register),
+		// not the anonymous visitor.
+		//   * Owner already a client (we hold the mark, or an Account carries this IPO applicant id):
+		//     no Lead. A Task on that Account for its owner, one open Task per subject.
+		//   * Open Lead for this IPO applicant id: refresh it and re-engage it (tmh_lead_reengage).
+		//   * Otherwise: a new Lead, Lead_Status New, Lead_Source "Search Result Only" (as trademark search).
+		riApp = Map();
+		if(p.get("applicant") != null)
+		{
+			riApp = p.get("applicant").toMap();
+		}
+		riIpo = ifnull(riApp.get("ipo_identifier"),"").toString().trim();
+		riName = ifnull(riApp.get("name"),"").toString().trim();
+		riAct = ifnull(p.get("action"),"Renewal Search").toString();
+		riMarks = List();
+		if(p.get("marks") != null)
+		{
+			riMarks = p.get("marks").toList();
+		}
+		riNums = "";
+		riLines = "";
+		riFirst = Map();
+		riFirstExp = "";
+		for each  riM in riMarks
+		{
+			riMm = riM.toMap();
+			riNo = ifnull(riMm.get("number"),"").toString();
+			riExp = ifnull(riMm.get("expiry"),"").toString();
+			if(riNums != "")
+			{
+				riNums = riNums + ", ";
+			}
+			riNums = riNums + riNo;
+			riLines = riLines + riNo + " " + ifnull(riMm.get("name"),"").toString() + " - expires " + riExp + " (" + ifnull(riMm.get("band"),"").toString() + ")" + nl;
+			// the mark that falls due first leads the record
+			if(riExp != "" && (riFirstExp == "" || riExp.toDate("yyyy-MM-dd") < riFirstExp.toDate("yyyy-MM-dd")))
+			{
+				riFirstExp = riExp;
+				riFirst = riMm;
+			}
+		}
+		if(riFirst.isEmpty() && riMarks.size() > 0)
+		{
+			riFirst = riMarks.get(0).toMap();
+		}
+		res.put("ok",true);
+		if(riIpo == "" && riMarks.size() == 0)
+		{
+			res.put("ok",false);
+			res.put("error","no applicant and no marks");
+		}
+		else
+		{
+			// 1. Already a client?
+			riAcc = "";
+			for each  riM2 in riMarks
+			{
+				if(riAcc == "")
+				{
+					riT = zoho.crm.searchRecords("Trademark","(Name:equals:" + riM2.toMap().get("number").toString() + ")");
+					for each  rit in riT
+					{
+						if(riAcc == "" && rit.get("Account_URN") != null)
+						{
+							riAcc = rit.get("Account_URN").get("id").toString();
+						}
+					}
+				}
+			}
+			if(riAcc == "" && riIpo != "")
+			{
+				riA = zoho.crm.searchRecords("Accounts","(Applicant_identifier:equals:" + riIpo + ")");
+				for each  ria in riA
+				{
+					if(riAcc == "")
+					{
+						riAcc = ria.get("id").toString();
+					}
+				}
+			}
+			if(riAcc != "")
+			{
+				riAr = zoho.crm.getRecordById("Accounts",riAcc.toLong());
+				riSubj = "Renewal Search: " + riNums + " looked at online";
+				if(riSubj.length() > 250)
+				{
+					riSubj = riSubj.subString(0,250);
+				}
+				riDup = false;
+				riRel = zoho.crm.getRelatedRecords("Tasks","Accounts",riAcc.toLong());
+				for each  rtk in riRel
+				{
+					if(ifnull(rtk.get("Subject"),"").toString() == riSubj && ifnull(rtk.get("Status"),"").toString() != "Completed")
+					{
+						riDup = true;
+					}
+				}
+				if(riDup == false)
+				{
+					riTk = Map();
+					riTk.put("Subject",riSubj);
+					riTk.put("What_Id",riAcc);
+					riTk.put("$se_module","Accounts");
+					riTk.put("Owner",riAr.get("Owner").get("id"));
+					riTk.put("Due_Date",zoho.currentdate.addDay(1));
+					riTk.put("Priority","High");
+					riTk.put("Description","Someone looked at renewing these marks on the website Renewal Search (" + riAct + "). It may be the client or someone acting for them. Check the renewal is in hand." + nl + nl + riLines);
+					riTkR = zoho.crm.createRecord("Tasks",riTk);
+					if(riTkR.get("id") != null)
+					{
+						res.put("task",riTkR.get("id").toString());
+					}
+					else
+					{
+						res.put("task_error",riTkR.toString());
+					}
+				}
+				else
+				{
+					res.put("task","exists");
+				}
+				res.put("client_account",riAcc);
+				res.put("how","client");
+			}
+			else
+			{
+				// 2. The owner as a Lead, one per IPO applicant id.
+				riLead = "";
+				if(riIpo != "")
+				{
+					riL = zoho.crm.searchRecords("Leads","(Applicant_identifier:equals:" + riIpo + ")");
+					for each  ril in riL
+					{
+						if(riLead == "")
+						{
+							riLead = ril.get("id").toString();
+						}
+					}
+				}
+				riF = Map();
+				riF.put("Applicant_name",riName);
+				if(riIpo != "")
+				{
+					riF.put("Applicant_identifier",riIpo.toLong());
+					riF.put("IPO_App_IDs",riIpo);
+				}
+				riCo = ifnull(riApp.get("company_number"),"").toString();
+				if(riCo != "")
+				{
+					riF.put("Applicant_company_number",riCo);
+				}
+				riAd = ifnull(riApp.get("address"),"").toString();
+				if(riAd != "")
+				{
+					riF.put("Applicant_address",riAd);
+				}
+				riPc = ifnull(riApp.get("postcode"),"").toString();
+				if(riPc != "")
+				{
+					riF.put("Applicant_postcode",riPc);
+				}
+				riCt = ifnull(riApp.get("country"),"").toString();
+				if(riCt != "")
+				{
+					riF.put("Applicant_address_country",riCt);
+				}
+				riKd = ifnull(riApp.get("kind"),"").toString();
+				riKinds = {"Company or Organisation","Individual(s)","Partnership","Trust","Other"};
+				if(riKinds.contains(riKd))
+				{
+					riF.put("Applicant_kind",riKd);
+				}
+				if(riFirst.isEmpty() == false)
+				{
+					riF.put("word_mark_text",ifnull(riFirst.get("name"),"").toString());
+					riF.put("Renew_Email_TM_Number",ifnull(riFirst.get("number"),"").toString());
+					riF.put("Renewal_Page_Link","https://braudit-free-search.onrender.com/renewal-search?mark=" + ifnull(riFirst.get("number"),"").toString());
+					if(riFirstExp != "")
+					{
+						riF.put("Next_Expiry_Date",riFirstExp);
+						riF.put("Renew_Email_Expiry_Date",riFirstExp);
+					}
+					riDue = {"renew_now","late"};
+					if(riDue.contains(ifnull(riFirst.get("band_key"),"").toString()))
+					{
+						riF.put("Lead_Type","REN - Renewal Due");
+					}
+				}
+				riF.put("Enquiry_Reason","Renewal");
+				if(riLead != "")
+				{
+					zoho.crm.updateRecord("Leads",riLead.toLong(),riF);
+					riRe = standalone.tmh_lead_reengage(riLead,riAct);
+					res.put("reengage",riRe);
+					res.put("how","existing lead");
+				}
+				else
+				{
+					riLn = riName;
+					if(riLn == "")
+					{
+						riLn = "Renewal Search " + riNums;
+					}
+					if(riLn.length() > 80)
+					{
+						riLn = riLn.subString(0,80);
+					}
+					riF.put("Last_Name",riLn);
+					if(riName != "")
+					{
+						riCoN = riName;
+						if(riCoN.length() > 200)
+						{
+							riCoN = riCoN.subString(0,200);
+						}
+						riF.put("Company",riCoN);
+					}
+					riF.put("Lead_Status","New");
+					riF.put("Lead_Source","Search Result Only");
+					riF.put("Capture_Method","Website Visit");
+					riF.put("Capture_Form","Renewal Search");
+					riF.put("Data_Processing_Basis","Legitimate Interests");
+					riF.put("Free_Search_Session",sessionId);
+					riF.put("Description","Found from the website Renewal Search: " + riAct + "." + nl + "This is the trademark OWNER from the UKIPO register, not necessarily the person who searched. Source contact details with the lead engine before reaching out." + nl + nl + riLines);
+					riLc = zoho.crm.createRecord("Leads",riF);
+					if(riLc.get("id") != null)
+					{
+						riLead = riLc.get("id").toString();
+						res.put("how","lead created");
+					}
+					else
+					{
+						res.put("ok",false);
+						res.put("error",riLc.toString());
+					}
+				}
+				res.put("zoho_lead_id",riLead);
+			}
+		}
+	}
+	else if(stg == "renewal_convert")
+	{
+		// ------------------------------------------- stage: renewal_convert (search-journey, 15 Oct 2026)
+		// Jonathan, 15 Oct: once they choose to renew "it's now a contact/account/order". Called by the
+		// journey only AFTER the renewal engine accepted the order: the owner's Renewal Search Lead(s)
+		// are converted INTO the Contact and Account renewal_party resolved, so no duplicate is left.
+		rcIds = List();
+		if(p.get("applicant_lead_ids") != null)
+		{
+			rcIds = p.get("applicant_lead_ids").toList();
+		}
+		rcDone = List();
+		if(contactId != "" && accountId != "")
+		{
+			for each  rcId in rcIds
+			{
+				rcCv = Map();
+				rcCv.put("overwrite",false);
+				rcCv.put("notify_lead_owner",false);
+				rcCv.put("notify_new_entity_owner",false);
+				rcCv.put("Accounts",accountId);
+				rcCv.put("Contacts",contactId);
+				rcR = zoho.crm.convertLead(rcId.toString().toLong(),rcCv);
+				rcDone.add(rcId.toString() + ":" + rcR.toString());
+			}
+		}
+		res.put("ok",true);
+		res.put("converted",rcDone);
+	}
