@@ -352,6 +352,137 @@ function fireAndForget(url: string, body: Record<string, unknown>) {
   } catch (_) { /* best effort — p still runs if the isolate stays warm */ }
 }
 
+// ---------------------------------------------------------------------------
+// RENEWAL SEARCH LEADS (Jonathan, 15 Oct 2026)
+// "Somebody running a search for a specific applicant or trademark tells us a
+// lot. That is a lead that we can go and source (with the lead engine) and
+// reach out to if they don't go any further." The Lead is the trademark OWNER
+// from the register (we never know who the visitor is until they renew).
+// Register facts are read HERE, server-side, from the Renewal Search lookup;
+// the browser only says which mark / applicant was looked at.
+// Once they renew "it's now a contact/account/order": /renewal/submit converts
+// these Leads into the Contact + Account (Deluge stage renewal_convert).
+const RENEWAL_LOOKUP_BASE = Deno.env.get("RENEWAL_LOOKUP_BASE") ??
+  "https://braudit-free-search.onrender.com";
+const RENEWAL_INTEREST_EVENTS: Record<string, string> = {
+  renewal_mark_viewed: "viewed",
+  renewal_portfolio_viewed: "viewed the portfolio of",
+  renewal_priced: "priced a renewal of",
+};
+type RenewalApplicant = { ipo_identifier: string; name: string; kind?: string;
+  company_number?: string; country?: string; address?: string; postcode?: string };
+type RenewalMark = { number: string; name: string; expiry: string; band: string; band_key: string };
+
+async function renewalLookup(qs: string): Promise<Record<string, unknown> | null> {
+  try {
+    const r = await fetch(`${RENEWAL_LOOKUP_BASE}/renewal-lookup?${qs}`,
+      { signal: AbortSignal.timeout(20_000) });
+    const j = await r.json();
+    return j && j.ok ? j as Record<string, unknown> : null;
+  } catch { return null; }
+}
+
+async function renewalMarkGroups(numbers: string[]):
+    Promise<Map<string, { applicant: RenewalApplicant; marks: RenewalMark[] }>> {
+  const groups = new Map<string, { applicant: RenewalApplicant; marks: RenewalMark[] }>();
+  for (const n of numbers.slice(0, 20)) {
+    const d = await renewalLookup("action=mark&number=" + encodeURIComponent(n));
+    const m = d?.mark as Record<string, any> | undefined;
+    if (!m) continue;
+    const o = ((m.owners ?? []) as Record<string, any>[]).find((x) => x.ipo_identifier);
+    if (!o) continue;
+    const key = String(o.ipo_identifier);
+    if (!groups.has(key)) {
+      groups.set(key, { applicant: { ipo_identifier: key, name: String(o.name ?? ""),
+        kind: o.kind, company_number: o.company_number, country: o.country,
+        address: o.address }, marks: [] });
+    }
+    groups.get(key)!.marks.push({ number: String(m.number), name: String(m.name ?? ""),
+      expiry: String(m.dates?.expiry ?? ""), band: String(m.band?.label ?? ""),
+      band_key: String(m.band?.key ?? "") });
+  }
+  return groups;
+}
+
+function renewalEventKey(eventType: string, payload: Record<string, unknown>): string {
+  if (eventType === "renewal_portfolio_viewed") return String(payload?.ipo ?? "");
+  if (eventType === "renewal_priced") {
+    const raw = Array.isArray(payload?.numbers) ? payload.numbers as unknown[] : [];
+    return raw.map((x) => String(x).trim()).sort().join(",");
+  }
+  return String(payload?.number ?? "").trim();
+}
+
+async function renewalInterest(sessionId: string, eventType: string,
+    payload: Record<string, unknown>, eventId = 0): Promise<void> {
+  const verb = RENEWAL_INTEREST_EVENTS[eventType];
+  if (!verb || !ZOHO_CHECKOUT_URL) return;
+  // Two identical events can arrive together (a number search shows the mark,
+  // then the visitor opens it). Only the EARLIEST one for the same mark /
+  // applicant does the work, so the owner is never pushed twice in parallel.
+  if (eventId) {
+    const myKey = renewalEventKey(eventType, payload);
+    const { data: same } = await admin.from("journey_events").select("id, payload")
+      .eq("session_id", sessionId).eq("event_type", eventType).order("id");
+    const first = (same ?? []).find((r: any) =>
+      renewalEventKey(eventType, (r.payload ?? {}) as Record<string, unknown>) === myKey);
+    if (first && Number(first.id) !== eventId) return;
+  }
+  let groups = new Map<string, { applicant: RenewalApplicant; marks: RenewalMark[] }>();
+  if (eventType === "renewal_portfolio_viewed") {
+    const ipo = String(payload.ipo ?? "").trim();
+    if (!/^\d+$/.test(ipo)) return;
+    const d = await renewalLookup("action=portfolio&ipo=" + encodeURIComponent(ipo));
+    const o = d?.owner as Record<string, any> | undefined;
+    if (!o) return;
+    const all = ((d!.marks ?? []) as Record<string, any>[]);
+    // the marks that matter for a renewal conversation first (already sorted by urgency)
+    const due = all.filter((m) => ["renew_now", "late", "approaching"].includes(m.band?.key));
+    const pick = (due.length ? due : all).slice(0, 10);
+    groups.set(ipo, { applicant: { ipo_identifier: ipo, name: String(o.name ?? ""),
+      company_number: o.company_number, address: o.address, postcode: o.postcode },
+      marks: pick.map((m) => ({ number: String(m.number), name: String(m.name ?? ""),
+        expiry: String(m.expiry_date ?? ""), band: String(m.band?.label ?? ""),
+        band_key: String(m.band?.key ?? "") })) });
+  } else {
+    const raw = eventType === "renewal_priced" ? payload.numbers : [payload.number];
+    const nums = (Array.isArray(raw) ? raw : String(raw ?? "").split(","))
+      .map((x) => String(x ?? "").trim()).filter((x) => /^[A-Za-z]{0,3}\d{5,}$/.test(x));
+    if (!nums.length) return;
+    groups = await renewalMarkGroups(nums);
+  }
+  if (!groups.size) return;
+  // One push per owner per kind of interest per visit: viewing then pricing
+  // re-engages, refreshing the same page does not.
+  const { data: prior } = await admin.from("journey_events").select("payload")
+    .eq("session_id", sessionId).eq("event_type", "renewal_interest_pushed");
+  const seen = new Set((prior ?? []).map((r: any) => String(r.payload?.key ?? "")));
+  for (const [ipo, g] of groups) {
+    const key = eventType + ":" + ipo;
+    if (seen.has(key)) continue;
+    const marksTxt = g.marks.slice(0, 3).map((m) => `${m.number} ${m.name}`.trim()).join(", ")
+      + (g.marks.length > 3 ? ` and ${g.marks.length - 3} more` : "");
+    const action = `Renewal Search: someone ${verb} ${
+      eventType === "renewal_portfolio_viewed" ? g.applicant.name : marksTxt}`.slice(0, 240);
+    let out: Record<string, unknown> = {};
+    try {
+      const r = await fetch(ZOHO_CHECKOUT_URL, { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: "renewal_interest", session_id: sessionId,
+          action, applicant: g.applicant, marks: g.marks }) });
+      const env = await r.json().catch(() => ({}));
+      const det = (env as any)?.details;
+      out = typeof det?.output === "string" ? JSON.parse(det.output) : env;
+    } catch (e) { out = { ok: false, error: String(e) }; }
+    await admin.from("journey_events").insert({ session_id: sessionId,
+      event_type: out.ok === false ? "renewal_interest_failed" : "renewal_interest_pushed",
+      payload: { key, ipo, applicant: g.applicant.name,
+        marks: g.marks.map((m) => m.number), how: out.how ?? null,
+        zoho_lead_id: out.zoho_lead_id ?? null, client_account: out.client_account ?? null,
+        task: out.task ?? null, error: out.error ?? null } });
+  }
+}
+
 // Placeholder identity for a visitor who hasn't given an email yet — kept
 // only for internal bookkeeping now (Cerebrum no longer reads it directly
 // from this function). session_id is the real key everywhere below.
@@ -1094,12 +1225,12 @@ serve(async (req) => {
     }
     const session_id = String(body.session_id);
 
-    const { error: evErr } = await admin.from("journey_events").insert({
+    const { data: evRow, error: evErr } = await admin.from("journey_events").insert({
       session_id,
       event_type: String(body.event_type),
       screen: body.screen ?? null,
       payload: body.payload ?? {},
-    });
+    }).select("id").single();
     if (evErr) return json({ ok: false, error: "could not log event" }, 500, origin);
 
     // A client-side invoice request arrives HERE directly (the engine is not
@@ -1133,6 +1264,20 @@ serve(async (req) => {
     // into the CRM.
     if (session && String(session.tenant_id) === "demo") {
       return json({ ok: true, demo: true }, 200, origin);
+    }
+    // Renewal Search interest -> the trademark OWNER as a Lead (or a Task if a
+    // client). Runs after the response, never slows the page.
+    if (session && String(session.source) === "renewal_search" &&
+        RENEWAL_INTEREST_EVENTS[String(body.event_type)]) {
+      const job = renewalInterest(session_id, String(body.event_type),
+        (body.payload && typeof body.payload === "object" ? body.payload : {}) as Record<string, unknown>,
+        Number((evRow as { id?: number } | null)?.id ?? 0))
+        .catch((e) => console.error("renewal interest:", (e as Error).message));
+      try {
+        // deno-lint-ignore no-explicit-any
+        (globalThis as any).EdgeRuntime?.waitUntil?.(job);
+      } catch (_) { await job; }
+      return json({ ok: true }, 200, origin);
     }
     if (session) {
       // Zoho gets it the moment real contact info exists — "once a search
@@ -1983,8 +2128,26 @@ serve(async (req) => {
           event_type: "renewal_engine_error", payload: { status: r.status, body: b } });
         return json({ ok: false, error: "The renewal service did not respond. Please try again or call 0161 833 5400." }, 200, origin);
       }
+      // The owner Lead(s) this visit created become the Contact + Account.
+      let converted: unknown = null;
+      if (sid) {
+        const { data: pushed } = await admin.from("journey_events").select("payload")
+          .eq("session_id", sid).eq("event_type", "renewal_interest_pushed");
+        const want = new Set(party.marks);
+        const leadIds = [...new Set((pushed ?? [])
+          .filter((r: any) => r.payload?.zoho_lead_id &&
+            (r.payload?.marks ?? []).some((n: string) => want.has(n)))
+          .map((r: any) => String(r.payload.zoho_lead_id)))];
+        if (leadIds.length) {
+          try {
+            converted = (await zohoStage({ stage: "renewal_convert", session_id: sid,
+              zoho_contact_id: contactId, zoho_account_id: accountId,
+              applicant_lead_ids: leadIds })).converted ?? null;
+          } catch (e) { converted = String(e); }
+        }
+      }
       if (sid) await admin.from("journey_events").insert({ session_id: sid,
-        event_type: "renewal_submitted", payload: { marks: party.marks, option,
+        event_type: "renewal_submitted", payload: { marks: party.marks, option, converted,
           account_id: accountId, contact_id: contactId, owner_match: ids.owner_match ?? null,
           order: (b.order as Record<string, unknown> | undefined)?.id ?? null,
           quote_url: b.quote_url ?? null, problems: b.problems ?? [] } });
