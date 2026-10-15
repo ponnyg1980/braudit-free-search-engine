@@ -2672,6 +2672,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				}
 			}
 			olProd = Map();
+			// line_key -> Deal_Items id, so each saving line can point at the fee line it reduces (A&M convention, 15 Oct 2026).
+			olKeyId = Map();
 			olTxt = {"Description","Line_Type","Price_Point","Xero_Account_Code","Xero_Tax_Type","Xero_Line_ID","Currency"};
 			olNum = {"List_Price","Amount","Discount","Tax","Total"};
 			for each  oli in olItems
@@ -2722,6 +2724,20 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				{
 					olRec.put("Quantity",olm.get("Quantity").toString().toLong());
 				}
+				olLk = "";
+				if(olm.get("line_key") != null)
+				{
+					olLk = olm.get("line_key").toString();
+				}
+				olRk = "";
+				if(olm.get("reduces_key") != null)
+				{
+					olRk = olm.get("reduces_key").toString();
+				}
+				if(olRk != "" && olKeyId.get(olRk) != null)
+				{
+					olRec.put("Reduces",olKeyId.get(olRk));
+				}
 				olLid = "";
 				if(olm.get("Xero_Line_ID") != null)
 				{
@@ -2730,6 +2746,10 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				if(olLid != "" && olHave.get(olLid) != null)
 				{
 					zoho.crm.updateRecord("Deal_Items",olHave.get(olLid).toLong(),olRec);
+					if(olLk != "")
+					{
+						olKeyId.put(olLk,olHave.get(olLid));
+					}
 					olUpd = olUpd + 1;
 				}
 				else
@@ -2737,6 +2757,10 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 					olLc = zoho.crm.createRecord("Deal_Items",olRec);
 					if(olLc.get("id") != null)
 					{
+						if(olLk != "")
+						{
+							olKeyId.put(olLk,olLc.get("id").toString());
+						}
 						olMade = olMade + 1;
 					}
 					else
