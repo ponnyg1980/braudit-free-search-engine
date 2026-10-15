@@ -153,6 +153,15 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		if(contactId == "")
 		{
 			leadId = "";
+			// STAFF START (Jonathan, 5 Oct 2026): the staff audit form calls this stage as soon
+			// as it is being filled in, passing the Lead it was opened from -- convert THAT Lead.
+			if(p.get("zoho_lead_id") != null)
+			{
+				if(p.get("zoho_lead_id").toString() != "")
+				{
+					leadId = p.get("zoho_lead_id").toString();
+				}
+			}
 			foundL = zoho.crm.searchRecords("Leads","(Email:starts_with:" + emPre + ")");
 			hitL = foundL.toString();
 			if(hitL.contains("id"))
@@ -179,6 +188,21 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 					lM.put("Phone",phone);
 				}
 				lM.put("Company",last);
+				// MOBILE (Jonathan, 5 Oct 2026): the staff form asks for the mobile; it goes to Mobile.
+				if(p.get("mobile") != null)
+				{
+					if(p.get("mobile").toString().trim() != "")
+					{
+						lM.put("Mobile",p.get("mobile").toString().trim());
+					}
+				}
+				if(p.get("business_name") != null)
+				{
+					if(p.get("business_name").toString().trim() != "")
+					{
+						lM.put("Company",p.get("business_name").toString().trim());
+					}
+				}
 				lM.put("Lead_Source","Request Brand Audit Website Form");
 				lM.put("Lead_Status","New Enquiry");
 				if(auditLink != "")
@@ -247,6 +271,14 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			cM.put("First_Name",first);
 			cM.put("Last_Name",last);
 			cM.put("Email",em);
+			// MOBILE (Jonathan, 5 Oct 2026): the staff form asks for the mobile; it goes to Mobile.
+			if(p.get("mobile") != null)
+			{
+				if(p.get("mobile").toString().trim() != "")
+				{
+					cM.put("Mobile",p.get("mobile").toString().trim());
+				}
+			}
 			if(phone != "")
 			{
 				cM.put("Phone",phone);
@@ -292,6 +324,42 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				dM.put("Free_Search_Session",sessionId);
 			}
 			dM.put("Description","Brand Audit in progress -- started at the contact step.");
+			// STAFF START (5 Oct 2026): staff-started Deal owned by the staff member, attributed as order_complete attributes staff orders.
+			csStaff = "";
+			if(p.get("staff_email") != null)
+			{
+				csStaff = p.get("staff_email").toString().trim().toLowerCase();
+			}
+			if(csStaff != "")
+			{
+				csOwners = Map();
+				csOwners.put("alex@thetrademarkhelpline.com","1964745000009819001");
+				csOwners.put("kayleigh@thetrademarkhelpline.com","1964745000018749001");
+				csOwners.put("jon@thetrademarkhelpline.com","1964745000033839001");
+				csOwners.put("matt@thetrademarkhelpline.com","1964745000035362001");
+				csOwners.put("saad@thetrademarkhelpline.com","1964745000040621001");
+				csOwners.put("support@thetrademarkhelpline.com","1964745000036444001");
+				if(csOwners.get(csStaff) != null)
+				{
+					dM.put("Owner",csOwners.get(csStaff));
+				}
+				if(mark != "")
+				{
+					dM.put("Deal_Name","Trademark Audit & Consultation - " + mark);
+				}
+				dM.remove("Lead_Source");
+				csLsg = "Other";
+				if(p.get("lead_source_group") != null)
+				{
+					if(p.get("lead_source_group").toString() != "")
+					{
+						csLsg = p.get("lead_source_group").toString();
+					}
+				}
+				dM.put("Lead_Source_Group",csLsg);
+				dM.put("User_Type","Staff");
+				dM.put("Description","Staff audit started in the staff form by " + csStaff + " -- Lead converted at the start, no payment or invoice yet.");
+			}
 			nd = zoho.crm.createRecord("Deals",dM);
 			if(nd.get("id") != null)
 			{
@@ -427,9 +495,12 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			dM.put("Audit_Consultation_Type",p.get("consultation_type").toString());
 		}
+		// The CLIENT's own date. Since 28 Sep 2026 Audit_Deadline is OUR delivery
+		// commitment (approval + N working days, set at Delivery Approved), so
+		// the client's date goes to Deadline (Deadline Date).
 		if(p.get("deadline") != null)
 		{
-			dM.put("Audit_Deadline",p.get("deadline").toString().toDate());
+			dM.put("Deadline",p.get("deadline").toString().toDate());
 		}
 		if(p.get("description") != null)
 		{
@@ -510,6 +581,27 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			if(scAcc != "")
 			{
 				scAM.put("Account",scAcc.toLong());
+			}
+			// TERMS APPROVAL (Jonathan, 2 Oct 2026): clients approve CLASSES, TMH
+			// approves the TERMS before any search, the client approves terms later
+			// in the Trademark Application Draft Approval. Re-sending the scope without
+			// a TMH approval puts it back to Draft: the terms may have changed.
+			if(p.get("terms_approved_by") != null && p.get("terms_approved_by").toString() != "")
+			{
+				scAM.put("Terms_Status","Approved by TMH");
+				scAM.put("Terms_Approved_By_TMH",p.get("terms_approved_by").toString());
+				if(p.get("now") != null && p.get("now").toString() != "")
+				{
+					scAM.put("Terms_Approved_By_TMH_At",p.get("now").toString());
+				}
+			}
+			else
+			{
+				scAM.put("Terms_Status","Draft");
+			}
+			if(p.get("classes_approved_at") != null && p.get("classes_approved_at").toString() != "")
+			{
+				scAM.put("Classes_Approved_By_Client",p.get("classes_approved_at").toString());
 			}
 			if(assetId == "")
 			{
@@ -1051,8 +1143,9 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			}
 			dNew = Map();
 			dNew.put("Deal_Name","Trademark Audit & Consultation - " + mk);
-			dNew.put("Stage","Prospect");
-			dNew.put("Pipeline","Standard (Standard)");
+			// PIPELINE (5 Oct 2026): create on the stage unique to Audit and Consultation (Prospect is in several pipelines; a staff order landed in UK Trademark Application).
+			dNew.put("Stage","Initial Conversation");
+			dNew.put("Pipeline","Audit and Consultation");
 			dNew.put("Owner",ownerId);
 			// Layout-mandatory fields (13 Sep 2026). The staff form asks for the
 			// lead source (14 Sep 2026) and sends it; "Other" is only reached by
@@ -1270,6 +1363,27 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				{
 					scAM.put("Account",scAcc.toLong());
 				}
+				// TERMS APPROVAL (Jonathan, 2 Oct 2026): clients approve CLASSES, TMH
+				// approves the TERMS before any search, the client approves terms later
+				// in the Trademark Application Draft Approval. Re-sending the scope without
+				// a TMH approval puts it back to Draft: the terms may have changed.
+				if(p.get("terms_approved_by") != null && p.get("terms_approved_by").toString() != "")
+				{
+					scAM.put("Terms_Status","Approved by TMH");
+					scAM.put("Terms_Approved_By_TMH",p.get("terms_approved_by").toString());
+					if(p.get("now") != null && p.get("now").toString() != "")
+					{
+						scAM.put("Terms_Approved_By_TMH_At",p.get("now").toString());
+					}
+				}
+				else
+				{
+					scAM.put("Terms_Status","Draft");
+				}
+				if(p.get("classes_approved_at") != null && p.get("classes_approved_at").toString() != "")
+				{
+					scAM.put("Classes_Approved_By_Client",p.get("classes_approved_at").toString());
+				}
 				if(assetId == "")
 				{
 					scCA = zoho.crm.createRecord("G_S_Scope_Assets",scAM);
@@ -1377,16 +1491,193 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				}
 			}
 			dealRec = zoho.crm.getRecordById("Deals",dealId.toLong());
+			// ===== BILLING ACCOUNT GUARD (Jonathan, 25 Sep 2026) =====
+			// A Deal reached Invoiced with no Account Name (ZZ TEST FASTTRACK,
+			// INV-4927): this stage set the Stage without checking there was a
+			// biller. Every audit tool (client checkout, Audit Fact Find, Quick
+			// Audit, the reconcile path) ends here, so the rule lives here once:
+			//   1. use the Deal's Account, else the one the order names, else
+			//      the Contact's;
+			//   2. else find or create it from the billing details the order
+			//      carries (company number first, then exact name);
+			//   3. else HOLD: an invoice order stays at its current Stage with
+			//      a task for Laura; a paid order is held by the research gate
+			//      below ("Account" in missing).
+			baId = "";
+			if(dealRec.get("Account_Name") != null)
+			{
+				baId = ifnull(dealRec.get("Account_Name").get("id"),"").toString();
+			}
+			if(baId == "" && p.get("zoho_account_id") != null)
+			{
+				baId = p.get("zoho_account_id").toString().trim();
+			}
+			baCon = "";
+			if(dealRec.get("Contact_Name") != null)
+			{
+				baCon = ifnull(dealRec.get("Contact_Name").get("id"),"").toString();
+			}
+			baConHasAcc = false;
+			if(baCon != "")
+			{
+				baCr = zoho.crm.getRecordById("Contacts",baCon.toLong());
+				if(baCr.get("Account_Name") != null)
+				{
+					baConHasAcc = true;
+					if(baId == "")
+					{
+						baId = ifnull(baCr.get("Account_Name").get("id"),"").toString();
+					}
+				}
+			}
+			baName = "";
+			if(p.get("billing_entity") != null)
+			{
+				baName = p.get("billing_entity").toString().trim();
+			}
+			// The Xero side falls back to the email address or "Audit client"
+			// when no entity was given. Neither is a company name.
+			if(baName.contains("@") || baName.equalsIgnoreCase("Audit client"))
+			{
+				baName = "";
+			}
+			baNo = "";
+			if(p.get("company_number") != null)
+			{
+				baNo = p.get("company_number").toString().trim().toUpperCase().replaceAll(" ","");
+			}
+			if(baId == "" && baNo != "")
+			{
+				baF = zoho.crm.searchRecords("Accounts","(Company_URN:equals:" + baNo + ")");
+				if(baF.toString().contains("id"))
+				{
+					baId = baF.get(0).get("id").toString();
+					res.put("billing_account_found_by","company_number");
+				}
+			}
+			if(baId == "" && baName != "")
+			{
+				// Exact name. Criteria break on ( ) , so search on the prefix
+				// before any of them and compare the whole name ourselves.
+				baKey = baName;
+				baCut = List();
+				baCut.add("(");
+				baCut.add(")");
+				baCut.add(",");
+				for each  bc in baCut
+				{
+					if(baKey.contains(bc))
+					{
+						baKey = baKey.getPrefix(bc).trim();
+					}
+				}
+				if(baKey.length() >= 3)
+				{
+					baF2 = zoho.crm.searchRecords("Accounts","(Account_Name:starts_with:" + baKey + ")");
+					for each  ba2 in baF2
+					{
+						if(baId == "" && ifnull(ba2.get("Account_Name"),"").toString().trim().equalsIgnoreCase(baName))
+						{
+							baId = ba2.get("id").toString();
+							res.put("billing_account_found_by","name");
+						}
+					}
+				}
+			}
+			if(baId == "" && baName != "")
+			{
+				baM = Map();
+				baM.put("Account_Name",baName);
+				if(baNo != "")
+				{
+					baM.put("Company_URN",baNo);
+				}
+				if(p.get("billing_addr1") != null && p.get("billing_addr1").toString() != "")
+				{
+					baM.put("Billing_Street",p.get("billing_addr1").toString());
+				}
+				if(p.get("billing_city") != null && p.get("billing_city").toString() != "")
+				{
+					baM.put("Billing_City",p.get("billing_city").toString());
+				}
+				if(p.get("billing_postcode") != null && p.get("billing_postcode").toString() != "")
+				{
+					baM.put("Billing_Code",p.get("billing_postcode").toString());
+				}
+				if(p.get("billing_country") != null && p.get("billing_country").toString() != "")
+				{
+					baM.put("Billing_Country",p.get("billing_country").toString());
+				}
+				baT = List();
+				baT.add("Billing Account");
+				baM.put("Account_Type_2",baT);
+				baM.put("Owner",ownerId);
+				baC = zoho.crm.createRecord("Accounts",baM);
+				if(baC.get("id") != null)
+				{
+					baId = baC.get("id").toString();
+					res.put("billing_account_created",true);
+				}
+				else
+				{
+					res.put("billing_account_error",baC.toString());
+				}
+			}
+			if(baId != "")
+			{
+				if(dealRec.get("Account_Name") == null)
+				{
+					baD = Map();
+					baD.put("Account_Name",baId);
+					zoho.crm.updateRecord("Deals",dealId.toLong(),baD);
+					// Re-read so the research gate and the applicant
+					// resolution below see the biller.
+					dealRec = zoho.crm.getRecordById("Deals",dealId.toLong());
+					res.put("billing_account_linked",baId);
+				}
+				if(baCon != "" && !baConHasAcc)
+				{
+					baCU = Map();
+					baCU.put("Account_Name",baId);
+					zoho.crm.updateRecord("Contacts",baCon.toLong(),baCU);
+				}
+			}
+			noBillAcc = false;
+			if(baId == "")
+			{
+				noBillAcc = true;
+			}
+			acc2Id = baId;
 			dM = Map();
 			dM.put("Owner",ownerId);
 			dM.put("Next_Action_Owner",ownerId);
+			// STAFF START (5 Oct 2026): a Deal started early by the staff form already exists -- write the Lead_Source_Group chosen later.
+			if((staffEm != "") && (p.get("lead_source_group") != null))
+			{
+				if(p.get("lead_source_group").toString() != "")
+				{
+					dM.put("Lead_Source_Group",p.get("lead_source_group").toString());
+				}
+			}
 			dM.put("Next_Action_Date",zoho.currentdate);
 			// Point 1 (9 Sep): current + planned territories COMBINED, one ISO
 			// vocabulary shared with Leads. Written to Trademark_Jurisdictions.
+			// Terms of Service (28 Sep 2026): a client order carries its countries
+			// on the accepted terms (Current + Planning); a staff order on the
+			// enquiry. Either way ONE combined list is written.
+			jsrc = "";
 			if(p.get("trademark_jurisdictions") != null)
 			{
+				jsrc = p.get("trademark_jurisdictions").toString();
+			}
+			else if(p.get("terms_jurisdictions") != null)
+			{
+				jsrc = p.get("terms_jurisdictions").toString();
+			}
+			if(jsrc != "")
+			{
 				jl = List();
-				jparts = p.get("trademark_jurisdictions").toString().toList(";");
+				jparts = jsrc.toList(";");
 				for each  jv in jparts
 				{
 					if(jl.contains(jv) == false)
@@ -1397,6 +1688,25 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				if(jl.size() > 0)
 				{
 					dM.put("Trademark_Jurisdictions",jl);
+				}
+			}
+			// Terms of Service accepted at order (handover 28 Sep 2026). The copy
+			// itself lives in Supabase terms_acceptances; the Deal carries the
+			// document + version and when, and the consumer answer.
+			if(p.get("terms_accepted") != null && p.get("terms_accepted").toString() != "")
+			{
+				dM.put("Terms_Accepted",p.get("terms_accepted").toString());
+				if(p.get("terms_accepted_at") != null && p.get("terms_accepted_at").toString() != "")
+				{
+					dM.put("Terms_Accepted_At",p.get("terms_accepted_at").toString());
+				}
+				if(p.get("buying_as_consumer") != null)
+				{
+					dM.put("Buying_As_Consumer",p.get("buying_as_consumer").toString() == "true");
+				}
+				if(p.get("consumer_consent_at") != null && p.get("consumer_consent_at").toString() != "")
+				{
+					dM.put("Consumer_Early_Start_Consent",p.get("consumer_consent_at").toString());
 				}
 			}
 			// Search contexts (9 Sep): tagline rides inside the WORD search
@@ -1439,14 +1749,152 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			{
 				dM.put("Deadline",p.get("deadline").toString().toDate());
 			}
-			else if(dealRec.get("Audit_Deadline") != null)
-			{
-				dM.put("Deadline",dealRec.get("Audit_Deadline").toString().toDate());
-			}
+			// (Until 28 Sep a missing date was filled from Audit_Deadline. That
+			// field is now our commitment, not the client's date, so no fallback.)
+			// SJ-1/SJ-2 (order-process handoff, 25 Sep 2026): Invoiced and Paid are no
+			// longer Stages. Stage says whether TMH has committed to the work (Ordered ->
+			// Delivery Approved); the money lives on Payment_Status. payApproved = the
+			// Deal was ALREADY approved (on credit, or by an earlier call): record the
+			// payment only and leave Stage, Approval_Basis and Next Action alone.
+			payApproved = false;
+			payHeld = false;
+			missing = List();
 			if(kind == "paid")
 			{
-				dM.put("Stage","Paid");
+				if(ifnull(dealRec.get("Stage"),"").toString() == "Delivery Approved")
+				{
+					payApproved = true;
+					res.put("payment_only",true);
+				}
+				else
+				{
+					// APPROVAL RULE (CREDIT_AND_APPROVAL_SPEC, Jonathan 28 Sep): paying
+					// covers headroom, but a Deal is Delivery Approved only if nothing on
+					// the BILLING account is overdue -- the overdue stop has not fired
+					// (Credit_Stopped_At) and no other Deal there is Payment_Status
+					// Overdue. Otherwise it stays at Ordered, paid, with a task for Laura.
+					// (Condition 1, the Audit T&Cs accepted at order, joins this list once
+					// the checkout captures it.)
+					apHold = List();
+					apAcc = "";
+					if(dealRec.get("Account_Name") != null)
+					{
+						apAcc = ifnull(dealRec.get("Account_Name").get("id"),"").toString();
+					}
+					if(apAcc != "")
+					{
+						apA = zoho.crm.getRecordById("Accounts",apAcc.toLong());
+						if(ifnull(apA.get("Credit_Stopped_At"),"").toString() != "")
+						{
+							apHold.add("an invoice on the billing account is overdue (credit stopped " + apA.get("Credit_Stopped_At").toString() + ")");
+						}
+						apDs = zoho.crm.getRelatedRecords("Deals","Accounts",apAcc.toLong());
+						apOv = List();
+						for each  apD in apDs
+						{
+							if(apD.get("id").toString() != dealId && ifnull(apD.get("Payment_Status"),"").toString() == "Overdue")
+							{
+								apOv.add(ifnull(apD.get("Deal_Name"),"").toString());
+							}
+						}
+						if(apOv.size() > 0)
+						{
+							apHold.add(apOv.size().toString() + " other Deal(s) on the billing account are Overdue: " + apOv.toString(", "));
+						}
+					}
+					if(apHold.size() > 0)
+					{
+						payHeld = true;
+						dM.put("Stage","Ordered");
+						dM.put("Next_Action","Awaiting Approval");
+						dM.put("Braudit_Last_Error","Paid but NOT approved: " + apHold.toString("; "));
+						tA = Map();
+						tA.put("Subject","Paid order not approved for delivery - overdue on the account");
+						tA.put("Description","Payment received, but the Deal was not moved to Delivery Approved because " + apHold.toString("; ") + "." + nl + "Resolve the overdue balance (or have the Super Administrator override), then set Stage to Delivery Approved, Approval Basis to Paid and Next Action Sub Status to Send for Research.");
+						tA.put("Status","Not Started");
+						tA.put("Priority","High");
+						tA.put("Due_Date",zoho.currentdate);
+						tA.put("What_Id",dealId);
+						tA.put("$se_module","Deals");
+						tA.put("Owner","1964745000036444001");
+						zoho.crm.createRecord("Tasks",tA);
+						res.put("approval_held",apHold.toString("; "));
+					}
+					else
+					{
+						dM.put("Stage","Delivery Approved");
+						if(ifnull(dealRec.get("Approval_Basis"),"").toString() == "")
+						{
+							dM.put("Approval_Basis","Paid");
+						}
+						// Clause 4.2 (Terms of Service, 28 Sep 2026): Audit_Deadline =
+						// approval date + N working days, N from the accepted terms
+						// (5 unless a shorter turnaround was agreed). Weekends and
+						// England & Wales bank holidays skipped; the list mirrors
+						// freesearch/terms.py EW_BANK_HOLIDAYS (extend each year).
+						tdN = 5;
+						if(p.get("turnaround_days") != null && p.get("turnaround_days").toString() != "")
+						{
+							tdN = p.get("turnaround_days").toString().toLong();
+						}
+						if(tdN < 1 || tdN > 5)
+						{
+							tdN = 5;
+						}
+						ewHol = {"2026-12-25","2026-12-28","2027-01-01","2027-03-26","2027-03-29","2027-05-03","2027-05-31","2027-08-30","2027-12-27","2027-12-28","2028-01-03","2028-04-14","2028-04-17","2028-05-01","2028-05-29","2028-08-28","2028-12-25","2028-12-26"};
+						tdSteps = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
+						tdDate = zoho.currentdate;
+						tdCnt = 0;
+						for each  tdS in tdSteps
+						{
+							if(tdCnt < tdN)
+							{
+								tdDate = tdDate.addDay(1);
+								tdDow = tdDate.getDayOfWeek();
+								if(tdDow != 1 && tdDow != 7 && ewHol.contains(tdDate.toString("yyyy-MM-dd")) == false)
+								{
+									tdCnt = tdCnt + 1;
+								}
+							}
+						}
+						dM.put("Audit_Deadline",tdDate);
+						res.put("audit_deadline",tdDate.toString("yyyy-MM-dd"));
+					}
+				}
+				dM.put("Payment_Status","Paid");
+				// A datetime field wants an ISO string with an offset from the CALLER: a bare
+				// zoho.currenttime is rejected (INVALID_DATA, proven 27 Sep) and its clock is
+				// unreliable in a standalone function (30 Aug).
+				if(p.get("now") != null && p.get("now").toString() != "")
+				{
+					dM.put("Last_Payment_At",p.get("now").toString());
+				}
 				dM.put("Paid",zoho.currentdate);
+				if(p.get("payment_method") != null && p.get("payment_method").toString() != "")
+				{
+					dM.put("Payment_Method",p.get("payment_method").toString());
+				}
+				// The Order is the INVOICE: on the reconcile path (invoice paid later)
+				// it was written as Invoiced, so mark it Paid here.
+				pdOrd = dealRec.get("Order");
+				if(pdOrd != null)
+				{
+					pdOid = ifnull(pdOrd.get("id"),"").toString();
+					if(pdOid != "")
+					{
+						pdOR = zoho.crm.getRecordById("Orders",pdOid.toLong());
+						if(ifnull(pdOR.get("Status"),"").toString() != "Paid")
+						{
+							pdOM = Map();
+							pdOM.put("Status","Paid");
+							pdOM.put("Paid_Date",zoho.currentdate);
+							zoho.crm.updateRecord("Orders",pdOid.toLong(),pdOM);
+							res.put("order_marked_paid",pdOid);
+						}
+					}
+				}
+				if(!payApproved && !payHeld)
+				{
 				// VALIDATION GATE (13 Sep 2026): 'Send for Research' only when
 				// everything research needs is on the Deal; otherwise the Deal
 				// waits at 'Set Up Order' and the Owner gets a task listing
@@ -1466,6 +1914,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				// not the retired sub-form: at least one Deal Search asset with
 				// at least one class row.
 				gtRows = 0;
+				gtStatus = "";
 				gtA = zoho.crm.getRelatedRecords("G_S_Scope_Assets","Deals",dealId.toLong());
 				if(gtA != null)
 				{
@@ -1477,6 +1926,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 							if(gtR != null)
 							{
 								gtRows = gtR.size();
+								gtStatus = ifnull(gta.get("Terms_Status"),"").toString();
 							}
 						}
 					}
@@ -1519,9 +1969,15 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 						missing.add("Nice classes and terms (G S Scope Asset)");
 					}
 				}
+				else if(gtStatus != "Approved by TMH" && gtStatus != "Approved by client")
+				{
+					// Jonathan, 2 Oct 2026: the terms must be checked and approved
+					// by TMH before the searches run. Clients never see terms.
+					missing.add("terms checked and approved by TMH (G S Scope Asset: Terms Status)");
+				}
 				if(dealRec.get("Account_Name") == null)
 				{
-					missing.add("Account");
+					missing.add("billing account (Account Name)");
 				}
 				// APPLICANT RESOLUTION (16 Sep 2026) -- runs HERE, before the gate,
 				// because this stage is fire-and-forget from the journey: nothing
@@ -1782,11 +2238,52 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 					zoho.crm.createRecord("Tasks",tM);
 					res.put("held_for","Set Up Order: " + missing.toString(", "));
 				}
+				}
+			}
+			else if(noBillAcc)
+			{
+				// BILLING ACCOUNT GUARD: no biller and nothing to make one from.
+				// The Xero invoice exists; the Deal does NOT claim Ordered until
+				// a human attaches the Account. Stage is left where it is.
+				dM.put("Next_Action","Set Up Order");
+				dM.put("Braudit_Last_Error","Missing: billing account (Account Name)");
+				if(p.get("pay_date") != null)
+				{
+					dM.put("Payment_Due_Date",p.get("pay_date").toString().toDate());
+				}
+				tB = Map();
+				tB.put("Subject","Attach the billing account, then set Stage to Ordered");
+				tB.put("Description","Invoice " + ifnull(p.get("invoice_number"),"") + " has been raised in Xero, but the order carried no billing company we could find or create an Account from, so the Deal was NOT moved to Ordered." + nl + "Attach the billing Account to the Deal (Account Name), then set Stage to Ordered, Next Action Sub Status to Awaiting Approval and Payment Status to Invoiced.");
+				tB.put("Status","Not Started");
+				tB.put("Priority","High");
+				tB.put("Due_Date",zoho.currentdate);
+				tB.put("What_Id",dealId);
+				tB.put("$se_module","Deals");
+				tB.put("Owner","1964745000036444001");
+				zoho.crm.createRecord("Tasks",tB);
+				res.put("held_for","No billing account");
 			}
 			else
 			{
-				dM.put("Stage","Invoiced");
-				dM.put("Next_Action","Awaiting Payment");
+				// SJ-2: an invoice raised = an ORDER, awaiting approval. Never downgrade
+				// a Deal that has already been approved (e.g. on credit).
+				if(ifnull(dealRec.get("Stage"),"").toString() != "Delivery Approved")
+				{
+					dM.put("Stage","Ordered");
+					dM.put("Next_Action","Awaiting Approval");
+				}
+				dM.put("Payment_Status","Invoiced");
+				pmI = "Invoice - bank transfer";
+				if(p.get("payment_method") != null && p.get("payment_method").toString() != "")
+				{
+					pmI = p.get("payment_method").toString();
+				}
+				dM.put("Payment_Method",pmI);
+				// Clear a hold this guard set on an earlier call, now resolved.
+				if(ifnull(dealRec.get("Braudit_Last_Error"),"").toString().contains("billing account"))
+				{
+					dM.put("Braudit_Last_Error","");
+				}
 				if(p.get("pay_date") != null)
 				{
 					dM.put("Payment_Due_Date",p.get("pay_date").toString().toDate());
@@ -1809,7 +2306,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			{
 				dM.put("NEXT_ACTION1","Approve/Reject Fast Track");
 			}
-			else
+			else if(!payApproved && !payHeld)
 			{
 				dM.put("NEXT_ACTION1","Send for Research");
 			}
@@ -1841,6 +2338,10 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			if(upd.get("id") != null)
 			{
 				res.put("deal_updated",true);
+			}
+			else
+			{
+				res.put("deal_update_error",upd.toString());
 			}
 			// Same records the 'scope' stage writes, so a staff order and a
 			// self-serve order are indistinguishable downstream.
@@ -1924,7 +2425,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			// Paid orders that PASSED the validation gate get the research task.
 			// A held order (Set Up Order) already has its own task listing what
 			// is missing -- two tasks would contradict each other (13 Sep 2026).
-			if((kind == "paid") && (missing.size() == 0))
+			if(kind == "paid" && !payApproved && !payHeld && missing.size() == 0)
 			{
 				dn = "this audit";
 				if(dealRec.get("Deal_Name") != null)
@@ -2320,6 +2821,92 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		}
 		res.put("ok",olOk);
 	}
+	else if(stg == "terms_approve")
+	{
+		//
+		// ------------------------------------------- stage: terms_approve
+		//
+		// A TMH team member has checked the classes and terms (Jonathan,
+		// 2 Oct 2026). Marks the Deal's most recent Deal Search asset
+		// Approved by TMH and, if that was the ONLY thing holding the
+		// research gate, releases the Deal to Send for Research.
+		taDeal = ifnull(p.get("zoho_deal_id"),"").toString();
+		taBy = ifnull(p.get("approved_by"),"").toString();
+		if(taDeal == "" || taBy == "")
+		{
+			res.put("error","zoho_deal_id and approved_by are required");
+		}
+		else
+		{
+			taAs = zoho.crm.getRelatedRecords("G_S_Scope_Assets","Deals",taDeal.toLong());
+			// Every Deal Search asset on the Deal: the approval is for the Deal's
+			// scope. (A "latest by Modified_Time" pick failed to save: Deluge has
+			// no > on text.)
+			taId = "";
+			taN = 0;
+			taM = Map();
+			taM.put("Terms_Status","Approved by TMH");
+			taM.put("Terms_Approved_By_TMH",taBy);
+			if(p.get("now") != null && p.get("now").toString() != "")
+			{
+				taM.put("Terms_Approved_By_TMH_At",p.get("now").toString());
+			}
+			for each  ta in taAs
+			{
+				if(ifnull(ta.get("Asset_Type"),"") == "Deal Search")
+				{
+					taU = zoho.crm.updateRecord("G_S_Scope_Assets",ta.get("id").toString().toLong(),taM);
+					if(taU.get("id") != null)
+					{
+						taN = taN + 1;
+						taId = ta.get("id").toString();
+					}
+					else
+					{
+						res.put("asset_update_error",taU.toString());
+					}
+				}
+			}
+			res.put("assets_approved",taN);
+			if(taId == "")
+			{
+				res.put("error","no classes and terms on this Deal yet");
+			}
+			else
+			{
+				taDR = zoho.crm.getRecordById("Deals",taDeal.toLong());
+				taErr = ifnull(taDR.get("Braudit_Last_Error"),"").toString();
+				taItem = "terms checked and approved by TMH (G S Scope Asset: Terms Status)";
+				if(ifnull(taDR.get("Next_Action"),"").toString() == "Set Up Order" && taErr.startsWith("Missing: ") && taErr.contains(taItem))
+				{
+					taRest = List();
+					taParts = taErr.subString(9).toList(", ");
+					for each  tp in taParts
+					{
+						if(tp.trim() != taItem && tp.trim() != "")
+						{
+							taRest.add(tp.trim());
+						}
+					}
+					taDM = Map();
+					if(taRest.size() == 0)
+					{
+						taDM.put("Next_Action","Send for Research");
+						taDM.put("Braudit_Trigger_Status","Ready to Send");
+						taDM.put("Braudit_Last_Error","");
+						res.put("released",true);
+					}
+					else
+					{
+						taDM.put("Braudit_Last_Error","Missing: " + taRest.toString(", "));
+						res.put("still_missing",taRest.toString(", "));
+					}
+					zoho.crm.updateRecord("Deals",taDeal.toLong(),taDM);
+				}
+			}
+		}
+		res.put("ok",true);
+	}
 	else if(stg == "fast_track_decision")
 	{
 		//
@@ -2436,7 +3023,7 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 			return res.toString();
 		}
 		dM2 = Map();
-		flds = {"Deal_Name","Stage","Next_Action","Applicant_Match_Status","Applicant_Candidates","Audit_Payment_Method","Audit_Order_Ref","Audit_Deadline","Braudit_Trigger_Status","Braudit_Frozen_At","Logo_Awaited","Audit_Search_Layers","Trademark_Jurisdictions","Braudit_Search_Types","Lead_Source_Group","Amount"};
+		flds = {"Deal_Name","Stage","Next_Action","Applicant_Match_Status","Applicant_Candidates","Audit_Payment_Method","Audit_Order_Ref","Audit_Deadline","Braudit_Trigger_Status","Braudit_Frozen_At","Logo_Awaited","Audit_Search_Layers","Trademark_Jurisdictions","Braudit_Search_Types","Lead_Source_Group","Amount","Payment_Status"};
 		for each  fn in flds
 		{
 			dM2.put(fn,ifnull(dR.get(fn),""));
@@ -2555,6 +3142,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 						tM.put("class_no",ifnull(tr.get("Nice_Class_Number_Snapshot"),""));
 						tM.put("description",ifnull(tr.get("Class_Description_Snapshot"),""));
 						tM.put("terms",ifnull(tr.get("Specific_Terms"),""));
+						// Continuation rows (7 Oct 2026): the part number, so the caller joins a long class in order.
+						tM.put("part",ifnull(tr.get("Part_Number"),1));
 						tM.put("source",ifnull(tr.get("Terms_Source"),""));
 						terms.add(tM);
 					}
@@ -2880,6 +3469,571 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		res.put("applicant_account_id",matchedId);
 		res.put("candidates",cands);
 	}
+	//
+	// ----------------------------------------------- stage: renewal_party (search-journey, 13 Oct 2026)
+	// Website Renewal Search -> renewal engine. Finds or creates the visitor's Contact and the
+	// Applicant Account the renewal is quoted on. Never creates a Lead (a renewal is an order).
+	// A mark we already hold is quoted on ITS Account only when this visitor belongs to it
+	// (Contact on it, Contact on its parent, or linked through Contacts_X_Accounts); otherwise the
+	// visitor's own Account is used and the engine refuses ("held for a different client").
+	// refused != "": the engine refused - raise a Task for Laura and stop.
+	else if(stg == "renewal_party" && emIn != "")
+	{
+		rpFirst = "";
+		if(p.get("first_name") != null)
+		{
+			rpFirst = p.get("first_name").toString().trim();
+		}
+		rpLast = "";
+		if(p.get("last_name") != null)
+		{
+			rpLast = p.get("last_name").toString().trim();
+		}
+		if(rpLast == "")
+		{
+			rpLast = emIn;
+		}
+		rpPhone = "";
+		if(p.get("phone") != null)
+		{
+			rpPhone = p.get("phone").toString().trim();
+		}
+		rpCo = "";
+		if(p.get("company_name") != null)
+		{
+			rpCo = p.get("company_name").toString().trim();
+		}
+		rpCoNo = "";
+		if(p.get("company_number") != null)
+		{
+			rpCoNo = p.get("company_number").toString().trim().toUpperCase().remove(" ");
+		}
+		rpMarks = List();
+		if(p.get("marks") != null)
+		{
+			rpMarks = p.get("marks").toList();
+		}
+		rpMarkTxt = "";
+		for each rpm in rpMarks
+		{
+			if(rpMarkTxt != "")
+			{
+				rpMarkTxt = rpMarkTxt + ", ";
+			}
+			rpMarkTxt = rpMarkTxt + rpm.toString();
+		}
+		rpRefused = "";
+		if(p.get("refused") != null)
+		{
+			rpRefused = p.get("refused").toString();
+		}
+		rpContact = contactId;
+		rpAcc = accountId;
+		rpHow = "";
+		// 1. Contact by exact email (starts_with is the net, the full address is the check).
+		if(rpContact == "")
+		{
+			rpFoundC = zoho.crm.searchRecords("Contacts","(Email:starts_with:" + emPre + ")");
+			for each rpc in rpFoundC
+			{
+				if(rpContact == "" && rpc.get("Email") != null)
+				{
+					if(rpc.get("Email").toString().equalsIgnoreCase(emIn))
+					{
+						rpContact = rpc.get("id").toString();
+						if(rpc.get("Account_Name") != null)
+						{
+							rpAcc = rpc.get("Account_Name").get("id").toString();
+						}
+						rpHow = "existing contact";
+					}
+				}
+			}
+		}
+		// 2. An open Lead for this email: convert it (one person, one record).
+		if(rpContact == "")
+		{
+			rpLead = "";
+			rpFoundL = zoho.crm.searchRecords("Leads","(Email:starts_with:" + emPre + ")");
+			for each rpl in rpFoundL
+			{
+				if(rpLead == "" && rpl.get("Email") != null)
+				{
+					if(rpl.get("Email").toString().equalsIgnoreCase(emIn))
+					{
+						rpLead = rpl.get("id").toString();
+					}
+				}
+			}
+			if(rpLead != "")
+			{
+				rpCv = Map();
+				rpCv.put("overwrite",false);
+				rpCv.put("notify_lead_owner",false);
+				rpCv.put("notify_new_entity_owner",false);
+				rpConv = zoho.crm.convertLead(rpLead.toLong(),rpCv);
+				if(rpConv.get("Contacts") != null)
+				{
+					rpContact = rpConv.get("Contacts").toString();
+					rpHow = "lead converted";
+				}
+				if(rpConv.get("Accounts") != null)
+				{
+					rpAcc = rpConv.get("Accounts").toString();
+				}
+			}
+		}
+		// 3. The Account: company number, then exact name, else create it.
+		if(rpAcc == "" && rpCoNo != "")
+		{
+			rpFa = zoho.crm.searchRecords("Accounts","(Company_URN:equals:" + rpCoNo + ")");
+			for each rpa in rpFa
+			{
+				if(rpAcc == "")
+				{
+					rpAcc = rpa.get("id").toString();
+				}
+			}
+		}
+		rpAccName = rpCo;
+		if(rpAccName == "")
+		{
+			rpAccName = (rpFirst + " " + rpLast).trim();
+		}
+		if(rpAcc == "" && rpCo != "")
+		{
+			rpFb = zoho.crm.searchRecords("Accounts","(Account_Name:equals:" + rpCo + ")");
+			for each rpb in rpFb
+			{
+				if(rpAcc == "" && rpb.get("Account_Name") != null)
+				{
+					if(rpb.get("Account_Name").toString().equalsIgnoreCase(rpCo))
+					{
+						rpAcc = rpb.get("id").toString();
+					}
+				}
+			}
+		}
+		if(rpAcc == "")
+		{
+			rpNa = Map();
+			rpNa.put("Account_Name",rpAccName);
+			if(rpCoNo != "")
+			{
+				rpNa.put("Company_URN",rpCoNo);
+			}
+			rpTypes = List();
+			rpTypes.add("Trademark Applicant");
+			rpTypes.add("Billing Account");
+			rpNa.put("Account_Type_2",rpTypes);
+			rpNa.put("Description","Created by the website Renewal Search (" + rpMarkTxt + ").");
+			rpNac = zoho.crm.createRecord("Accounts",rpNa);
+			if(rpNac.get("id") != null)
+			{
+				rpAcc = rpNac.get("id").toString();
+			}
+		}
+		// 4. No Contact yet: create it on the Account.
+		if(rpContact == "")
+		{
+			rpCm = Map();
+			rpCm.put("First_Name",rpFirst);
+			rpCm.put("Last_Name",rpLast);
+			rpCm.put("Email",emIn);
+			if(rpPhone != "")
+			{
+				rpCm.put("Phone",rpPhone);
+			}
+			if(rpAcc != "")
+			{
+				rpCm.put("Account_Name",rpAcc);
+			}
+			rpCc = zoho.crm.createRecord("Contacts",rpCm);
+			if(rpCc.get("id") != null)
+			{
+				rpContact = rpCc.get("id").toString();
+				rpHow = "contact created";
+			}
+		}
+		else if(rpAcc != "")
+		{
+			rpCr = zoho.crm.getRecordById("Contacts",rpContact.toLong());
+			if(rpCr.get("Account_Name") == null)
+			{
+				rpCu = Map();
+				rpCu.put("Account_Name",rpAcc);
+				zoho.crm.updateRecord("Contacts",rpContact.toLong(),rpCu);
+			}
+		}
+		// 5. A mark we already hold: use ITS Account when this visitor belongs to it.
+		rpOwner = "";
+		rpOwnerOk = false;
+		for each rpm2 in rpMarks
+		{
+			if(rpOwner == "")
+			{
+				rpT = zoho.crm.searchRecords("Trademark","(Name:equals:" + rpm2.toString() + ")");
+				for each rpt in rpT
+				{
+					if(rpOwner == "" && rpt.get("Account_URN") != null)
+					{
+						rpOwner = rpt.get("Account_URN").get("id").toString();
+					}
+				}
+			}
+		}
+		if(rpOwner != "")
+		{
+			if(rpOwner == rpAcc)
+			{
+				rpOwnerOk = true;
+			}
+			else
+			{
+				rpOr = zoho.crm.getRecordById("Accounts",rpOwner.toLong());
+				if(rpOr.get("Parent_Account") != null)
+				{
+					if(rpOr.get("Parent_Account").get("id").toString() == rpAcc)
+					{
+						rpOwnerOk = true;
+					}
+				}
+				if(rpOwnerOk == false && rpContact != "")
+				{
+					rpLinks = zoho.crm.getRelatedRecords("Contacts19","Accounts",rpOwner.toLong());
+					for each rpk in rpLinks
+					{
+						if(rpk.get("Associated_Contacts") != null)
+						{
+							if(rpk.get("Associated_Contacts").get("id").toString() == rpContact)
+							{
+								rpOwnerOk = true;
+							}
+						}
+					}
+				}
+			}
+			if(rpOwnerOk)
+			{
+				rpAcc = rpOwner;
+			}
+		}
+		// 6. The engine refused: a person checks it.
+		if(rpRefused != "" && rpContact != "")
+		{
+			rpTk = Map();
+			rpTk.put("Subject","Website renewal request needs checking: " + rpMarkTxt);
+			rpTk.put("Who_Id",rpContact);
+			if(rpAcc != "")
+			{
+				rpTk.put("What_Id",rpAcc);
+				rpTk.put("$se_module","Accounts");
+			}
+			rpTk.put("Owner","1964745000036444001");
+			rpTk.put("Due_Date",zoho.currentdate.addDay(1));
+			rpTk.put("Priority","High");
+			rpTk.put("Description","The website Renewal Search could not quote this automatically: " + rpRefused + nl + "Marks: " + rpMarkTxt + nl + "Email: " + emIn + nl + "Company given: " + rpCo + " " + rpCoNo);
+			rpTkR = zoho.crm.createRecord("Tasks",rpTk);
+			if(rpTkR.get("id") != null)
+			{
+				res.put("task",rpTkR.get("id").toString());
+			}
+			else
+			{
+				res.put("task_error",rpTkR.toString());
+			}
+		}
+		if(rpContact != "" && rpRefused == "")
+		{
+			rpNt = Map();
+			rpNt.put("Parent_Id",rpContact);
+			rpNt.put("se_module","Contacts");
+			rpNt.put("Note_Title","[Renewal] Website renewal request");
+			rpNt.put("Note_Content","Started a renewal on the website Renewal Search for: " + rpMarkTxt + ".");
+			zoho.crm.createRecord("Notes",rpNt);
+		}
+		res.put("ok",true);
+		res.put("zoho_contact_id",rpContact);
+		res.put("zoho_account_id",rpAcc);
+		res.put("contact_how",rpHow);
+		res.put("owner_account",rpOwner);
+		res.put("owner_match",rpOwnerOk);
+	}
+	else if(stg == "renewal_interest")
+	{
+		// ------------------------------------------- stage: renewal_interest (search-journey, 15 Oct 2026)
+		// Jonathan, 15 Oct: "somebody running a search for a specific applicant or trademark tells us a
+		// lot. That is a lead that we can go and source (with the lead engine) and reach out to if they
+		// don't go any further." Called by the journey when a Renewal Search visitor opens a mark, an
+		// owner's portfolio, or prices a renewal. The LEAD IS THE TRADEMARK OWNER (from the register),
+		// not the anonymous visitor.
+		//   * Owner already a client (we hold the mark, or an Account carries this IPO applicant id):
+		//     no Lead. A Task on that Account for its owner, one open Task per subject.
+		//   * Open Lead for this IPO applicant id: refresh it and re-engage it (tmh_lead_reengage).
+		//   * Otherwise: a new Lead, Lead_Status New, Lead_Source "Search Result Only" (as trademark search).
+		riApp = Map();
+		if(p.get("applicant") != null)
+		{
+			riApp = p.get("applicant").toMap();
+		}
+		riIpo = ifnull(riApp.get("ipo_identifier"),"").toString().trim();
+		riName = ifnull(riApp.get("name"),"").toString().trim();
+		riAct = ifnull(p.get("action"),"Renewal Search").toString();
+		riMarks = List();
+		if(p.get("marks") != null)
+		{
+			riMarks = p.get("marks").toList();
+		}
+		riNums = "";
+		riLines = "";
+		riFirst = Map();
+		riFirstExp = "";
+		for each  riM in riMarks
+		{
+			riMm = riM.toMap();
+			riNo = ifnull(riMm.get("number"),"").toString();
+			riExp = ifnull(riMm.get("expiry"),"").toString();
+			if(riNums != "")
+			{
+				riNums = riNums + ", ";
+			}
+			riNums = riNums + riNo;
+			riLines = riLines + riNo + " " + ifnull(riMm.get("name"),"").toString() + " - expires " + riExp + " (" + ifnull(riMm.get("band"),"").toString() + ")" + nl;
+			// the mark that falls due first leads the record
+			if(riExp != "" && (riFirstExp == "" || riExp.toDate("yyyy-MM-dd") < riFirstExp.toDate("yyyy-MM-dd")))
+			{
+				riFirstExp = riExp;
+				riFirst = riMm;
+			}
+		}
+		if(riFirst.isEmpty() && riMarks.size() > 0)
+		{
+			riFirst = riMarks.get(0).toMap();
+		}
+		res.put("ok",true);
+		if(riIpo == "" && riMarks.size() == 0)
+		{
+			res.put("ok",false);
+			res.put("error","no applicant and no marks");
+		}
+		else
+		{
+			// 1. Already a client?
+			riAcc = "";
+			for each  riM2 in riMarks
+			{
+				if(riAcc == "")
+				{
+					riT = zoho.crm.searchRecords("Trademark","(Name:equals:" + riM2.toMap().get("number").toString() + ")");
+					for each  rit in riT
+					{
+						if(riAcc == "" && rit.get("Account_URN") != null)
+						{
+							riAcc = rit.get("Account_URN").get("id").toString();
+						}
+					}
+				}
+			}
+			if(riAcc == "" && riIpo != "")
+			{
+				riA = zoho.crm.searchRecords("Accounts","(Applicant_identifier:equals:" + riIpo + ")");
+				for each  ria in riA
+				{
+					if(riAcc == "")
+					{
+						riAcc = ria.get("id").toString();
+					}
+				}
+			}
+			if(riAcc != "")
+			{
+				riAr = zoho.crm.getRecordById("Accounts",riAcc.toLong());
+				riSubj = "Renewal Search: " + riNums + " looked at online";
+				if(riSubj.length() > 250)
+				{
+					riSubj = riSubj.subString(0,250);
+				}
+				riDup = false;
+				riRel = zoho.crm.getRelatedRecords("Tasks","Accounts",riAcc.toLong());
+				for each  rtk in riRel
+				{
+					if(ifnull(rtk.get("Subject"),"").toString() == riSubj && ifnull(rtk.get("Status"),"").toString() != "Completed")
+					{
+						riDup = true;
+					}
+				}
+				if(riDup == false)
+				{
+					riTk = Map();
+					riTk.put("Subject",riSubj);
+					riTk.put("What_Id",riAcc);
+					riTk.put("$se_module","Accounts");
+					riTk.put("Owner",riAr.get("Owner").get("id"));
+					riTk.put("Due_Date",zoho.currentdate.addDay(1));
+					riTk.put("Priority","High");
+					riTk.put("Description","Someone looked at renewing these marks on the website Renewal Search (" + riAct + "). It may be the client or someone acting for them. Check the renewal is in hand." + nl + nl + riLines);
+					riTkR = zoho.crm.createRecord("Tasks",riTk);
+					if(riTkR.get("id") != null)
+					{
+						res.put("task",riTkR.get("id").toString());
+					}
+					else
+					{
+						res.put("task_error",riTkR.toString());
+					}
+				}
+				else
+				{
+					res.put("task","exists");
+				}
+				res.put("client_account",riAcc);
+				res.put("how","client");
+			}
+			else
+			{
+				// 2. The owner as a Lead, one per IPO applicant id.
+				riLead = "";
+				if(riIpo != "")
+				{
+					riL = zoho.crm.searchRecords("Leads","(Applicant_identifier:equals:" + riIpo + ")");
+					for each  ril in riL
+					{
+						if(riLead == "")
+						{
+							riLead = ril.get("id").toString();
+						}
+					}
+				}
+				riF = Map();
+				riF.put("Applicant_name",riName);
+				if(riIpo != "")
+				{
+					riF.put("Applicant_identifier",riIpo.toLong());
+					riF.put("IPO_App_IDs",riIpo);
+				}
+				riCo = ifnull(riApp.get("company_number"),"").toString();
+				if(riCo != "")
+				{
+					riF.put("Applicant_company_number",riCo);
+				}
+				riAd = ifnull(riApp.get("address"),"").toString();
+				if(riAd != "")
+				{
+					riF.put("Applicant_address",riAd);
+				}
+				riPc = ifnull(riApp.get("postcode"),"").toString();
+				if(riPc != "")
+				{
+					riF.put("Applicant_postcode",riPc);
+				}
+				riCt = ifnull(riApp.get("country"),"").toString();
+				if(riCt != "")
+				{
+					riF.put("Applicant_address_country",riCt);
+				}
+				riKd = ifnull(riApp.get("kind"),"").toString();
+				riKinds = {"Company or Organisation","Individual(s)","Partnership","Trust","Other"};
+				if(riKinds.contains(riKd))
+				{
+					riF.put("Applicant_kind",riKd);
+				}
+				if(riFirst.isEmpty() == false)
+				{
+					riF.put("word_mark_text",ifnull(riFirst.get("name"),"").toString());
+					riF.put("Renew_Email_TM_Number",ifnull(riFirst.get("number"),"").toString());
+					riF.put("Renewal_Page_Link","https://braudit-free-search.onrender.com/renewal-search?mark=" + ifnull(riFirst.get("number"),"").toString());
+					if(riFirstExp != "")
+					{
+						riF.put("Next_Expiry_Date",riFirstExp);
+						riF.put("Renew_Email_Expiry_Date",riFirstExp);
+					}
+					riDue = {"renew_now","late"};
+					if(riDue.contains(ifnull(riFirst.get("band_key"),"").toString()))
+					{
+						riF.put("Lead_Type","REN - Renewal Due");
+					}
+				}
+				riF.put("Enquiry_Reason","Renewal");
+				if(riLead != "")
+				{
+					zoho.crm.updateRecord("Leads",riLead.toLong(),riF);
+					riRe = standalone.tmh_lead_reengage(riLead,riAct);
+					res.put("reengage",riRe);
+					res.put("how","existing lead");
+				}
+				else
+				{
+					riLn = riName;
+					if(riLn == "")
+					{
+						riLn = "Renewal Search " + riNums;
+					}
+					if(riLn.length() > 80)
+					{
+						riLn = riLn.subString(0,80);
+					}
+					riF.put("Last_Name",riLn);
+					if(riName != "")
+					{
+						riCoN = riName;
+						if(riCoN.length() > 200)
+						{
+							riCoN = riCoN.subString(0,200);
+						}
+						riF.put("Company",riCoN);
+					}
+					riF.put("Lead_Status","New");
+					riF.put("Lead_Source","Search Result Only");
+					riF.put("Capture_Method","Website Visit");
+					riF.put("Capture_Form","Renewal Search");
+					riF.put("Data_Processing_Basis","Legitimate Interests");
+					riF.put("Free_Search_Session",sessionId);
+					riF.put("Description","Found from the website Renewal Search: " + riAct + "." + nl + "This is the trademark OWNER from the UKIPO register, not necessarily the person who searched. Source contact details with the lead engine before reaching out." + nl + nl + riLines);
+					riLc = zoho.crm.createRecord("Leads",riF);
+					if(riLc.get("id") != null)
+					{
+						riLead = riLc.get("id").toString();
+						res.put("how","lead created");
+					}
+					else
+					{
+						res.put("ok",false);
+						res.put("error",riLc.toString());
+					}
+				}
+				res.put("zoho_lead_id",riLead);
+			}
+		}
+	}
+	else if(stg == "renewal_convert")
+	{
+		// ------------------------------------------- stage: renewal_convert (search-journey, 15 Oct 2026)
+		// Jonathan, 15 Oct: once they choose to renew "it's now a contact/account/order". Called by the
+		// journey only AFTER the renewal engine accepted the order: the owner's Renewal Search Lead(s)
+		// are converted INTO the Contact and Account renewal_party resolved, so no duplicate is left.
+		rcIds = List();
+		if(p.get("applicant_lead_ids") != null)
+		{
+			rcIds = p.get("applicant_lead_ids").toList();
+		}
+		rcDone = List();
+		if(contactId != "" && accountId != "")
+		{
+			for each  rcId in rcIds
+			{
+				rcCv = Map();
+				rcCv.put("overwrite",false);
+				rcCv.put("notify_lead_owner",false);
+				rcCv.put("notify_new_entity_owner",false);
+				rcCv.put("Accounts",accountId);
+				rcCv.put("Contacts",contactId);
+				rcR = zoho.crm.convertLead(rcId.toString().toLong(),rcCv);
+				rcDone.add(rcId.toString() + ":" + rcR.toString());
+			}
+		}
+		res.put("ok",true);
+		res.put("converted",rcDone);
+	}
 	else if(stg == "staff_lookup")
 	{
 		//
@@ -2940,6 +4094,8 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 					hM.put("first",ifnull(prow.get("First_Name"),""));
 					hM.put("last",ifnull(prow.get("Last_Name"),""));
 					hM.put("email",ifnull(prow.get("Email"),""));
+					hM.put("phone",ifnull(prow.get("Phone"),""));
+					hM.put("mobile",ifnull(prow.get("Mobile"),""));
 					if(modIn == "Contacts")
 					{
 						if(prow.get("Account_Name") != null)
@@ -3205,9 +4361,18 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 		{
 			ansr = p.get("account_type").toString();
 			want = "Trademark Applicant";
+			ptNew = "";
 			if(ansr.containsIgnoreCase("client I represent"))
 			{
-				want = "White Label Partner (Billing Account & Contact)";
+				// 7 Oct 2026 (Jonathan): the role question decides it. Attorney or Solicitor = Representative; independent consultant = Reseller.
+				want = "Representative (Billing Account & Contact)";
+				ptNew = "Representative";
+				rl = ifnull(p.get("rep_role"),"").toString();
+				if(rl.containsIgnoreCase("consultant"))
+				{
+					want = "Reseller (Billing Account)";
+					ptNew = "Reseller";
+				}
 			}
 			accRec = zoho.crm.getRecordById("Accounts",accountId.toLong());
 			typs = List();
@@ -3224,6 +4389,15 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 				typs.add(want);
 				aM = Map();
 				aM.put("Account_Type_2",typs);
+				if(ptNew != "" && ifnull(accRec.get("Partner_Type"),"") == "")
+				{
+					aM.put("Partner_Type",ptNew);
+				}
+				if(ptNew != "" && typs.contains("Billing Account") == false)
+				{
+					typs.add("Billing Account");
+					aM.put("Account_Type_2",typs);
+				}
 				zoho.crm.updateRecord("Accounts",accountId.toLong(),aM);
 			}
 		}
