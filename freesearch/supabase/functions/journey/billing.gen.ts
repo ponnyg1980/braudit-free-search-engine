@@ -33,6 +33,10 @@ export const CATALOGUE = {
 export const BILLING_CODES = {
   "uk": "227",
   "nonuk": "247",
+  "discount_uk": "290",
+  "discount_nonuk": "291",
+  "discount_product_dom": "DISC-SAL-UK",
+  "discount_product_intl": "DISC-SAL-INTL",
   "tax_uk": "OUTPUT2",
   "tax_nonuk": "NONE",
   "forbidden": [
