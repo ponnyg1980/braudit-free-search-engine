@@ -426,6 +426,10 @@ function render(d){
         '<a class="btn" style="text-decoration:none" href="tel:+441618335400">Call 0161 833 5400</a></div></div>';
     logEvent('renewal_not_found', {query:d.query, types:d.types||[], auto:!!d.auto, looks_like_number:isNum});
   }
+  // A search for a SPECIFIC mark or applicant is a lead (Jonathan, 15 Oct): the journey turns
+  // it into a Lead for the trademark owner (or a Task if they are a client).
+  byNum.slice(0,3).forEach(m=>logEvent('renewal_mark_viewed', {number:m.number, via:'search'}));
+  if(byOwner.length && d.owner && d.owner.ipo_identifier) logEvent('renewal_portfolio_viewed', {ipo:d.owner.ipo_identifier, via:'search'});
   if((d.failed||[]).length) h += '<p class="hint">Part of the search did not complete. Try again in a moment.</p>';
   elOut.innerHTML = h;
   syncSel();
@@ -533,6 +537,7 @@ async function show(st){
     const nums = st.nums ? st.nums.split(',') : selNums();
     if(!nums.length){ elView.innerHTML = backBtn()+'<div class="empty">Tick at least one trademark first.</div>'; return; }
     loadingView('Working out your renewal options\u2026');
+    logEvent('renewal_priced', {numbers:nums});
     // Prices come from the renewal engine (12 Oct decisions). The local quote
     // below is only the fallback while the engine connection is switched off.
     ENG = {nums, option: ENG && ENG.option || 'plan', addon: ENG ? ENG.addon : true, changes: (ENG && ENG.changes) || {}, p:null};
@@ -549,6 +554,7 @@ async function show(st){
     let d; try{ d = await (await fetch('/renewal-lookup?action=mark&number='+encodeURIComponent(st.n))).json(); }catch(e){ d = null; }
     if(!d || !d.ok){ elView.innerHTML = backBtn()+'<div class="empty">'+esc((d&&d.error)||'We could not load that trademark. Please try again.')+'</div>'; return; }
     drawMark(d.mark);
+    logEvent('renewal_mark_viewed', {number:d.mark.number});
   } else {
     loadingView('Loading the portfolio…');
     const qs = st.ipo ? 'ipo='+encodeURIComponent(st.ipo) : 'number='+encodeURIComponent(st.n);
@@ -556,6 +562,7 @@ async function show(st){
     if(!d || !d.ok){ elView.innerHTML = backBtn()+'<div class="empty">'+esc((d&&d.error)||'We could not load the portfolio. Please try again.')+'</div>'; return; }
     PF = d; PVIEW = 'prio'; (d.marks||[]).forEach(m=>{ MARKS[m.number] = m; });
     drawPortfolio();
+    if(d.owner && d.owner.ipo_identifier) logEvent('renewal_portfolio_viewed', {ipo:d.owner.ipo_identifier});
   }
 }
 
