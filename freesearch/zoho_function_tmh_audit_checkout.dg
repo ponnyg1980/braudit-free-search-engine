@@ -3845,6 +3845,34 @@ string standalone.tmh_audit_checkout(string crmAPIRequest)
 					}
 				}
 			}
+			// An Applicants record for this IPO id (its Applicant Account, else its Billing Account),
+			// or any other mark we hold for this owner (Trademark.Applicant_identifier).
+			if(riAcc == "" && riIpo != "")
+			{
+				riAp = zoho.crm.searchRecords("Applicants","(IPO_Identifier:equals:" + riIpo + ")");
+				for each  riap in riAp
+				{
+					if(riAcc == "" && riap.get("Applicant_Account") != null)
+					{
+						riAcc = riap.get("Applicant_Account").get("id").toString();
+					}
+					if(riAcc == "" && riap.get("Billing_Account") != null)
+					{
+						riAcc = riap.get("Billing_Account").get("id").toString();
+					}
+				}
+			}
+			if(riAcc == "" && riIpo != "")
+			{
+				riT2 = zoho.crm.searchRecords("Trademark","(Applicant_identifier:equals:" + riIpo + ")");
+				for each  rit2 in riT2
+				{
+					if(riAcc == "" && rit2.get("Account_URN") != null)
+					{
+						riAcc = rit2.get("Account_URN").get("id").toString();
+					}
+				}
+			}
 			if(riAcc != "")
 			{
 				riAr = zoho.crm.getRecordById("Accounts",riAcc.toLong());
