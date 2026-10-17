@@ -1469,7 +1469,9 @@ function startClassChat(){
     const tg=document.getElementById('tagline'), lf=document.getElementById('logo-file');
     TMHClassChat.mount(document.getElementById('ho1-chat'), {
       api:(CONFIG.API_BASE||''), staff:(CONFIG.RETURN==='staff'||!!CONFIG.DEAL),
-      context:{word:state.name||'', tagline:(tg?tg.value.trim():state.tagline)||'',
+      // From a Deal the builder is opened with the Deal NAME ("Trademark Audit - TEMMY", "UKTM App - X (word)"):
+      // the mark is the part after the last " - ", without a "(word ...)" note (17 Oct 2026).
+      context:{word:(CONFIG.DEAL?String(state.name||'').split(' - ').pop().replace(/\s*\((word|logo|word and logo|word, logo)[^)]*\)\s*$/i,'').trim():(state.name||'')), tagline:(tg?tg.value.trim():state.tagline)||'',
         has_logo:!!(state.logo&&!state.logoLater), logoFile:(lf&&lf.files&&lf.files[0])||null,
         website:state.businessWebsite||''},
       onDone:function(r){
