@@ -116,7 +116,8 @@
       var desc = state.brief || [state.site_summary, state.about].filter(Boolean).join('\n');
       var mk = state.mark || {};
       if(typeof opts.onDone === 'function'){
-        opts.onDone({classes: d.classes || [], terms: terms, description: desc, brief: state.brief || '',
+        var mub = state.brief ? state.brief + ((state.flags || []).length ? '\n\nStaff notes:\n- ' + state.flags.join('\n- ') : '') : '';
+        opts.onDone({classes: d.classes || [], terms: terms, description: desc, brief: state.brief || '', mark_use_brief: mub,
                      flags: state.flags || [], certainty: (state.classes || []).map(function(c){ return {n: c.n, certainty: c.certainty}; }),
                      website: mk.website || state.website || '', provides: state.provides || '', state: state});
       }

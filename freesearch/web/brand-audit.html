@@ -399,7 +399,9 @@ function saveBrandRemote(brand){
       // class_source carries the reviewed per-class detail (official heading
       // + that class's own terms) from the Class Builder, so Zoho can write
       // a proper row per class instead of the same flat term list on each.
-      class_source:brand.scope?{route:'class_tools',application_scope:brand.scope}:null,
+      // mark_use_brief (17 Oct 2026): the class assistant's summary of the mark -> G_S_Scope_Assets.Mark_Use_Brief
+      class_source:(brand.scope||brand.markBrief)?{route:'class_tools',application_scope:brand.scope||null,
+        mark_use_brief:brand.markBrief||undefined}:null,
       logo_flag:brand.logo,logo_later:brand.logoLater,tagline:brand.tagline,
       website_url:brand.website||null,business_description:brand.desc||null,
       competitor_name:brand.compName||null,competitor_website:brand.compSite||null,
@@ -533,6 +535,7 @@ function chatForBrand(){
     has_logo:!!state.brandForm.logo, logoFile:(lf&&lf.files&&lf.files[0])||null,
     website:v('bf-website'), description:v('bf-desc')};
   TMHClassChat.mount(out,{api:engineBase(),staff:false,context:ctx,onDone:function(r){
+    if(r.mark_use_brief) state.brandForm.markBrief=r.mark_use_brief;
     (r.classes||[]).forEach(c=>addBrandClass(c.n));
     Object.keys(r.terms||{}).forEach(n=>(r.terms[n]||[]).forEach(t=>{
       if(!state.brandForm.terms.includes(t)) state.brandForm.terms.push(t); }));
@@ -692,7 +695,7 @@ function readBrandForm(){
 }
 function clearBrandForm(){
   state.brandForm={name:'',classes:[],terms:[],scope:null,logo:false,logoLater:false,tagline:'',
-    website:'',desc:'',compName:'',compSite:''};
+    website:'',desc:'',compName:'',compSite:'',markBrief:''};
   state._draftBrandRemoteId=null;
   document.getElementById('bf-name').value='';
   renderBrandClassBasket();renderTermBasket();

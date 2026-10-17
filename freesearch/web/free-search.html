@@ -1477,7 +1477,7 @@ function startClassChat(){
         if(!items.length) return;
         showClassPicker('1','What our class assistant found',items,
           {value:r.description||'',label:'class assistant chat',agent_terms:r.terms,
-           model:'class-chat',website:r.website||'',provides:r.provides||''});
+           model:'class-chat',website:r.website||'',provides:r.provides||'',mark_use_brief:r.mark_use_brief||''});
         logEvent('class_chat_done','classes',{classes:items.map(i=>i.n)},true);
       }});
   });
