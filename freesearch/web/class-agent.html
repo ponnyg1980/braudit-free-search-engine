@@ -226,7 +226,8 @@
   </div>
 </div>
 <script src="/class-chat.js"></script>
-<script>TMHClassChat.mount(document.getElementById('cc-host'),{api:'',staff:true});</script>
+<script>TMHClassChat.mount(document.getElementById('cc-host'),{api:'',staff:true,context:(function(){const q=new URLSearchParams(location.search);return {word:q.get('word')||'',tagline:q.get('tagline')||'',
+      has_logo:q.get('logo')==='1',business:q.get('business')||'',website:q.get('website')||'',description:q.get('description')||''};})()});</script>
 
 <script>
 /* Thin client. All the logic lives behind POST /suggest-classes so Brand

@@ -1466,8 +1466,12 @@ function startClassChat(){
   if(!state.emailForAI){ aiEmailGate('1', startClassChat); return; }
   aiUse('class_chat', out, function(){
     out.textContent='';
+    const tg=document.getElementById('tagline'), lf=document.getElementById('logo-file');
     TMHClassChat.mount(document.getElementById('ho1-chat'), {
       api:(CONFIG.API_BASE||''), staff:(CONFIG.RETURN==='staff'||!!CONFIG.DEAL),
+      context:{word:state.name||'', tagline:(tg?tg.value.trim():state.tagline)||'',
+        has_logo:!!(state.logo&&!state.logoLater), logoFile:(lf&&lf.files&&lf.files[0])||null,
+        website:state.businessWebsite||''},
       onDone:function(r){
         const items=(r.classes||[]).map(c=>({n:c.n,label:c.label,on:true}));
         if(!items.length) return;

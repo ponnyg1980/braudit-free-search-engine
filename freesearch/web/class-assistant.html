@@ -827,6 +827,8 @@ async function aiStartChat(){
   const email=await aiGate(); if(!email) return;
   document.getElementById('ai-start').style.display='none';
   TMHClassChat.mount(document.getElementById('ai-chat'), {api: aiApi(), staff: STAFF_VIEW,
+    context: (function(){const q=new URLSearchParams(location.search);return {word:q.get('word')||'',tagline:q.get('tagline')||'',
+      has_logo:q.get('logo')==='1',business:q.get('business')||'',website:q.get('website')||'',description:q.get('description')||''};})(),
     onDone: function(r){
       renderAi('Your class assistant suggests', {classes:(r.classes||[]).map(c=>({
         n:c.n, class_label:c.label, terms:(r.terms[c.n]||[])}))});

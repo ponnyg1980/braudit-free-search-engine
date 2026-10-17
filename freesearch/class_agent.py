@@ -159,6 +159,7 @@ def _call(system: str, user: str, *, cfg: dict, max_tokens: int = 1024,
         'model': use_model,
         'max_tokens': max_tokens,
         'system': system,
+        # `user` is text, or a list of content blocks (text + image) for the logo reader
         'messages': [{'role': 'user', 'content': user}],
     }
     # 23 Sep 2026: current Sonnet/Opus think before answering by default, and
@@ -178,7 +179,7 @@ def _call(system: str, user: str, *, cfg: dict, max_tokens: int = 1024,
             'anthropic-version': API_VERSION,
         })
         try:
-            r = json.loads(urllib.request.urlopen(req, timeout=45).read())
+            r = json.loads(urllib.request.urlopen(req, timeout=float(cfg.get('timeout') or 45)).read())
             parts = [b.get('text', '') for b in (r.get('content') or [])
                      if b.get('type') == 'text']
             text = ''.join(parts)
@@ -597,3 +598,185 @@ def suggest(text: str, *, provides: str | None = None, cfg: dict | None = None,
             # Classes whose term pick FAILED (as opposed to legitimately
             # finding nothing). Non-empty means retry, not "no terms".
             'failed_classes': sorted(failed)}
+
+
+
+# ================================================================ MARK MODE ==
+#
+# Jonathan, 17 Oct 2026 (_Hub/CLASS_AGENT_MARK_USE_DESIGN_2026-10-17.md): the assistant asked "what do
+# you do", never "what is this word / logo / tagline for, and what exactly will it be used on". The
+# Temmy owl came out as legal services (45, 35) when it is the face of a software portal (9, 42).
+# Mark mode classifies the MARK'S USE from one summary (the brief), reasons over everything known,
+# and is INCLUSIVE: "It is better to suggest terms than ignore them ... if in doubt, include the term
+# ... Terms can be removed at drafting." Clients only see classes until the draft.
+# suggest() above is unchanged for its other callers.
+
+MARK_MAX_CLASSES = 12
+MARK_TERMS_PER_CLASS = 40
+MARK_CANDIDATES = 90
+CERTAINTY = ('core', 'likely', 'possible')
+
+_S1M = """You are a UK trademark attorney choosing Nice classes for ONE trademark.
+
+You are given a summary of the MARK: what it is (word, logo, tagline, character), what job it does \
+(house brand, product name, range, mascot, slogan, event), where it will be seen, the owner's \
+genuine plans, and - as background only - what the owner's business does.
+
+Classify what THIS MARK will be used for, not simply what the business does. A house brand covers \
+everything the business trades in under it; a product name covers that product; a mascot or \
+character may also be used on software screens, apps, printed matter, clothing, toys, stickers and \
+digital media; a slogan follows the goods and services it advertises. Use where it will be seen as \
+evidence (an app or software -> 9/42; clothing they SELL -> 25; free giveaways alone are advertising, \
+not trade in those goods).
+
+Think through every line of trade this mark will genuinely be used for, now or as stated plans, so \
+nothing is missed. These classes are for a pre-filing clearance audit: missing a class is worse than \
+including one, and staff remove classes at drafting. So if in doubt, INCLUDE the class and grade it:
+  core     - clearly what the mark is used for
+  likely   - very probably used for, from what they said
+  possible - could apply on what they said or plan; include it for the audit
+Do not add classes for trade nobody has mentioned or implied.
+
+Also give staff a short note if the mark looks weak: it describes the goods/services (e.g. a coffee \
+cup logo for a coffee shop, a tagline that only describes the service), is a common word in that \
+trade, or a geographic or laudatory term. Empty if none. This is a note for staff, not advice.
+
+Reply with JSON only:
+{"classes": [{"n": 9, "certainty": "core", "why": "the owl brands the software portal"}],
+ "flags": ["..."]}
+
+At most %d classes.""" % MARK_MAX_CLASSES
+
+_S2M = """You select goods & services terms for ONE UK trademark, for a pre-filing clearance audit.
+
+You are given a summary of the mark and how it will be used, the class, and a NUMBERED list of real \
+Nice specification terms taken from marks registered in the UK.
+
+Choose every term that may genuinely apply to what this mark will be used for, and grade each:
+  core     - clearly true of the mark's use
+  likely   - very probably true from what they said
+  possible - could apply on what they said or plan
+If in doubt, include the term as possible: terms are removed at drafting, a missed term is worse. \
+Do not pick terms for trade nobody has mentioned or implied (no cryptocurrency, gaming or real \
+estate for a business that has not said so). Where several terms say the same thing, keep the \
+plainest one.
+
+RETURN NUMBERS ONLY. Do not write, edit, reword or invent terms.
+
+Reply with JSON only: {"core": [1, 4], "likely": [9], "possible": [12, 15]}"""
+
+_SL = """You describe a logo submitted for a UK trademark application, for the attorney's notes.
+
+Reply with JSON only:
+{"description": "one plain sentence, e.g. a cartoon owl wearing round glasses, in purple and teal",
+ "character": true,
+ "words": "any words or letters in the image, exactly as shown, or empty",
+ "depicts_goods": "if the image shows a product or service itself (a coffee cup, a car, scissors), say what; else empty"}
+
+character is true when the image is a figure with a personality (a mascot, animal or person drawn \
+as a character), false for a plain symbol, shape or lettering."""
+
+
+def describe_logo(data_url: str, *, cfg: dict | None = None) -> dict:
+    """Look at the logo once and describe it. Never raises: no description is not a failure."""
+    cfg = dict(cfg or {})
+    m = re.match(r'^data:(image/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+)$', str(data_url or ''))
+    if not m or len(m.group(2)) > 2_000_000:
+        return {}
+    try:
+        raw = _call(_SL, [{'type': 'image', 'source': {'type': 'base64', 'media_type': m.group(1),
+                                                       'data': m.group(2)}},
+                          {'type': 'text', 'text': 'Describe this logo.'}], cfg=cfg, max_tokens=600)
+        d = _json_from(raw)
+    except AgentError as exc:
+        print(f'[class-agent] logo read failed: {exc}', flush=True)
+        return {}
+    return {'description': str(d.get('description') or '').strip()[:240],
+            'character': bool(d.get('character')),
+            'words': str(d.get('words') or '').strip()[:120],
+            'depicts_goods': str(d.get('depicts_goods') or '').strip()[:160]}
+
+
+def _mark_stage1(brief: str, cfg: dict) -> tuple[list[dict], list[str]]:
+    data = _json_from(_call(_S1M, f'The mark:\n"""{brief}"""', cfg={**cfg, 'timeout': 90},
+                            max_tokens=4000, effort='medium'))
+    out, seen = [], set()
+    for c in data.get('classes') or []:
+        try:
+            n = int(c.get('n'))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if not 1 <= n <= 45 or n in seen:
+            continue
+        seen.add(n)
+        cert = str(c.get('certainty') or '').lower()
+        out.append({'n': n, 'certainty': cert if cert in CERTAINTY else 'possible',
+                    'why': str(c.get('why') or '')[:200]})
+    flags = [str(f).strip()[:240] for f in (data.get('flags') or []) if str(f).strip()][:4]
+    return out[:MARK_MAX_CLASSES], flags
+
+
+def _mark_stage2(brief: str, cls: int, candidates: list, cfg: dict) -> list[dict]:
+    if not candidates:
+        return []
+    listing = '\n'.join(f'{i+1}. {c["term"]}' for i, c in enumerate(candidates))
+    data = _json_from(_call(_S2M, f'The mark:\n"""{brief}"""\n\nNice class {cls} ({class_label(cls)}). '
+                                  f'Candidate terms:\n{listing}', cfg=cfg, max_tokens=2500, model=TERMS_MODEL))
+    out, seen = [], set()
+    for cert in CERTAINTY:                       # core first, so a cap keeps the surest
+        for i in data.get(cert) or []:
+            try:
+                idx = int(i) - 1
+            except (TypeError, ValueError):
+                continue
+            if 0 <= idx < len(candidates) and idx not in seen:
+                seen.add(idx)
+                t = candidates[idx]
+                d = t.as_dict() if isinstance(t, _Term) else dict(t)
+                d['certainty'] = cert
+                out.append(d)
+    return out[:MARK_TERMS_PER_CLASS]
+
+
+def mark_terms(brief: str, classes: list[int], cfg: dict | None = None) -> tuple[dict, list[int]]:
+    """{class: [term dicts with certainty]} for the given classes, in parallel; and the classes that failed."""
+    cfg = dict(cfg or {})
+    pools = {c: candidate_pool(brief, c, k=MARK_CANDIDATES) for c in classes}
+    failed: list[int] = []
+
+    def _one(c):
+        try:
+            got = _mark_stage2(brief, c, pools[c], cfg)
+        except AgentError as exc:
+            print(f'[class-agent] mark stage 2 class {c} failed: {exc}', flush=True)
+            failed.append(c)
+            return c, []
+        allowed = {p['term'] for p in pools[c]}          # the guarantee: vocabulary terms only
+        return c, [t for t in got if t['term'] in allowed]
+
+    out = {}
+    if classes:
+        with futures.ThreadPoolExecutor(max_workers=min(len(classes), MAX_PARALLEL)) as ex:
+            for c, terms in ex.map(_one, classes):
+                out[c] = terms
+    return out, sorted(failed)
+
+
+def suggest_mark(brief: str, *, cfg: dict | None = None) -> dict:
+    """Classes and graded terms for ONE mark, from its brief. Same shape as suggest() plus
+    certainty on classes and terms, and staff flags."""
+    cfg = dict(cfg or {})
+    brief = (brief or '').strip()[:4000]
+    if len(brief) < 10:
+        return {'ok': False, 'error': 'too_short', 'message': 'Tell us a little more about the mark.'}
+    if not load_vocab():
+        return {'ok': False, 'error': 'no_vocabulary', 'message': 'Term vocabulary unavailable.'}
+    classes, flags = _mark_stage1(brief, cfg)
+    if not classes:
+        return {'ok': True, 'classes': [], 'flags': flags, 'failed_classes': [],
+                'message': "We couldn't work this out from that."}
+    terms, failed = mark_terms(brief, [c['n'] for c in classes], cfg)
+    return {'ok': True, 'flags': flags, 'failed_classes': failed,
+            'model': cfg.get('model') or DEFAULT_MODEL,
+            'classes': [{'n': c['n'], 'label': class_label(c['n']), 'why': c['why'],
+                         'certainty': c['certainty'], 'terms': terms.get(c['n'], [])} for c in classes]}

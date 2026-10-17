@@ -527,7 +527,12 @@ async function suggestForBrand(){
 function chatForBrand(){
   const out=document.getElementById('bf-ai-out');
   document.getElementById('bf-ai').disabled=true;
-  TMHClassChat.mount(out,{api:engineBase(),staff:false,onDone:function(r){
+  const v=id=>((document.getElementById(id)||{}).value||'').trim();
+  const lf=document.getElementById('bf-logo-file');
+  const ctx={word:v('bf-name'), tagline:v('bf-tagline'),
+    has_logo:!!state.brandForm.logo, logoFile:(lf&&lf.files&&lf.files[0])||null,
+    website:v('bf-website'), description:v('bf-desc')};
+  TMHClassChat.mount(out,{api:engineBase(),staff:false,context:ctx,onDone:function(r){
     (r.classes||[]).forEach(c=>addBrandClass(c.n));
     Object.keys(r.terms||{}).forEach(n=>(r.terms[n]||[]).forEach(t=>{
       if(!state.brandForm.terms.includes(t)) state.brandForm.terms.push(t); }));
