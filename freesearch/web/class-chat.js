@@ -128,18 +128,19 @@
       busy = true; send.disabled = true; setQuick([]);
       var typing = el('div','tcc-typing', message ? 'Thinking…' : '');
       if(message) log.appendChild(typing);
+      var slow = setTimeout(function(){ typing.textContent = 'Working out your classes… this can take up to half a minute.'; }, 4000);
       fetch(api + '/class-chat', {method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(ctx ? {state: state, message: message || '', context: ctx} : {state: state, message: message || ''})})
         .then(function(r){ return r.json(); })
         .then(function(d){
-          typing.remove(); busy = false; send.disabled = false;
+          clearTimeout(slow); typing.remove(); busy = false; send.disabled = false;
           if(!d || !d.ok){ add('a', (d && d.reply) || "Sorry, I can't help with classes right now. Please pick them from the list instead."); return; }
           state = d.state || state; ctx = null;
           add('a', d.reply);
           if(d.done) showResult(d); else { setQuick(d.quick, d.multi); input.focus(); }
         })
         .catch(function(){
-          typing.remove(); busy = false; send.disabled = false;
+          clearTimeout(slow); typing.remove(); busy = false; send.disabled = false;
           add('a', "Sorry, something went wrong. Please try again, or pick your classes from the list.");
         });
     }
