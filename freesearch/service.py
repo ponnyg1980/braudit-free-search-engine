@@ -250,7 +250,8 @@ def run_free_search(client, request: FreeSearchRequest,
                 if s not in stems:
                     stems.append(s)
         try:
-            records, truncated = qr_retriever.search(stems)
+            heads = [re.split(r'\s+', p.strip())[0] for p in (*request.word_marks, request.tagline) if p and p.strip()]
+            records, truncated = qr_retriever.search(stems, heads=heads)
         except Exception:
             log.warning('query-runs retrieval failed; falling back to REST',
                         exc_info=True)

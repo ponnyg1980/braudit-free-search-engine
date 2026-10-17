@@ -43,27 +43,54 @@ def sanitise_stem(stem: str) -> str:
     return s.replace("'", "''")
 
 
-def build_search_sql(stems: list[str], *, limit: int = MAX_ROWS) -> str:
-    """One SELECT that unions all stems, returning class-complete candidate
-    rows. Prefix match (`ILIKE 'stem%'`) — fast on the verbal-element index and
-    enough to catch the variants that matter (MOMENT -> MOMENTUM…)."""
+# Trigram floor (D17, tmh-scoring): 0.25, not pg_trgm's 0.30 default - HAILAFLO/HEALAFLOW measures 0.267.
+TRGM_FLOOR = 0.25
+TRGM_MIN_LEN = 5
+
+
+def build_search_sql(stems: list[str], *, limit: int = MAX_ROWS, heads: list[str] | None = None) -> str:
+    """One SELECT returning class-complete candidate rows.
+
+    17 Oct 2026 (Jonathan: a free search for TEMMY returned nothing, while TEMMT, TOMMY, TAMMY and TIMMY are
+    live in class 42). It used to be PREFIX ONLY (`ILIKE 'stem%'`): a mark that differs anywhere in the first
+    letters never reached the scorer. Blocking must never be narrower than the scorer (D17), so three nets now,
+    like the audit's temmy_source:
+      * prefix of the stem (as before: MOMENT -> MOMENTUM),
+      * the whole head word anywhere in the mark (substring),
+      * trigram similarity to the whole head word >= 0.25 for words of 5+ letters, through the trigram index
+        (`%` operator with set_limit(0.25) - measured ~7 s vs ~10 s for a similarity() scan).
+    Ordered substring-first then by similarity, so the LIMIT keeps the closest, never an arbitrary slice.
+    Assessment is unchanged: scoring still decides what is shown."""
     clean = [sanitise_stem(s) for s in stems if sanitise_stem(s)]
     if not clean:
         return ''
-    conds = ' OR '.join(f"m.verbal_element_text ILIKE '{s}%'" for s in clean)
+    hs = [sanitise_stem(h).upper() for h in (heads or []) if sanitise_stem(h)]
+    conds = [f"m.verbal_element_text ILIKE '{s}%'" for s in clean]
+    conds += [f"upper(m.verbal_element_text) LIKE '%{h}%'" for h in hs]
+    trg = [h for h in hs if len(h.replace(' ', '')) >= TRGM_MIN_LEN]
+    conds += [f"upper(m.verbal_element_text) % '{h}'" for h in trg]
+    sim = (f"GREATEST({', '.join(f'similarity(upper(m.verbal_element_text), {chr(39)}{h}{chr(39)})' for h in hs)})"
+           if len(hs) > 1 else (f"similarity(upper(m.verbal_element_text), '{hs[0]}')" if hs else "0"))
+    sub = (' OR '.join(f"upper(m.verbal_element_text) LIKE '%{h}%'" for h in hs)) or 'false'
+    lim = f"WITH lim AS MATERIALIZED (SELECT set_limit({TRGM_FLOOR}) AS l)\n" if trg else ''
+    frm = "lim, marks m" if trg else "marks m"
+    gate = "lim.l > 0 AND " if trg else ''
     return f"""
-SELECT t.application_number, t.status, m.verbal_element_text, m.feature AS mark_type,
+{lim}SELECT t.application_number, t.status, m.verbal_element_text, m.feature AS mark_type,
        array_agg(DISTINCT nc.number) FILTER (WHERE nc.number IS NOT NULL) AS classes,
        (array_agg(DISTINCT a.name))[1] AS applicant_name,
-       (array_agg(DISTINCT a.company_number))[1] AS company_number
-FROM marks m
+       (array_agg(DISTINCT a.company_number))[1] AS company_number,
+       max(CASE WHEN ({sub}) THEN 1 ELSE 0 END) AS sub_hit,
+       max({sim}) AS sim
+FROM {frm}
 JOIN trademarks t ON t.id = m.trademark_id
 LEFT JOIN nice_class_trademarks nct ON nct.trademark_id = t.id
 LEFT JOIN nice_classes nc ON nc.id = nct.nice_class_id
 LEFT JOIN applicant_trademarks apt ON apt.trademark_id = t.id
 LEFT JOIN applicants a ON a.id = apt.applicant_id
-WHERE ({conds})
+WHERE {gate}({' OR '.join(conds)})
 GROUP BY t.application_number, t.status, m.verbal_element_text, m.feature
+ORDER BY sub_hit DESC, sim DESC
 LIMIT {int(limit)}
 """.strip()
 
@@ -130,10 +157,10 @@ class QueryRunsRetriever:
             kwargs['base_url'] = base_url.strip()
         self._qr = TemmyQueryRunsClient(**kwargs)
 
-    def search(self, stems: list[str], *, limit: int = MAX_ROWS
+    def search(self, stems: list[str], *, limit: int = MAX_ROWS, heads: list[str] | None = None
                ) -> tuple[list[MarkRecord], bool]:
         """Return (records, truncated)."""
-        sql = build_search_sql(stems, limit=limit)
+        sql = build_search_sql(stems, limit=limit, heads=heads)
         if not sql:
             return [], False
         manifest = self._qr.submit(sql=sql, page_size=limit, preview_limit=100)
@@ -162,4 +189,5 @@ class QueryRunsRetriever:
                 except Exception:
                     pass
         records = [r for r in (record_from_row(x) for x in rows) if r]
-        return records, total > len(records)
+        # the cap reached means the closest `limit` were kept - say so (D17: never silently)
+        return records, total > len(records) or len(records) >= limit

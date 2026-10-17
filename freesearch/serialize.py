@@ -130,7 +130,10 @@ def serialize_result(result: FreeSearchResult, *, gated: bool = False,
     unanswered "how long have you used it?" scores as no evidence of use, not
     as a penalty.
     """
-    conflicts = result.conflicts
+    # Jonathan, 17 Oct 2026: with the wider candidate fetch, "refine down to only display anything Low to High
+    # risk" - Negligible rows are checked and set aside, not shown or counted as flagged.
+    conflicts = [r for r in result.conflicts if r.risk != 'Negligible']
+    result.total_conflicts = len(conflicts)
     active = [r for r in conflicts if _is_active(r)]
 
     # Top 5 registered/active for the on-screen shortlist.
