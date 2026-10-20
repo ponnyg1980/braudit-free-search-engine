@@ -44,6 +44,7 @@
   .cancel h1{color:#8a3b12}
 </style>
 <script src="/partner-ref.js"></script>
+<script src="/consult-booking.js"></script>
 </head>
 <body>
 <div class="tw">
@@ -79,6 +80,7 @@
       <b>We go through it together<span id="c-date"></span></b>
       Up to an hour with one of our trademark experts, covering the findings, any
       risks, and your options — so you can decide your next step with confidence.
+      <div id="c-book" style="margin-top:10px"></div>
     </div></div>
   </div>
 
@@ -110,6 +112,11 @@
   }
 
   if(!sid) return;   /* generic copy stands on its own */
+  /* Book the consultation the client chose in the form (15 Oct 2026). Staff orders and
+     "just the audit" come back as skipped and show nothing extra. */
+  if(window.TMHConsult) TMHConsult.book(document.getElementById('c-book'),{sid:sid,journey:JOURNEY,
+    onBooked:function(r){var c=document.getElementById('c-date');
+      if(c) c.textContent=' — '+TMHConsult.longDate(r.date)+' at '+TMHConsult.time12(r.time);}});
   fetch(JOURNEY+'/session?id='+encodeURIComponent(sid))
     .then(function(r){return r.json();})
     .then(function(d){
