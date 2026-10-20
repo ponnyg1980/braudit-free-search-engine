@@ -1782,7 +1782,7 @@ function proceedOrder(){
       xero_invoice:'pending_credentials'});
   }
   /* Deal name (Jonathan, 20 Oct 2026): "Trademark Clearance Audit - <name> - Word / Logo / Tagline". */
-  const dealName=['Trademark Clearance Audit',state.name,
+  const dealName=[state.consult.taken?'Trademark Clearance Audit & Consultation':'Trademark Clearance Audit',state.name,
     ['Word',state.hasLogo?'Logo':'',state.tagline?'Tagline':''].filter(Boolean).join(' / ')]
     .filter(Boolean).join(' - ');
   /* Summary reached -> Quoted. */
