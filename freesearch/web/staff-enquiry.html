@@ -21,6 +21,7 @@
      opens until the contact details are captured. -->
 <link rel="stylesheet" href="/braudit.css">
 <script src="/demo-banner.js"></script>
+<script src="/booking-capture.js"></script>
 <link rel="stylesheet" href="/wizard.css">
 <style>
   body{background:#eef2f5}
@@ -641,7 +642,12 @@
       </div>
       <iframe id="f-bookframe" title="Book the consultation" loading="lazy"
         style="width:100%;height:640px;border:1px solid #E6E9ED;border-radius:12px;background:#fff"></iframe>
-      <div class="sf-hint" id="f-bookhint">Once it is booked, put the same date and time in below.</div>
+      <div class="sf-hint" id="f-bookhint">When the booking is made, the date, time and adviser come
+        back into this form by themselves.</div>
+      <div id="f-booked" class="hidden" style="margin-top:10px;border-left:4px solid #1F8A5B;background:#E7F6EE;
+        border-radius:0 10px 10px 0;padding:12px 16px;font-size:14.5px"></div>
+      <div class="sf-hint" style="margin-top:6px"><a href="#" onclick="consultManual();return false">Booked
+        another way? Enter the appointment by hand</a></div>
     </div>
     <div id="f-consultfields">
     <div class="sf-row">
@@ -1062,12 +1068,16 @@ function consultDiary(){
   w.classList.toggle('hidden',!src&&!CONFIG.QUICK);
   ['phone','video'].forEach(k=>{const b=document.getElementById('f-bk-'+k);
     if(b) b.className='btn '+((state.consult.method||'phone')===k?'primary':'ghost');});
-  /* Quick Audit (Jonathan, 20 Oct 2026): the booking itself records the date, time, adviser
-     and Phone/Teams, so the form does not ask for them again. */
-  if(CONFIG.QUICK){
-    const cf=document.getElementById('f-consultfields'); if(cf) cf.style.display='none';
-    const h=document.getElementById('f-bookhint');
-    if(h) h.textContent='Zoho Bookings sends the client the confirmation and puts it in the adviser\'s diary. Nothing to copy across.';
+  /* Jonathan, 20 Oct 2026: the booking records the date, time, adviser and Phone/Teams and
+     hands them back (booking-capture.js), so the form only asks by hand when told to. */
+  const cf=document.getElementById('f-consultfields');
+  if(cf) cf.style.display=state.consult.manual?'':'none';
+  const bk=document.getElementById('f-booked'), cn=state.consult;
+  if(bk){
+    const ok=cn.date&&cn.time&&!cn.manual;
+    bk.classList.toggle('hidden',!ok);
+    if(ok) bk.innerHTML='<b>Booked:</b> '+esc(fromIsoLong(cn.date))+' at '+esc(cn.time)
+      +(cn.adviser?' with '+esc(cn.adviser):'')+' ('+(cn.method==='video'?'Teams':'Phone')+')';
   }
   if(src&&fr.getAttribute('src')!==src) fr.setAttribute('src',src);
   const d1=addWorkingDays(new Date(),1),d2=addWorkingDays(new Date(),2);
@@ -1077,6 +1087,22 @@ function consultDiary(){
   const ct=state.contact.clientType;
   set('f-scriptcust',ct==='existing'||ct==='returning'?'an existing':'a new');
 }
+function fromIsoLong(s){try{const [y,m,d]=String(s).split('-').map(Number);
+  return new Date(y,m-1,d).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});}catch(e){return s;}}
+function consultManual(){state.consult.manual=true;consultDiary();touch();}
+if(window.TMHBooking) TMHBooking.listen(b=>{
+  if(!b.date) return;
+  const cn=state.consult;
+  cn.date=b.date; cn.time=b.time||cn.time; cn.adviser=b.adviser||cn.adviser||'Booked in Zoho Bookings';
+  if(b.type) cn.method=b.type==='Teams'?'video':'phone';
+  cn.agreed=true; cn.manual=false; cn.bookingId=b.booking_id||''; cn.declined=false;
+  const set=(id,v)=>{const e=document.getElementById(id); if(e){ if(e.type==='checkbox') e.checked=!!v; else e.value=v||''; }};
+  set('f-consultdate',cn.date);set('f-consulttime',cn.time);set('f-adviser',cn.adviser);
+  set('f-consultmethod',cn.method);set('c-agreed',true);set('c-declined',false);
+  try{logEvent('consult_booked_embed','staff_consult',{date:cn.date,time:cn.time,adviser:cn.adviser,
+    type:b.type,booking_id:cn.bookingId,raw:b.raw});}catch(e){}
+  consultDiary(); touch(); try{renderGate();}catch(e){}
+});
 function consultMethod(m){
   state.consult.method=m;
   const sel=document.getElementById('f-consultmethod'); if(sel) sel.value=m;
