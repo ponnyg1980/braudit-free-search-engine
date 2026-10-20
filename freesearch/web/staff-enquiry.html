@@ -2180,6 +2180,7 @@ async function loadDeal(){
     return;
   }
   const z=d.deal;
+  if(z.order_id) setTimeout(()=>showOrderLink(z.order_id,z.order_name),0);
   state.deal.id=CONFIG.DEAL;
   state.deal.name=z.Deal_Name||'';
   state.deal.frozen=z.frozen===true;
@@ -2705,10 +2706,43 @@ async function toPayment(){
       box.innerHTML='<div class="sf-guide sf-never" style="margin-top:16px"><div class="gh">Refused</div><ul><li>'
         +esc((d&&d.error)||'Something went wrong.')+unmet+'</li></ul></div>';
     }
+    if(d&&d.ok) watchOrder(box);
   }catch(e){
     box.innerHTML='<div class="sf-guide sf-never" style="margin-top:16px"><div class="gh">Network problem</div><ul><li>Nothing was charged. Try again.</li></ul></div>';
   }
   btn.disabled=!gatePasses();
+}
+/* 20 Oct 2026 (Jonathan): once the invoice exists, link straight to the audit app's
+   page where the Deal Owner reviews the email and sends the invoice to the client. */
+const AUDIT_APP='https://audit.thetrademarkhelpline.com';
+function showOrderLink(id,name,paid){
+  const box=document.getElementById('f-payresult'); if(!box) return;
+  let panel=document.getElementById('f-orderlink');
+  if(!panel){panel=document.createElement('div');panel.id='f-orderlink';box.appendChild(panel);}
+  panel.innerHTML=`<div class="sf-guide" style="margin-top:12px;border-color:#2f9e63;background:#f2faf5">
+    <div class="gh">Invoice ${esc(name||'')} is ready${paid?' (marked paid)':''}</div>
+    <ul><li>The Deal Owner reviews the email and sends it to the client from here:</li>
+    <li><a class="btn primary" style="margin:6px 0" target="_blank" rel="noopener"
+      href="${AUDIT_APP}/order/invoice?order=${encodeURIComponent(id)}">Review and send the invoice</a></li></ul></div>`;
+}
+function watchOrder(box){
+  if(window.IS_DEMO&&window.IS_DEMO()) return;
+  let panel=document.getElementById('f-orderlink');
+  if(!panel){panel=document.createElement('div');panel.id='f-orderlink';box.appendChild(panel);}
+  panel.innerHTML='<div class="sf-hint" style="margin-top:10px">Waiting for the invoice to be raised in Xero…</div>';
+  let tries=0;
+  const tick=async()=>{
+    tries++;
+    try{
+      const r=await fetch('/staff-order',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({k:CONFIG.TOKEN,session_id:state.sessionId})});
+      const d=await r.json();
+      if(d&&d.ok&&d.order_id){showOrderLink(d.order_id,d.invoice_number,d.paid);return;}
+    }catch(e){}
+    if(tries<36){setTimeout(tick,5000);return;}
+    panel.innerHTML='<div class="sf-hint" style="margin-top:10px">The invoice is not raised yet (a payment link waits for payment first). <a href="#" onclick="watchOrder(document.getElementById(\'f-payresult\'));return false">Check again</a></div>';
+  };
+  tick();
 }
 
 /* =====================================================================
