@@ -109,6 +109,7 @@
   @media(max-width:560px){.steps{gap:8px}.steps b{font-size:10px;letter-spacing:.6px}}
 </style>
 <script src="/partner-ref.js"></script>
+<script src="/consult-booking.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -418,19 +419,29 @@
         </div>
         <div id="book-slot" class="hidden">
           <div class="panel" style="display:block">
-            <p style="margin:0 0 12px;font-size:14.5px">Pick your slot in our booking diary
-              &mdash; it opens in a new tab, and your confirmation comes by email.</p>
-            <a class="btn primary" id="book-link" href="#" target="_blank" rel="noopener"
-               onclick="bookOpened()">Choose your appointment time &rarr;</a>
-            <div id="book-back" class="hidden" style="margin-top:16px">
-              <label class="fld" style="margin-top:0">Which date did you book?</label>
-              <input type="date" id="con-date">
-              <label class="fld">And roughly what time?</label>
-              <select id="con-tod">
-                <option>Morning</option><option>Afternoon</option>
-              </select>
-              <p class="sub" style="margin-top:8px">We use this to make sure your audit is ready
-                and reviewed before you speak to us.</p>
+            <p style="margin:0 0 12px;font-size:14.5px">Choose a time that suits you. These are the
+              times our advisers are free; we book it the moment your order is placed and email
+              you the confirmation.</p>
+            <!-- In-page diary (15 Oct 2026, consult-booking.js): real free times, Mon-Fri 9-5,
+                 never sooner than the form allows. Nothing is booked until the order exists. -->
+            <div id="slot-pick"></div>
+            <!-- If our live diary cannot be reached, the Zoho Bookings diary is embedded IN the
+                 page (20 Oct 2026, the same inline embed as the partner pages), never a new tab. -->
+            <div id="book-fallback" class="hidden">
+              <p style="margin:0 0 12px;font-size:14.5px">Pick a time in our diary below. Your
+                confirmation comes by email.</p>
+              <iframe id="book-frame" title="Book your consultation" loading="lazy"
+                style="width:100%;height:640px;border:1px solid #E6E9ED;border-radius:12px;background:#fff"></iframe>
+              <p class="sub" style="margin-top:6px">Diary not showing?
+                <a id="book-link" href="#" target="_blank" rel="noopener" onclick="bookOpened()">Open it in a new tab</a>.</p>
+              <div id="book-back" style="margin-top:16px">
+                <label class="fld" style="margin-top:0">Once you&rsquo;ve booked, which date did you choose?</label>
+                <input type="date" id="con-date">
+                <label class="fld">And roughly what time?</label>
+                <select id="con-tod">
+                  <option>Morning</option><option>Afternoon</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -579,6 +590,7 @@
     <h1 style="text-align:center">Thank you &mdash; your audit is booked in</h1>
     <div id="done-head" class="ac-about"></div>
     <div class="ac-next" id="done-next"></div>
+    <div id="done-book" style="margin:14px 0"></div>
 
     <div class="panel" style="display:block">
       <h3 style="margin-top:0">While you&rsquo;re here &mdash; a couple of quick questions</h3>
@@ -656,6 +668,9 @@ const CONFIG=(function(){
        CANNOT be iframed — the booking opens in a new tab (checked 27 Aug). */
     BOOK_PHONE_URL:q.get('bookphone')||'https://bookings.thetrademarkhelpline.com/Audit-Phone',
     BOOK_VIDEO_URL:q.get('bookvideo')||'https://bookings.thetrademarkhelpline.com/audit-review',
+    /* Inline embeds (Jonathan, 20 Oct 2026): Teams = audit-review, Phone = Audit-Phone. */
+    EMBED_PHONE_URL:'https://bookings.thetrademarkhelpline.com/portal-embed#/Audit-Phone',
+    EMBED_VIDEO_URL:'https://bookings.thetrademarkhelpline.com/portal-embed#/audit-review',
     PAY_ENDPOINT:'/audit-pay',
     PHONE:'0161 833 5400',
     ADMIN_EMAIL:'admin@thetrademarkhelpline.com',
@@ -710,7 +725,7 @@ const state={
   now:['GB'], plan:[], nowMode:'uk', planMode:'none',
   classes:[], scope:[], termsShown:true, scopeResp:'client',
   platforms:{ipos:{}, org:null, orgNone:false, domain:'', domainNone:false, soc:{}, shop:{}},
-  consult:{taken:null, type:'', prefDate:'', prefTod:'', auditDate:''},
+  consult:{taken:null, type:'', prefDate:'', prefTime:'', prefTod:'', auditDate:'', slotMode:'picker', slotType:''},
   applicant:{kind:'',name:'',id:'',addr1:'',addr2:'',addr3:'',postcode:''},
   payment:{method:'',payDate:'',cc:''}
 };
@@ -1304,6 +1319,31 @@ function consultType(t){
   document.getElementById('ft-wrap').classList.remove('hidden');
   document.getElementById('book-link').href=
     t==='Phone'?CONFIG.BOOK_PHONE_URL:CONFIG.BOOK_VIDEO_URL;
+  /* Changing phone/video clears a time picked for the other one (different diaries). */
+  if(state.consult.slotType && state.consult.slotType!==t){state.consult.prefDate='';state.consult.prefTime='';}
+  state.consult.slotMode='picker';
+  document.getElementById('book-fallback').classList.add('hidden');
+  if(!window.TMHConsult){consultFallback();return;}
+  TMHConsult.picker(document.getElementById('slot-pick'),{journey:journeyBase(),type:t,
+    from:earliestDeadlineIso(),
+    selected:state.consult.prefDate&&state.consult.prefTime?{date:state.consult.prefDate,time:state.consult.prefTime}:null,
+    onPick:function(pk){
+      state.consult.prefDate=pk.date;state.consult.prefTime=pk.time;state.consult.slotType=t;
+      state.consult.prefTod=(+pk.time.slice(0,2))<12?'Morning':'Afternoon';
+      clearErr('con-err');
+      logEvent('consult_slot_chosen','audit_consult',{type:t,date:pk.date,time:pk.time});
+    },
+    onUnavailable:consultFallback});
+}
+/* The diary could not be reached: fall back to the old booking link + "which date". */
+function consultFallback(){
+  state.consult.slotMode='link';
+  document.getElementById('slot-pick').innerHTML='';
+  document.getElementById('book-fallback').classList.remove('hidden');
+  const fr=document.getElementById('book-frame');
+  const src=state.consult.type==='Video'?CONFIG.EMBED_VIDEO_URL:CONFIG.EMBED_PHONE_URL;
+  if(fr&&fr.getAttribute('src')!==src) fr.setAttribute('src',src);
+  logEvent('audit_checkout_booking_opened','audit_consult',{type:state.consult.type,embedded:true},{});
 }
 function bookOpened(){
   document.getElementById('book-back').classList.remove('hidden');
@@ -1314,10 +1354,15 @@ function submitConsult(){
     return showErr('con-err','Choose the free consultation, or just the audit.');
   if(state.consult.taken){
     if(!state.consult.type) return showErr('con-err','Phone or video?');
-    state.consult.prefDate=document.getElementById('con-date').value||'';
-    state.consult.prefTod=document.getElementById('con-tod').value||'';
-    if(!state.consult.prefDate)
-      return showErr('con-err','Book your slot, then tell us the date you chose.');
+    if(state.consult.slotMode==='link'){
+      state.consult.prefDate=document.getElementById('con-date').value||'';
+      state.consult.prefTod=document.getElementById('con-tod').value||'';
+      state.consult.prefTime='';
+      if(!state.consult.prefDate)
+        return showErr('con-err','Book your slot, then tell us the date you chose.');
+    }else if(!state.consult.prefDate||!state.consult.prefTime){
+      return showErr('con-err','Choose a day and a time for your consultation.');
+    }
   }else{
     state.consult.auditDate=document.getElementById('audit-date').value||'';
     if(!state.consult.auditDate)
@@ -1433,6 +1478,7 @@ function submitApplicant(){
   }catch(e){}})();
   /* The Details page is where the Account comes from. */
   crm('applicant',{org_name:state.applicant.name,org_id:state.applicant.id,
+    kind:state.applicant.kind,
     addr1:state.applicant.addr1,addr2:state.applicant.addr2,
     addr3:state.applicant.addr3,postcode:state.applicant.postcode,
     country:(state.applicant.kind==='uk_org'||state.applicant.kind==='uk_ind')
@@ -1548,7 +1594,7 @@ function renderSummary(){
       (shopOn.length?'<br>Shopping: '+shopOn.join(', '):''))+
     sec('Your brand assets (excluded from results)',excl.length?excl.join('<br>'):'None recorded')+
     sec('Consultation',state.consult.taken
-      ?`Free consultation (${state.consult.type}) — ${prettyDate(state.consult.prefDate)}, ${state.consult.prefTod}`
+      ?`Free consultation (${state.consult.type}) — ${prettyDate(state.consult.prefDate)}, ${consultWhen()}`
       :'Audit only — delivery by '+prettyDate(state.consult.auditDate))+
     sec('Prepared for',`${kindLabel}: ${state.applicant.name}`+
       (state.applicant.id?` (${state.applicant.id})`:'')+`<br>`+
@@ -1769,6 +1815,16 @@ function proceedOrder(){
     }},{status:'audit_ordered',current_screen:'audit_done'});
   renderDone();
   go('done');
+  /* Book the chosen consultation now the order exists (15 Oct 2026). The journey
+     books it once, whoever asks first (this screen or the order processing). */
+  if(state.consult.taken&&state.consult.slotMode!=='link'&&window.TMHConsult){
+    const box=document.getElementById('done-book');
+    if(box) TMHConsult.book(box,{sid:state.sessionId,journey:journeyBase(),type:state.consult.type,
+      from:earliestDeadlineIso()});
+  }
+}
+function consultWhen(){
+  return state.consult.prefTime&&window.TMHConsult?TMHConsult.time12(state.consult.prefTime):(state.consult.prefTod||'');
 }
 
 /* ================= 9 — CONFIRMATION ================= */
@@ -1779,7 +1835,7 @@ function renderDone(){
   head.push('<h4>What happens next</h4>');
   if(state.consult.taken){
     head.push(`<p>Your <b>free ${state.consult.type.toLowerCase()} consultation</b> is booked for
-      <b>${prettyDate(state.consult.prefDate)}</b> (${state.consult.prefTod}). You&rsquo;ll speak
+      <b>${prettyDate(state.consult.prefDate)}</b> (${consultWhen()}). You&rsquo;ll speak
       to one of our expert trademark advisers for up to an hour, and they&rsquo;ll have your
       completed audit in front of them.</p>`);
   }else{
