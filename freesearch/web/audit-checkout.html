@@ -1781,8 +1781,10 @@ function proceedOrder(){
       billing_entity:state.applicant.name||'',source:'client_checkout',
       xero_invoice:'pending_credentials'});
   }
-  const dealName=(state.consult.taken?'Trademark Audit & Consultation - ':'Trademark Audit Only - ')+
-    state.name+(state.hasLogo?' Word, Logo':' Word');
+  /* Deal name (Jonathan, 20 Oct 2026): "Trademark Clearance Audit - <name> - Word / Logo / Tagline". */
+  const dealName=['Trademark Clearance Audit',state.name,
+    ['Word',state.hasLogo?'Logo':'',state.tagline?'Tagline':''].filter(Boolean).join(' / ')]
+    .filter(Boolean).join(' - ');
   /* Summary reached -> Quoted. */
   const payLabel={online:'Online (Stripe)',phone_now:'Phone',invoice:'Invoice'}[state.payment.method];
   crm('summary',{order_ref:invoiceRef(),net_total:pr.net,vat:pr.vat,total:pr.total,
