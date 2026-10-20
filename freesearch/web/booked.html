@@ -1,0 +1,26 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Appointment booked</title>
+<style>body{margin:0;font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1D1D1B;
+display:grid;place-items:center;min-height:100vh;background:#fff}
+.b{max-width:440px;text-align:center;padding:24px}.b h1{color:#2D455A;font-size:22px;margin:0 0 8px}
+.ok{display:inline-block;background:#E7F6EE;color:#1F8A5B;border-radius:99px;padding:4px 14px;font-weight:700;margin-bottom:12px}</style>
+</head><body><div class="b">
+<div class="ok">Booked</div>
+<h1>Your consultation is booked</h1>
+<p id="d">A confirmation is on its way by email.</p>
+</div>
+<script>
+/* Zoho Bookings redirects here after an audit booking (20 Oct 2026). Inside our forms this page is
+   framed by the form itself (same origin), so the booking details go straight back to it. */
+(function(){
+  var raw={};
+  [location.search.slice(1), (location.hash.split('?')[1]||'')].forEach(function(q){
+    q.split('&').forEach(function(p){ if(!p) return; var i=p.indexOf('=');
+      var k=decodeURIComponent((i<0?p:p.slice(0,i)).replace(/\+/g,' '));
+      var v=i<0?'':decodeURIComponent(p.slice(i+1).replace(/\+/g,' '));
+      if(k) raw[k]=v; });
+  });
+  try{ if(window.parent!==window) window.parent.postMessage({tmhBooking:raw}, location.origin); }catch(e){}
+})();
+</script></body></html>
