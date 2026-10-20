@@ -130,6 +130,8 @@ _PAGES = {
     # guided call workspace, ad-hoc completion, multiple marks on one order,
     # and a payment gate. Token-gated below — see _STAFF_PATHS.
     '/staff-enquiry': 'staff-enquiry.html',
+    # Zoho Bookings returns here after an audit booking (20 Oct 2026); hands the details to the form.
+    '/booked': 'booked.html',
     # Quick Audit (Jonathan, 15 Sep): the SAME page in its audit-schema-only
     # mode -- contact, marks, platforms, billing, read-back. The page detects
     # the path. One file, one Deal shape, so a change to the shape changes
@@ -522,7 +524,7 @@ def _static(path: str):
     # tool-events.js: GA4 step messages to the host page (handoff 24 Sep).
     # class-chat.js: the ONE AI class assistant widget (2 Oct 2026).
     if path in ('/braudit.css', '/wizard.css', '/demo-banner.js', '/help-line.js', '/partner-ref.js',
-                '/tool-events.js', '/class-chat.js', '/consult-booking.js'):
+                '/tool-events.js', '/class-chat.js', '/consult-booking.js', '/booking-capture.js'):
         rel = path.lstrip('/')
     elif path.startswith('/brand/') or path.startswith('/fonts/'):
         rel = path.lstrip('/')
@@ -873,7 +875,9 @@ def _terms_accept(session_id: str, *, staff: bool, enq: dict | None,
         business = tb.get('business')
         consent = tb.get('consumer_start') is True
         consent_at = str(tb.get('consumer_start_at') or '') or (now if consent else '')
-        n_raw = None                              # web orders: always 5
+        # Web orders: 5 working days, except a booked consultation, which is turned round in
+        # 24 hours (1 working day) subject to adviser diaries (Jonathan, 20 Oct 2026).
+        n_raw = 1 if tb.get('consult_24h') is True else None
         current = (sess or {}).get('trading_now') or []
         planning = (sess or {}).get('planning_to_trade') or []
         source, by = 'client_checkout', 'client'
