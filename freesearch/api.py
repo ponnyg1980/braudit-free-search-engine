@@ -522,7 +522,7 @@ def _static(path: str):
     # tool-events.js: GA4 step messages to the host page (handoff 24 Sep).
     # class-chat.js: the ONE AI class assistant widget (2 Oct 2026).
     if path in ('/braudit.css', '/wizard.css', '/demo-banner.js', '/help-line.js', '/partner-ref.js',
-                '/tool-events.js', '/class-chat.js'):
+                '/tool-events.js', '/class-chat.js', '/consult-booking.js'):
         rel = path.lstrip('/')
     elif path.startswith('/brand/') or path.startswith('/fonts/'):
         rel = path.lstrip('/')
@@ -1665,42 +1665,6 @@ class _Handler(BaseHTTPRequestHandler):
             # see Portal_Identity_in_Search_Spec.md §5.
             self._send_raw(_STAFF_GATE_HTML.encode(), 'text/html; charset=utf-8')
             return
-        if path.startswith('/q/'):
-            # QR codes (Lead Engine, 12 Oct 2026). Every Cerebrum contact has a
-            # permanent code printed or emailed as tools.thetrademarkhelpline.com/q/<code>;
-            # its destination changes daily (Watch report, renewal, portal,
-            # industry report, free search). This host has no access to TMH
-            # Analytics, so the scan is forwarded to the audit host, which looks
-            # the code up, logs the scan and redirects (audit_engine /q/<code>).
-            code = path[3:]
-            if code.lower().endswith('.png'):
-                code = code[:-4].upper()
-                if re.fullmatch(r'[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{7}', code):
-                    import io as _io
-                    import segno
-                    qr = segno.make(f'https://tools.thetrademarkhelpline.com/q/{code}', error='m')
-                    w = qr.symbol_size(scale=1, border=4)[0]
-                    buf = _io.BytesIO()
-                    qr.save(buf, kind='png', scale=max(1, 600 // w), border=4,
-                            dark='#000000', light='#ffffff')
-                    body = buf.getvalue()
-                    self.send_response(200)
-                    self.send_header('Content-Type', 'image/png')
-                    self.send_header('Content-Length', str(len(body)))
-                    # the image for a code never changes
-                    self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
-                    self.end_headers()
-                    self.wfile.write(body)
-                else:
-                    self._send({'ok': False, 'error': 'not found'}, 404)
-                return
-            self.send_response(302)
-            self.send_header('Location', 'https://audit.thetrademarkhelpline.com/q/'
-                             + re.sub(r'[^A-Za-z0-9]', '', code)[:12].upper())
-            self.send_header('Cache-Control', 'no-store')
-            self.send_header('X-Robots-Tag', 'noindex')
-            self.end_headers()
-            return
         if path in _PAGES or path.startswith('/report/'):
             # /report/<session-uuid> is the pretty unique-URL form of the
             # search report; the page reads the id from the path itself.
@@ -1991,6 +1955,29 @@ class _Handler(BaseHTTPRequestHandler):
                     self._send(json.loads(r.read().decode()))
             except Exception:
                 self._send({'ok': False, 'error': 'could not record the approval'}, 200)
+            return
+        if path == '/staff-order':
+            # 20 Oct 2026: the Zoho Order + invoice number for a staff session, so the
+            # staff forms can link straight to the audit app's "send the invoice" page.
+            try:
+                length = int(self.headers.get('Content-Length', 0) or 0)
+                payload = json.loads(self.rfile.read(length) or b'{}')
+            except (ValueError, json.JSONDecodeError):
+                self._send({'ok': False, 'error': 'invalid JSON'}, 400)
+                return
+            if not _staff_user(str(payload.get('k') or '')):
+                self._send({'ok': False, 'error': 'forbidden'}, 403)
+                return
+            import urllib.request as _ur
+            body = json.dumps({'key': os.environ.get('XERO_PROCESS_KEY', ''),
+                               'session_id': str(payload.get('session_id') or '')}).encode()
+            req = _ur.Request(_JOURNEY_URL.rstrip('/') + '/staff/order-status', data=body,
+                              headers={'Content-Type': 'application/json'})
+            try:
+                with _ur.urlopen(req, timeout=15) as r:
+                    self._send(json.loads(r.read().decode()))
+            except Exception:
+                self._send({'ok': False, 'error': 'could not read the order'}, 200)
             return
         if path == '/staff-deal':
             # Read an existing audit Deal back for EDIT mode (15 Sep). Shared
