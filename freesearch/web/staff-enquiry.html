@@ -606,6 +606,48 @@
       </ul>
     </div>
 
+    <!-- 20 Oct 2026 (Jonathan): the consultation script and the booking diary, in the form. -->
+    <details class="sf-guide sf-script" id="f-consultscript" style="margin-bottom:14px">
+      <summary style="cursor:pointer;list-style:none">
+        <div class="gh" style="margin-bottom:4px">Trademark Clearance Audit &amp; Consultation</div>
+        <span class="say">"The searches can generally be turned around inside 24 hours&hellip;"</span>
+        <span style="color:var(--pink,#E51652);font-weight:700;margin-left:6px">Read more</span>
+      </summary>
+      <div class="say" style="margin-top:10px;line-height:1.55">
+        <p>"The searches can generally be turned around inside 24 hours. This includes taking the raw
+          results from the trademark registers, Companies House, social media, domains and Google
+          search and running them through initial risk scoring.</p>
+        <p>Compliance then pass the results and findings to me. I will review the results and prepare
+          the report and guidance, which will include whether we believe a trademark application is
+          viable, the best approach and a specific breakdown of the potential costs, which I can run
+          through with you over the phone or over Teams.</p>
+        <p><b>Cost:</b> we budget 2 hours in total, which works out at £298.</p>
+        <p>However, because you are <span id="f-scriptcust">a new</span> customer, I am able to offer
+          the clearance audit at cost, which is <b>£99 / £149</b>, and can do the consultation free
+          of charge.</p>
+        <p>This is because it gives us the chance to show you how we operate, by giving you all the
+          information you need to make an informed decision on the next steps. There is no obligation
+          beyond the audit and consultation, and if we were to advise you against applying for a
+          trademark for whatever reason, we offer you a second audit and consultation on a different
+          trademark within 3 months, completely free of charge.</p>
+        <p>Does that make sense?"</p>
+      </div>
+    </details>
+    <div class="sf-guide" style="margin-bottom:14px">
+      <div class="gh">Confirm the appointment for tomorrow or the next day</div>
+      <ul><li><span class="say">"Shall we book you in for <b id="f-day1">tomorrow</b> or
+        <b id="f-day2">the day after</b>?"</span></li></ul>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button type="button" class="btn ghost" onclick="consultDay(1)">Book <span id="f-day1b">tomorrow</span></button>
+        <button type="button" class="btn ghost" onclick="consultDay(2)">Book <span id="f-day2b">next day</span></button>
+      </div>
+    </div>
+    <div id="f-bookwrap" style="margin-bottom:14px">
+      <label class="fld">Book it in the diary <span class="opt">(Phone or Teams, from the Method below)</span></label>
+      <iframe id="f-bookframe" title="Book the consultation" loading="lazy"
+        style="width:100%;height:640px;border:1px solid #E6E9ED;border-radius:12px;background:#fff"></iframe>
+      <div class="sf-hint">Once it is booked, put the same date and time in below.</div>
+    </div>
     <div id="f-consultfields">
     <div class="sf-row">
       <div><label class="fld">Date <span class="req">*</span></label>
@@ -934,7 +976,8 @@ const ALL_SECTIONS=[
 ];
 /* Quick Audit: the audit schema only (spec: temmy-access/Quick Audit -
    audit schema.md §12). Everything else is Fact Find only. */
-const QUICK_SECS=['contact','marks','platforms','billing','readback'];
+/* 20 Oct 2026 (Jonathan): the appointment is booked on Quick Audit too, before Billing. */
+const QUICK_SECS=['contact','marks','platforms','consult','billing','readback'];
 const SECTIONS=CONFIG.QUICK?ALL_SECTIONS.filter(s=>QUICK_SECS.includes(s[0])):ALL_SECTIONS;
 const inForm=sec=>SECTIONS.some(s=>s[0]===sec);
 
@@ -1014,6 +1057,27 @@ function isWorkingDay(d){const g=d.getDay();return g>=1&&g<=5&&!EW_BANK_HOLIDAYS
 /* The agreed turnaround N (Terms of Service clause 4.2): 5 unless a SHORTER
    one was agreed with the client. Never longer -- that needs Jonathan. */
 function turnaroundN(){const n=parseInt((state.recommend||{}).turnaroundDays||'5',10);return n>=1&&n<=5?n:5;}
+/* 20 Oct 2026: the consultation diary (Zoho Bookings inline embed) follows the Method. */
+const DIARY={phone:'https://bookings.thetrademarkhelpline.com/portal-embed#/Audit-Phone',
+             video:'https://bookings.thetrademarkhelpline.com/portal-embed#/audit-review'};
+function consultDiary(){
+  const fr=document.getElementById('f-bookframe'),w=document.getElementById('f-bookwrap');
+  if(!fr||!w) return;
+  const src=DIARY[state.consult.method||'phone'];
+  w.classList.toggle('hidden',!src);
+  if(src&&fr.getAttribute('src')!==src) fr.setAttribute('src',src);
+  const d1=addWorkingDays(new Date(),1),d2=addWorkingDays(new Date(),2);
+  const nm=d=>d.toLocaleDateString('en-GB',{weekday:'long'});
+  const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
+  set('f-day1',nm(d1));set('f-day2',nm(d2));set('f-day1b',nm(d1));set('f-day2b',nm(d2));
+  const ct=state.contact.clientType;
+  set('f-scriptcust',ct==='existing'||ct==='returning'?'an existing':'a new');
+}
+function consultDay(n){
+  state.consult.date=iso(addWorkingDays(new Date(),n));
+  const el=document.getElementById('f-consultdate'); if(el) el.value=state.consult.date;
+  touch();
+}
 function addWorkingDays(date,n){
   const d=new Date(date.getTime());let step=n<0?-1:1,left=Math.abs(n);
   while(left>0){d.setDate(d.getDate()+step);if(isWorkingDay(d))left--;}
@@ -1124,7 +1188,7 @@ function gateRules(){
      bounds rule lives on Recommendation in Fact Find; here it belongs with
      the marks, where the prices are typed. Mirrors _staff_gate(quick). */
   return rules.map(r=>r.id==='G-13'?Object.assign({},r,{sec:'marks'}):r)
-              .filter(r=>inForm(r.sec));
+              .filter(r=>inForm(r.sec)&&r.id!=='G-07');
 }
 function validEmail(e){return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e||'').trim());}
 function parseClasses(s){
@@ -1179,6 +1243,7 @@ function showSection(id){
   const el=document.querySelector('[data-sec="'+id+'"]');
   if(el) el.classList.remove('hidden');
   if(id==='readback') renderReadback();
+  if(id==='consult') consultDiary();
   renderNav();
   try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}
 }
@@ -2479,7 +2544,8 @@ function bindAll(){
   bind('f-consultdate',v=>state.consult.date=v);
   bind('f-consulttime',v=>state.consult.time=v);
   bind('f-adviser',v=>state.consult.adviser=v);
-  bind('f-consultmethod',v=>state.consult.method=v);
+  bind('f-consultmethod',v=>{state.consult.method=v;consultDiary();});
+  consultDiary();
   bind('c-agreed',v=>state.consult.agreed=v);
   const dc=document.getElementById('c-declined');
   dc.addEventListener('change',()=>{
