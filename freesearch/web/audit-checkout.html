@@ -1360,12 +1360,21 @@ if(window.TMHBooking) TMHBooking.listen(function(b){
   clearErr('con-err');
   logEvent('consult_booked_embed','audit_consult',{date:b.date,time:b.time,type:b.type,booking_id:b.booking_id,raw:b.raw});
 });
+/* 21 Oct 2026 (Jonathan): the Zoho diary fills the client's details from the URL. Tested: it reads
+   the form's field labels after the hash route: First Name, Last Name, Email, Contact Number. */
+function diaryPrefill(url,c){
+  c=c||{}; let ph=String(c.phone||'').replace(/[^\d+]/g,'');
+  if(/^0\d{9,10}$/.test(ph)) ph='+44'+ph.slice(1);
+  const q=[['First Name',c.first],['Last Name',c.last],['Email',c.email],['Contact Number',ph]]
+    .filter(p=>p[1]&&String(p[1]).trim()).map(p=>encodeURIComponent(p[0])+'='+encodeURIComponent(String(p[1]).trim())).join('&');
+  return q?url+(url.includes('?')?'&':'?')+q:url;
+}
 function consultFallback(){
   state.consult.slotMode='link';
   document.getElementById('slot-pick').innerHTML='';
   document.getElementById('book-fallback').classList.remove('hidden');
   const fr=document.getElementById('book-frame');
-  const src=state.consult.type==='Video'?CONFIG.EMBED_VIDEO_URL:CONFIG.EMBED_PHONE_URL;
+  const src=diaryPrefill(state.consult.type==='Video'?CONFIG.EMBED_VIDEO_URL:CONFIG.EMBED_PHONE_URL,state.contact);
   if(fr&&fr.getAttribute('src')!==src) fr.setAttribute('src',src);
   logEvent('audit_checkout_booking_opened','audit_consult',{type:state.consult.type,embedded:true},{});
   if(window.TMHBooking&&state.sessionId) TMHBooking.poll({journey:journeyBase(),sid:state.sessionId});
