@@ -72,5 +72,33 @@
     var b = normalise(e.data.tmhBooking);
     fns.forEach(function (f) { try { f(b); } catch (x) {} });
   });
-  window.TMHBooking = { listen: function (f) { fns.push(f); }, normalise: normalise };
+  /* 21 Oct 2026: with the Zoho Bookings connection live, the booking is also found by asking Zoho
+     for the session's email (journey /consult/lookup), so no redirect page is needed. Polls quietly
+     while the diary is on screen and stops at the first hit. */
+  var timer = null, seen = '';
+  function poll(o) {
+    stop();
+    if (!o || !o.sid || !o.journey) return;
+    var left = o.max || 200;
+    function tick() {
+      if (left-- <= 0) return;
+      fetch(o.journey.replace(/\/$/, '') + '/consult/lookup', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: o.sid }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d && d.ok && d.start_time && d.booking_id !== seen) {
+            seen = d.booking_id;
+            var b = normalise({ start_time: d.start_time, assigned_to: d.staff_name,
+              service_name: d.service_name, booking_id: d.booking_id });
+            fns.forEach(function (f) { try { f(b); } catch (x) {} });
+            return;
+          }
+          timer = setTimeout(tick, o.every || 6000);
+        })
+        .catch(function () { timer = setTimeout(tick, o.every || 6000); });
+    }
+    tick();
+  }
+  function stop() { if (timer) { clearTimeout(timer); timer = null; } }
+  window.TMHBooking = { listen: function (f) { fns.push(f); }, normalise: normalise, poll: poll, stop: stop };
 })();
