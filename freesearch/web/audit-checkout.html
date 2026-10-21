@@ -1368,6 +1368,7 @@ function consultFallback(){
   const src=state.consult.type==='Video'?CONFIG.EMBED_VIDEO_URL:CONFIG.EMBED_PHONE_URL;
   if(fr&&fr.getAttribute('src')!==src) fr.setAttribute('src',src);
   logEvent('audit_checkout_booking_opened','audit_consult',{type:state.consult.type,embedded:true},{});
+  if(window.TMHBooking&&state.sessionId) TMHBooking.poll({journey:journeyBase(),sid:state.sessionId});
 }
 function bookOpened(){
   document.getElementById('book-back').classList.remove('hidden');
