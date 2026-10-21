@@ -1061,10 +1061,20 @@ function turnaroundN(){const n=parseInt((state.recommend||{}).turnaroundDays||'5
 /* 20 Oct 2026: the consultation diary (Zoho Bookings inline embed) follows the Method. */
 const DIARY={phone:'https://bookings.thetrademarkhelpline.com/portal-embed#/Audit-Phone',
              video:'https://bookings.thetrademarkhelpline.com/portal-embed#/audit-review'};
+/* 21 Oct 2026 (Jonathan): the Zoho diary fills the client's details from the URL. Tested: it reads
+   the form's field labels after the hash route: First Name, Last Name, Email, Contact Number. */
+function diaryPrefill(url,c){
+  c=c||{}; let ph=String(c.phone||'').replace(/[^\d+]/g,'');
+  if(/^0\d{9,10}$/.test(ph)) ph='+44'+ph.slice(1);
+  const q=[['First Name',c.first],['Last Name',c.last],['Email',c.email],['Contact Number',ph]]
+    .filter(p=>p[1]&&String(p[1]).trim()).map(p=>encodeURIComponent(p[0])+'='+encodeURIComponent(String(p[1]).trim())).join('&');
+  return q?url+(url.includes('?')?'&':'?')+q:url;
+}
 function consultDiary(){
   const fr=document.getElementById('f-bookframe'),w=document.getElementById('f-bookwrap');
   if(!fr||!w) return;
-  const src=DIARY[state.consult.method||'phone'];
+  const base=DIARY[state.consult.method||'phone'];
+  const src=base?diaryPrefill(base,state.contact):base;
   w.classList.toggle('hidden',!src&&!CONFIG.QUICK);
   ['phone','video'].forEach(k=>{const b=document.getElementById('f-bk-'+k);
     if(b) b.className='btn '+((state.consult.method||'phone')===k?'primary':'ghost');});
