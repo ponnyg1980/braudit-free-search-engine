@@ -1278,7 +1278,10 @@ function showSection(id){
   const el=document.querySelector('[data-sec="'+id+'"]');
   if(el) el.classList.remove('hidden');
   if(id==='readback') renderReadback();
-  if(id==='consult') consultDiary();
+  if(id==='consult'){ consultDiary();
+    if(window.TMHBooking&&state.sessionId&&!(window.IS_DEMO&&window.IS_DEMO())&&!(state.consult.date&&state.consult.bookingId))
+      TMHBooking.poll({journey:jb(),sid:state.sessionId});
+  } else if(window.TMHBooking) TMHBooking.stop();
   renderNav();
   try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}
 }
