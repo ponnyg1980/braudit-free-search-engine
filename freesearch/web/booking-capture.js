@@ -35,8 +35,27 @@
     if (m[3]) { var pm = /p/i.test(m[3]); if (pm && h < 12) h += 12; if (!pm && h === 12) h = 0; }
     return pad(h) + ':' + m[2];
   }
+  function londonParts(iso) {
+    /* Zoho passes booking_start_time as ISO 8601; with Z or an offset, show it in UK time. */
+    var d = new Date(iso);
+    if (isNaN(d)) return null;
+    var f = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit',
+      day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d);
+    var g = {}; f.forEach(function (p) { g[p.type] = p.value; });
+    return { date: g.year + '-' + g.month + '-' + g.day, time: (g.hour === '24' ? '00' : g.hour) + ':' + g.minute };
+  }
   function normalise(raw) {
-    var when = [pick(raw, ['bookingdate', 'appointmentdate', 'date', 'startdate', 'bookingdatetime', 'starttime', 'appointmenttime', 'bookingtime', 'fromtime', 'time']),
+    var st = pick(raw, ['bookingstarttime']);
+    if (st && /T\d{2}:\d{2}/.test(st) && /(Z|[+-]\d{2}:?\d{2})$/.test(st)) {
+      var lp = londonParts(st);
+      if (lp) {
+        var svc0 = pick(raw, ['servicename', 'service']);
+        return { date: lp.date, time: lp.time, adviser: pick(raw, ['assignedto', 'staffname', 'staff']),
+          type: /teams|video|review/i.test(svc0) ? 'Teams' : (svc0 ? 'Phone' : ''), service: svc0,
+          booking_id: pick(raw, ['bookingid']), raw: raw || {} };
+      }
+    }
+    var when = [pick(raw, ['bookingstarttime', 'bookingdate', 'appointmentdate', 'date', 'startdate', 'bookingdatetime', 'starttime', 'appointmenttime', 'bookingtime', 'fromtime', 'time']),
                 pick(raw, ['starttime', 'appointmenttime', 'bookingtime', 'fromtime', 'time'])].join(' ');
     var svc = pick(raw, ['servicename', 'service', 'eventtype', 'appointmenttype']);
     return {
