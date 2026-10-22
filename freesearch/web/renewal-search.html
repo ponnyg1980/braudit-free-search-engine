@@ -742,13 +742,13 @@ function drawRenew(){
        '<div><span class="was">'+money(o.rrp)+'</span><span class="save">Save '+money(o.saving)+'</span></div>'+
        '<div class="today">'+money(o.tmh_today)+' <small>today + UKIPO fees</small></div>'+
        '<ul>'+(INC[o.n]||[]).map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>'+
-       '<div class="then">'+(o.then_monthly ? 'Then '+money(o.then_monthly)+' a month<span>Rolling monthly. Cancel or change your plan at any time.</span>' : 'Nothing more to pay')+'</div></div>').join('')+'</div>';
+       '<div class="then">'+(o.then_monthly ? 'Then '+money(o.then_monthly)+' a month<span>Rolling monthly, change at any time.</span>' : 'Nothing more to pay')+'</div></div>').join('')+'</div>';
   const o = d.options.find(x=>x.n===CHOICE) || d.options[0];
   h += '<div class="sect"><h3>What you pay today</h3><div class="in"><table class="fees">'+
        '<tr><td>'+esc(cleanLabel(o.label))+'</td><td class="r"><span class="was">'+money(o.rrp)+'</span>'+money(o.tmh_today)+'</td></tr>'+
        '<tr><td>UKIPO renewal fee'+(n>1?'s ('+n+' marks)':'')+'</td><td class="r">'+money(d.ukipo_total)+'</td></tr>'+
        '<tr class="tot"><td>Total today</td><td class="r">'+money(o.pays_today)+'</td></tr></table>'+
-       (o.then_monthly?'<p class="hint">Then '+money(o.then_monthly)+' a month. Rolling monthly, cancel or change at any time.</p>':'')+
+       (o.then_monthly?'<p class="hint">Then '+money(o.then_monthly)+' a month. Rolling monthly, change at any time.</p>':'')+
        '<p class="hint">'+esc(d.ukipo_note)+' Prices exclude VAT where it applies.</p>'+
        '<div class="acts" style="margin-top:12px"><button type="button" class="btn pink" disabled>Continue: your details</button>'+
        '<span class="hint" style="align-self:center">Next: confirm your details, sign the authority, and pay.</span></div></div></div>';
@@ -804,7 +804,7 @@ function drawEngine(){
         '<div>'+(anchor>price?'<span class="was">'+gbp(anchor)+'</span>':'')+(Number(o.saving)>0?'<span class="save">Save '+gbp(o.saving)+'</span>':'')+'</div>'+
         '<div class="today">'+(price>0?gbp(price):'Included')+' <small>'+(price>0?'renewal':'renewal fee')+'</small></div>'+
         (inc.length?'<ul>'+inc.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+
-        '<div class="then">'+(mo>0?'Then '+(moR>mo?'<s style="color:var(--quiet);font-weight:400">'+gbp(moR)+'</s> ':'')+gbp(mo)+' a month<span>Rolling monthly. Cancel or change at any time.</span>':'Nothing more to pay')+'</div></div>'; }).join('')+'</div>';
+        '<div class="then">'+(mo>0?'Then '+(moR>mo?'<s style="color:var(--quiet);font-weight:400">'+gbp(moR)+'</s> ':'')+gbp(mo)+' a month<span>Rolling monthly, change at any time.</span>':'Nothing more to pay')+'</div></div>'; }).join('')+'</div>';
     const o = opts[ENG.option] || {};
     h += '<div class="sect"><h3>What you pay today</h3><div class="in">'+
       '<label style="display:flex;gap:10px;align-items:flex-start;font-size:.92rem;margin:4px 0 10px;cursor:pointer"><input type="checkbox" id="e-addon"'+(ENG.addon?' checked':'')+' style="margin-top:3px">'+
