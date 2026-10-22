@@ -3015,7 +3015,10 @@ function discJur(p){const nonUk=[...(p.trading_now||[]),...(p.planning_to_trade|
    engine's summary — the counts, the narrative and the buttons can never
    disagree. Never declares a mark "clear", "available" or "safe". */
 function resultOutcome(s){
-  if(!s || s.truncated) return 'error';
+  /* 22 Oct 2026: `truncated` now means the candidate pool hit its 1,000-row cap, and the engine keeps
+     the CLOSEST rows (ORDER BY sub_hit, sim since the 17 Oct D17 blocking change). That is a complete,
+     ranked result, not a failed search, so it no longer blanks the page. Only a missing summary is. */
+  if(!s) return 'error';
   if(s.high>0) return 'high';
   if(s.medium>0) return 'medium';
   if(s.total_flagged>0) return 'clean';
@@ -3039,7 +3042,8 @@ function renderResults(r){const s=r.summary;
   const oc=OUTCOME_COPY[outcome];
   document.getElementById('res-head').textContent=oc[0];
   document.getElementById('res-sub').textContent=
-    `We searched the ${r.searched_office} register for “${r.query.word_marks[0]}”. `+oc[1];
+    `We searched the ${r.searched_office} register for “${r.query.word_marks[0]}”. `+oc[1]
+    +(s&&s.truncated&&outcome!=='error'?' We have ranked the closest matches; the register holds more partial matches, which a Brand Audit reviews in full.':'');
   // An incomplete search must never be presented as a low-risk result: no
   // score, no opinion dial (spec §7 consistency rules).
   r._outcome=outcome;
