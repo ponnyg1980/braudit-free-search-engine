@@ -1884,7 +1884,9 @@ class _Handler(BaseHTTPRequestHandler):
             module = str(payload.get('module') or '')
             # AccountContacts (11 Sep): the people ON an account, so an audit
             # anchored on the Account still ends up attached to a person.
-            if module not in ('Contacts', 'Leads', 'Accounts', 'AccountContacts'):
+            # LeadById / ContactById (22 Oct 2026): the Lead and Contact buttons open the form on one
+            # record; its id travels in account_id.
+            if module not in ('Contacts', 'Leads', 'Accounts', 'AccountContacts', 'LeadById', 'ContactById'):
                 self._send({'ok': False, 'error': 'bad module'}, 400)
                 return
             import urllib.request as _ur
