@@ -189,5 +189,9 @@ class QueryRunsRetriever:
                 except Exception:
                     pass
         records = [r for r in (record_from_row(x) for x in rows) if r]
-        # the cap reached means the closest `limit` were kept - say so (D17: never silently)
-        return records, total > len(records) or len(records) >= limit
+        if len(records) < len(rows):
+            log.warning('query-runs: %d of %d rows did not parse', len(rows) - len(records), len(rows))
+        # Truncated = the cap was hit (the closest `limit` were kept - D17: never silently) or
+        # paging stopped short of the total. Rows that fail to parse are NOT truncation
+        # (22 Oct 2026: they used to count, so a clean small result could read as capped).
+        return records, len(rows) >= limit or len(rows) < total
