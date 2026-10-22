@@ -2318,6 +2318,36 @@ async function loadRecord(){
     }
     if(!state.billing.email) state.billing.email=h.email||'';
   }
+  /* 22 Oct 2026: an unfinished audit for this person is offered before a fresh start. */
+  offerOpenAudits(isLead?{lead_id:id,email:h.email||''}:{contact_id:id,email:h.email||''});
+}
+async function offerOpenAudits(q){
+  let list=[];
+  try{
+    const r=await fetch('/staff-sessions',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(Object.assign({k:CONFIG.TOKEN},q))});
+    const d=await r.json(); list=(d&&d.ok&&Array.isArray(d.sessions))?d.sessions:[];
+  }catch(e){}
+  if(!list.length) return;
+  const path=location.pathname, form=CONFIG.QUICK?'Quick Audit':'Audit Fact Find';
+  const fmt=t=>{try{return new Date(t).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return '';}};
+  const rows=list.map(x=>{
+    const tool=x.quick?'/quick-audit':'/staff-enquiry';
+    const mk=x.marks.length?x.marks.join(', '):'No mark entered yet';
+    return '<a href="'+tool+'?s='+encodeURIComponent(x.session_id)+'" style="display:block;border:1px solid #E6E9ED;border-radius:10px;padding:12px 14px;margin:0 0 8px;text-decoration:none;color:#1D1D1B">'
+      +'<b style="color:#2D455A">'+esc(mk)+'</b> <span style="font-size:12px;background:#FDE7EE;color:#2D455A;border-radius:99px;padding:2px 8px;margin-left:6px">'+esc(x.stage)+'</span>'
+      +'<div style="font-size:13px;color:#617383;margin-top:4px">'+(x.quick?'Quick Audit':'Audit Fact Find')+' · last saved '+esc(fmt(x.updated_at))+(x.contact?' · '+esc(x.contact):'')+'</div></a>';
+  }).join('');
+  const ov=document.createElement('div');
+  ov.id='sf-openaudits';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(15,27,38,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:85vh;overflow:auto;padding:24px;box-shadow:0 12px 32px rgba(45,69,90,.25)">'
+    +'<h2 style="margin:0 0 6px;color:#2D455A;font-size:20px">'+(list.length===1?'This client already has an audit started':'This client already has '+list.length+' audits')+'</h2>'
+    +'<p style="margin:0 0 16px;color:#3f4c58;font-size:14px">Carry on with one of these, or start a new '+form+' if this is a different order.</p>'
+    +rows
+    +'<button type="button" id="sf-openaudits-new" style="margin-top:8px;background:#fff;border:1px solid #96A2AC;border-radius:8px;padding:10px 16px;cursor:pointer;color:#2D455A;font-weight:600">Start a new '+form+'</button></div>';
+  document.body.appendChild(ov);
+  document.getElementById('sf-openaudits-new').onclick=()=>ov.remove();
 }
 async function loadDeal(){
   const banner=document.getElementById('sf-dealbanner');
