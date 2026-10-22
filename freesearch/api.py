@@ -1985,6 +1985,31 @@ class _Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send({'ok': False, 'error': 'could not read the order'}, 200)
             return
+        if path == '/staff-sessions':
+            # 22 Oct 2026: unfinished staff audits for a Contact / Lead, so the
+            # Zoho buttons can reopen one instead of starting a second.
+            try:
+                length = int(self.headers.get('Content-Length', 0) or 0)
+                payload = json.loads(self.rfile.read(length) or b'{}')
+            except (ValueError, json.JSONDecodeError):
+                self._send({'ok': False, 'error': 'invalid JSON'}, 400)
+                return
+            if not _staff_user(str(payload.get('k') or '')):
+                self._send({'ok': False, 'error': 'forbidden'}, 403)
+                return
+            import urllib.request as _ur
+            body = json.dumps({'key': os.environ.get('XERO_PROCESS_KEY', ''),
+                               'contact_id': str(payload.get('contact_id') or ''),
+                               'lead_id': str(payload.get('lead_id') or ''),
+                               'email': str(payload.get('email') or '')}).encode()
+            req = _ur.Request(_JOURNEY_URL.rstrip('/') + '/staff/sessions', data=body,
+                              headers={'Content-Type': 'application/json'})
+            try:
+                with _ur.urlopen(req, timeout=15) as r:
+                    self._send(json.loads(r.read().decode()))
+            except Exception:
+                self._send({'ok': False, 'error': 'could not list audits'}, 200)
+            return
         if path == '/staff-deal':
             # Read an existing audit Deal back for EDIT mode (15 Sep). Shared
             # by both staff forms. Staff-token gated like /staff-lookup and
