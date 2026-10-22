@@ -947,6 +947,10 @@ const CONFIG=(function(){
        forms. Reads back through /staff-deal; never creates a Lead, Contact
        or Account; refuses to edit once the scope is frozen. */
     DEAL:(q.get('deal')||'').replace(/\D/g,''),
+    /* Opened from a Lead or Contact button (22 Oct 2026, Jonathan): ?lead=<id> / ?contact=<id>.
+       No search needed: the form links that record (and a contact's account) and fills the details. */
+    LEAD:(q.get('lead')||'').replace(/\D/g,''),
+    CONTACT:(q.get('contact')||'').replace(/\D/g,''),
     PRICE:149,           /* RRP per line item (Jonathan, 9 Sep) */
     MIN_TOTAL:99,        /* net order floor -- the total can never go below */
     VAT:0.20,
@@ -2051,7 +2055,12 @@ async function ensureSession(){
       body:JSON.stringify({tenant_id:(window.IS_DEMO&&window.IS_DEMO())?'demo':'tmh',source:'brand_audit_direct',
         name:(state.marks[0]&&state.marks[0].text)||null,screen:'staff_enquiry'})});
     const d=await r.json();
-    if(d&&d.ok&&d.session_id){state.sessionId=d.session_id;setRef();}
+    if(d&&d.ok&&d.session_id){state.sessionId=d.session_id;setRef();
+      /* Opened from a Lead/Contact button: from now on the address is this enquiry, so a refresh
+         resumes it rather than starting another. */
+      if((CONFIG.LEAD||CONFIG.CONTACT)&&!CONFIG.SESSION){
+        try{history.replaceState(null,'',location.pathname+'?s='+d.session_id);}catch(e){}
+      }}
   }catch(e){}
   return state.sessionId;
 }
@@ -2212,6 +2221,7 @@ window.addEventListener('beforeunload',e=>{
 async function load(){
   if(!state.sessionId){
     if(CONFIG.DEAL) await loadDeal();   /* edit mode with no session yet */
+    else if(CONFIG.LEAD||CONFIG.CONTACT){ if(await loadRecord()==='redirect') return; }
     finishLoad();return;
   }
   setRef();
@@ -2275,6 +2285,40 @@ async function load(){
      2. refuse to edit past Braudit_Frozen_At (freezeForm()).
    Fails closed: if the Deal cannot be read, the form says so and stays
    empty rather than creating a second order for the same client. */
+/* Lead / Contact buttons (22 Oct 2026). One record in, linked and filled, never a new one.
+   A search Lead already has its own session, so it opens that instead (search data and all). */
+async function loadRecord(){
+  const isLead=!!CONFIG.LEAD, id=isLead?CONFIG.LEAD:CONFIG.CONTACT;
+  let h=null;
+  try{
+    const r=await fetch('/staff-lookup',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({k:CONFIG.TOKEN,module:isLead?'LeadById':'ContactById',account_id:id,q:''})});
+    const d=await r.json(); h=(d&&d.ok&&Array.isArray(d.hits)&&d.hits[0])||null;
+  }catch(e){}
+  if(!h) return;
+  if(isLead){
+    const m=String(h.staff_link||'').match(/[?&]s=([0-9a-f-]{36})/i);
+    if(m){ location.replace(location.pathname+'?s='+m[1]); return 'redirect'; }
+  }
+  const c=state.contact;
+  c.first=h.first||c.first; c.last=h.last||c.last; c.email=h.email||c.email;
+  c.phone=h.mobile||h.phone||c.phone; if(h.title) c.position=h.title;
+  /* Organisation: the Lead's Company, or the Contact's Account name (Jonathan, 22 Oct). */
+  if(h.org) c.org=h.org;
+  if(isLead){
+    c.clientType='returning'; state.link.searchIn='Leads';
+    state.link.lead_id=h.id; state.link.lead_name=h.name; state.link.picked=h;
+  }else{
+    c.clientType='existing'; state.link.searchIn='Contacts';
+    state.link.contact_id=h.id; state.link.contact_name=h.name; state.link.picked=h;
+    if(h.account_id){
+      state.link.account_id=h.account_id; state.link.account_name=h.org||'';
+      state.billing.accountType='existing'; state.billing.account_id=h.account_id;
+      state.billing.account_name=h.org||''; if(!state.billing.entity) state.billing.entity=h.org||'';
+    }
+    if(!state.billing.email) state.billing.email=h.email||'';
+  }
+}
 async function loadDeal(){
   const banner=document.getElementById('sf-dealbanner');
   banner.classList.remove('hidden');banner.textContent='Loading Deal '+CONFIG.DEAL+'…';
