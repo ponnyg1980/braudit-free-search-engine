@@ -167,6 +167,7 @@ def serialize_result(result: FreeSearchResult, *, gated: bool = False,
         'overall_risk': result.overall_risk,
         'active_count': len(active),
         'truncated': result.truncated,
+        'search_failed': result.search_failed,
     }
 
     # The on-page opinion. Computed here rather than in the browser so the
