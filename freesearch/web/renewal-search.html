@@ -684,8 +684,7 @@ function syncActions(){
 }
 
 /* Message Us: editable box pre-filled with the ticked numbers (§8a).
-   NOT YET WIRED to Zoho (note on the Account + Task + copy to the client):
-   until it is, Send opens an email to support@ as the fallback the map allows. */
+   Sent through the journey to support@ (reply-to the visitor), with a copy to the visitor (23 Oct 2026). */
 function openIntl(intl){
   const names = intl.map(n=>{ const m = selected.get(n)||{}; return n + (m.name?' '+m.name:''); });
   document.getElementById('intl-marks').textContent = (intl.length===1?'Trademark ':'Trademarks ') + names.join(', ');
@@ -702,10 +701,27 @@ function openMessage(text){
 function sendMessage(){
   const g = id=>document.getElementById(id).value.trim(), err = document.getElementById('m-err');
   if(!g('m-name') || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(g('m-email'))){ err.textContent='Please add your name and a valid email so we can reply.'; err.classList.add('on'); return; }
-  const body = g('m-text') + '\n\n' + g('m-name') + (g('m-phone') ? '\n' + g('m-phone') : '') + '\n' + g('m-email');
-  location.href = 'mailto:support@thetrademarkhelpline.com?subject=' + encodeURIComponent('Trademark renewal: ' + (selNums().join(', ') || NOTFOUND || '')) +
-                  '&body=' + encodeURIComponent(body);
-  document.getElementById('msg').classList.remove('on');
+  /* 23 Oct 2026: sent for real (journey /renewal/message -> support@ with reply-to the visitor, plus a copy to
+     them). If that fails, the old email fallback still opens so nothing is lost. */
+  const btn = document.querySelector('[data-act="msg-send"]'); btn.disabled = true; btn.textContent = 'Sending…';
+  const nums = selNums().length ? selNums() : (NOTFOUND ? [NOTFOUND] : []);
+  session().then(sid => fetch(JOURNEY + '/renewal/message', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({session_id: sid || '', name: g('m-name'), email: g('m-email'), phone: g('m-phone'),
+        message: g('m-text'), numbers: nums})}))
+    .then(r => r.json()).catch(() => null).then(d => {
+      btn.disabled = false; btn.textContent = 'Send message';
+      if(d && d.ok){
+        document.getElementById('m-text').value = '';
+        err.textContent = 'Thank you. Your message is with our team and we have emailed you a copy. We will reply within one working day.';
+        err.classList.add('on'); err.style.color = '#1F8A5B';
+        setTimeout(() => { document.getElementById('msg').classList.remove('on'); err.style.color = ''; err.classList.remove('on'); }, 3500);
+        return;
+      }
+      const body = g('m-text') + '\n\n' + g('m-name') + (g('m-phone') ? '\n' + g('m-phone') : '') + '\n' + g('m-email');
+      location.href = 'mailto:support@thetrademarkhelpline.com?subject=' + encodeURIComponent('Trademark renewal: ' + (nums.join(', ') || '')) +
+                      '&body=' + encodeURIComponent(body);
+      document.getElementById('msg').classList.remove('on');
+    });
 }
 
 /* Chat with us: the website's Zoho SalesIQ chat, opening question = the ticked
