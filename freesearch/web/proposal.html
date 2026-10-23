@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Your Clearance Audit proposal — The Trademark Helpline</title>
+<!-- 23 Oct 2026 (Jonathan): the client's side of an audit PROPOSAL sent from the staff
+     forms. The link is signed (s, e, t); everything shown is read back from the stored
+     order, and accepting re-derives the price on the server before anything is taken. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#2D455A;--pink:#E51652;--pinkh:#c9134a;--tint:#FDE7EE;--ink:#1D1D1B;--slate:#3f4c58;--quiet:#617383;--line:#E6E9ED;--bg:#F7F8FA}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--pink)} a:hover{color:var(--pinkh)}
+.mast{background:var(--navy);padding:22px 20px;text-align:center}
+.mast img{height:42px}
+.wrap{max-width:760px;margin:0 auto;padding:24px 18px 60px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;margin:0 0 18px;box-shadow:0 2px 8px rgba(45,69,90,.06),0 12px 28px rgba(45,69,90,.08)}
+.eyebrow{font-family:'Public Sans',sans-serif;font-weight:800;font-size:12.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--pink);margin:0 0 6px}
+h1{font-size:30px;line-height:1.2;letter-spacing:-.6px;color:var(--navy);margin:0 0 8px;font-weight:800}
+h2{font-size:19px;color:var(--navy);margin:0 0 12px}
+.lead{color:var(--slate);margin:0}
+table{width:100%;border-collapse:collapse;font-size:14.5px}
+td{padding:9px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+td.r{text-align:right;white-space:nowrap}
+tr.tot td{font-weight:800;color:var(--navy);border-bottom:0;font-size:16px}
+tr.sub td{color:var(--quiet)}
+.facts{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;font-size:14.5px;margin:0}
+.facts dt{color:var(--quiet)} .facts dd{margin:0}
+.terms{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px 16px;font-size:13.5px;background:#fff}
+.terms h2{font-size:15px}
+.q{margin:16px 0 0}
+.q label{display:flex;gap:10px;align-items:flex-start;margin:8px 0;cursor:pointer}
+.q input{margin-top:4px;accent-color:var(--pink);width:17px;height:17px;flex:0 0 auto}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0 0}
+.btn{display:block;width:100%;border:0;border-radius:10px;padding:14px 16px;font:700 15.5px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;cursor:pointer;transition:background .15s ease}
+.btn.primary{background:var(--pink);color:#fff} .btn.primary:hover{background:var(--pinkh)}
+.btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--navy)} .btn.ghost:hover{background:var(--bg)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.sub-note{font-size:12.5px;color:var(--quiet);margin:6px 2px 0;text-align:center}
+.msg{border-radius:10px;padding:14px 16px;margin:14px 0 0;font-size:14.5px}
+.msg.bad{background:var(--tint);color:#7a0b2c}
+.msg.ok{background:#E7F6EE;color:#14593b}
+.hidden{display:none}
+.help{text-align:center;color:var(--quiet);font-size:14px}
+@media (max-width:560px){.opts{grid-template-columns:1fr}.facts{grid-template-columns:1fr}h1{font-size:25px}}
+</style>
+</head>
+<body>
+<div class="mast"><img src="/brand/logo-white.svg" alt="The Trademark Helpline"></div>
+<div class="wrap">
+  <div class="card" id="loading"><p class="lead">Loading your proposal…</p></div>
+
+  <div id="main" class="hidden">
+    <div class="card">
+      <p class="eyebrow">Trademark Clearance Audit proposal</p>
+      <h1 id="p-title">Your proposal</h1>
+      <p class="lead" id="p-lead"></p>
+    </div>
+
+    <div class="card">
+      <h2>What we will do</h2>
+      <dl class="facts" id="p-facts"></dl>
+    </div>
+
+    <div class="card">
+      <h2>Your price</h2>
+      <table id="p-lines"></table>
+      <p class="sub-note" id="p-valid" style="text-align:left;margin-top:12px"></p>
+    </div>
+
+    <div class="card" id="accept-card">
+      <h2>Accept and choose how to pay</h2>
+      <div class="terms" id="p-terms"></div>
+      <div class="q">
+        <div style="font-weight:700;color:var(--navy)">Are you buying for a business?</div>
+        <label><input type="radio" name="biz" value="yes"> Yes, for a business</label>
+        <label><input type="radio" name="biz" value="no"> No, for myself</label>
+        <label id="consumer-wrap" class="hidden"><input type="checkbox" id="consumer">
+          <span>Please start my audit within the 14 day cancellation period. I understand that if I
+          cancel once work has started I may have to pay for the work done (clause 9.3).</span></label>
+        <label><input type="checkbox" id="accept">
+          <span>I accept the Clearance Audit Terms of Service above.</span></label>
+      </div>
+      <div class="opts">
+        <div><button class="btn primary" id="b-card">Pay by card</button>
+          <p class="sub-note">Secure payment by Stripe</p></div>
+        <div><button class="btn ghost" id="b-inv">Send me an invoice</button>
+          <p class="sub-note">Payable within 7 days</p></div>
+      </div>
+      <div id="p-msg"></div>
+    </div>
+
+    <p class="help">Questions? Call us on <a href="tel:01618335400">0161 833 5400</a> or reply to our email.</p>
+  </div>
+
+  <div class="card hidden" id="done"></div>
+</div>
+<script>
+const q=new URLSearchParams(location.search);
+const S=q.get('s')||'',E=q.get('e')||'',T=q.get('t')||'';
+const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const gbp=p=>'£'+((Number(p)||0)/100).toFixed(2);
+const pretty=d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});}catch(e){return d;}};
+function show(id){['loading','main','done'].forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==id));}
+function finish(html){const d=document.getElementById('done');d.innerHTML=html;show('done');}
+async function load(){
+  let d=null;
+  try{const r=await fetch('/proposal-view?s='+encodeURIComponent(S)+'&e='+encodeURIComponent(E)+'&t='+encodeURIComponent(T));d=await r.json();}catch(e){}
+  if(!d||!d.ok){finish('<h2>We could not open this proposal</h2><p class="lead">'+esc((d&&d.error)||'Please try again in a moment.')+'</p><p class="lead" style="margin-top:12px">Call us on <a href="tel:01618335400">0161 833 5400</a> and we will help.</p>');return;}
+  if(d.ordered){finish('<p class="eyebrow">Thank you</p><h2>This proposal has been accepted</h2><p class="lead">'+(d.paid?'We have your payment and your audit is under way.':'Your order is with our team. If you asked for an invoice, it will arrive by email shortly.')+'</p><p class="lead" style="margin-top:12px">Questions? Call <a href="tel:01618335400">0161 833 5400</a>.</p>');return;}
+  const first=(d.name||'').split(' ')[0];
+  document.getElementById('p-title').textContent=(first?first+', here':'Here')+' is your audit proposal';
+  document.getElementById('p-lead').textContent=(d.from_name?d.from_name+' at ':'')+'The Trademark Helpline has prepared this for '+(d.entity||d.name||'you')+'. Review it below, accept our terms and choose how to pay.';
+  const cls=d.classes.length?('Class'+(d.classes.length>1?'es ':' ')+d.classes.join(', ')):(d.scope_resp==='tmh_all'?'We will pick the right classes with you':'To be agreed');
+  document.getElementById('p-facts').innerHTML=
+    '<dt>Your brand</dt><dd>'+esc(d.marks.join(', ')||'Your brand')+'</dd>'+
+    '<dt>Where we search</dt><dd>'+(d.worldwide?'The UK register and the countries we discussed':'The UK register')+'</dd>'+
+    '<dt>Goods and services</dt><dd>'+esc(cls)+'</dd>'+
+    '<dt>What you get</dt><dd>A full clearance audit of marks that could conflict with yours, and a consultation to talk you through what we find.</dd>';
+  const rows=d.lines.map(l=>'<tr><td>'+esc(l.label)+'</td><td class="r">'+gbp(l.p)+'</td></tr>').join('');
+  const vat=d.vat_exempt?'<tr class="sub"><td>VAT not applicable (outside the UK)</td><td class="r"></td></tr>'
+    :'<tr class="sub"><td>VAT at 20%</td><td class="r">'+gbp(d.total_pence-d.net_pence)+'</td></tr>';
+  document.getElementById('p-lines').innerHTML=rows+'<tr class="sub"><td>Total before VAT</td><td class="r">'+gbp(d.net_pence)+'</td></tr>'+vat+'<tr class="tot"><td>Total to pay</td><td class="r">'+gbp(d.total_pence)+'</td></tr>';
+  document.getElementById('p-valid').textContent=d.expired?'This proposal expired on '+pretty(d.expires)+'. Please call us and we will refresh it.':'This proposal is valid until '+pretty(d.expires)+'.';
+  document.getElementById('p-terms').innerHTML=d.terms_html||'<p>The Clearance Audit Terms of Service apply. <a href="/terms/clearance-audit" target="_blank" rel="noopener">Read them here</a>.</p>';
+  document.getElementById('p-terms').querySelectorAll('a').forEach(a=>{a.target='_blank';a.rel='noopener';});
+  if(d.expired){document.getElementById('b-card').disabled=true;document.getElementById('b-inv').disabled=true;}
+  show('main');
+}
+document.querySelectorAll('input[name=biz]').forEach(r=>r.addEventListener('change',()=>{
+  document.getElementById('consumer-wrap').classList.toggle('hidden',r.value!=='no'||!r.checked);
+}));
+async function accept(method){
+  const biz=(document.querySelector('input[name=biz]:checked')||{}).value||'';
+  const box=document.getElementById('p-msg');
+  const say=(t,cls)=>{box.innerHTML='<div class="msg '+(cls||'bad')+'">'+esc(t)+'</div>';};
+  if(!biz){say('Please tell us whether you are buying for a business.');return;}
+  if(biz==='no'&&!document.getElementById('consumer').checked){say('Please ask us to start within the cancellation period, or call us to talk it through.');return;}
+  if(!document.getElementById('accept').checked){say('Please tick to accept the terms.');return;}
+  const bc=document.getElementById('b-card'),bi=document.getElementById('b-inv');bc.disabled=bi.disabled=true;
+  say(method==='card'?'Taking you to secure payment…':'Sending your invoice…','ok');
+  let d=null;
+  try{const r=await fetch('/proposal-accept',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({s:S,e:E,t:T,method,business:biz,accepted:true,consumerStart:biz==='no'})});d=await r.json();}catch(e){}
+  if(d&&d.ok&&d.pay_url){location.href=d.pay_url;return;}
+  if(d&&d.ok&&d.invoice){finish('<p class="eyebrow">Thank you</p><h2>Your audit is ordered</h2><p class="lead">Your invoice is on its way'+(d.email?' to '+esc(d.email):'')+'. It is payable within 7 days, and we start as soon as your order is approved.</p><p class="lead" style="margin-top:12px">Questions? Call <a href="tel:01618335400">0161 833 5400</a>.</p>');return;}
+  bc.disabled=bi.disabled=false;
+  say((d&&d.error)||'Something went wrong. Please try again, or call 0161 833 5400.');
+}
+document.getElementById('b-card').addEventListener('click',()=>accept('card'));
+document.getElementById('b-inv').addEventListener('click',()=>accept('invoice'));
+load();
+</script>
+</body>
+</html>
