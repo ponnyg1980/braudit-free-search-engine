@@ -176,6 +176,7 @@ class FreeSearchResult:
     total_conflicts: int = 0
     searched_office: str = 'UK IPO'
     truncated: bool = False         # True when Temmy paging was cut short
+    search_failed: bool = False     # 23 Oct 2026: the register could not be read (not the same as 'no matches')
     notes: list[str] = field(default_factory=list)
 
     def preview(self) -> list[MarkRecord]:
