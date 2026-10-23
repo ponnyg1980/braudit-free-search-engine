@@ -820,6 +820,7 @@
           <option value="">Choose…</option>
           <option value="now">Paying now — send the link</option>
           <option value="date">Paying on an agreed date</option>
+          <option value="quote">Send a proposal: the client accepts and pays online</option>
           <option value="paid" id="f-paywhen-paid" class="hidden">Payment already taken — record it</option>
         </select></div>
       <div id="f-paydatewrap" class="hidden"><label class="fld">Agreed payment date <span class="req">*</span></label>
@@ -1199,9 +1200,9 @@ function gateRules(){
         ?'With no appointment, the delivery date is the promise — it must be set.'
         :'Delivery on or before the appointment day — same day is fine.'},
     {id:'G-09',sec:'billing',label:'Payment agreed',
-     ok:(b.payWhen==='now'||(b.payWhen==='date'&&nonEmpty(b.payDate)&&payDateWorks())
+     ok:b.payWhen==='quote'||((b.payWhen==='now'||(b.payWhen==='date'&&nonEmpty(b.payDate)&&payDateWorks())
          ||(CONFIG.QUICK&&b.payWhen==='paid'&&nonEmpty(b.paidDate)&&b.paidDate<=todayIso()
-            &&nonEmpty(b.paidRef)))&&b.agreed,
+            &&nonEmpty(b.paidRef)))&&b.agreed),
      why:CONFIG.QUICK
         ?'Paying now, an exact agreed date, or a payment already taken with its date and reference.'
         :'Either they are paying now, or there is an exact agreed date, no later than delivery.'},
@@ -1223,10 +1224,10 @@ function gateRules(){
      why:'Read the summary back, then tick.'},
     /* Terms of Service (28 Sep 2026). Mirrors _terms_accept in api.py. */
     {id:'G-15',sec:'readback',label:'Terms of Service accepted',
-     ok:state.terms.accepted===true&&(state.terms.business==='yes'||state.terms.business==='no'),
+     ok:state.billing.payWhen==='quote'||(state.terms.accepted===true&&(state.terms.business==='yes'||state.terms.business==='no')),
      why:'Ask whether they are buying for a business, then tick that they accept the Clearance Audit Terms of Service.'},
     {id:'G-16',sec:'readback',label:'Consumer early-start consent',
-     ok:state.terms.business!=='no'||state.terms.consumerStart===true,
+     ok:state.billing.payWhen==='quote'||state.terms.business!=='no'||state.terms.consumerStart===true,
      why:'A consumer must ask us to start within the 14-day cancellation period (clause 9.3). Read it to them.'},
     {id:'G-17',sec:CONFIG.QUICK?'marks':'discovery',label:'Countries for a Worldwide audit',
      ok:!isWorldwideOrder()||((state.discovery.terrNow||[]).length+(state.discovery.terrPlan||[]).length)>0,
@@ -1314,7 +1315,7 @@ function renderGate(){
   }else if(outstanding.length===0){
     msg.innerHTML='<b>Ready.</b> '+markCount()+' line'+(markCount()===1?'':'s')+
       ' = £'+total().toFixed(2)+(vatExempt()?' (no VAT — outside the UK).':' inc VAT.');
-    pay.textContent=state.billing.payWhen==='date'?'Request invoice'
+    pay.textContent=state.billing.payWhen==='quote'?'Prepare proposal':state.billing.payWhen==='date'?'Request invoice'
       :(state.billing.payWhen==='paid'?'Record payment & create order':'Take payment now');
   }else{
     msg.innerHTML='<b>'+outstanding.length+' outstanding.</b> Next: '+esc(outstanding[0].why);
@@ -2889,6 +2890,7 @@ function openTools(){
    stored enquiry — this button carries nothing the server trusts. */
 async function toPayment(){
   if(!gatePasses()){renderGate();return;}
+  if(state.billing.payWhen==='quote') return toProposal();
   await saveNow(true);
   const id=state.sessionId;
   if(!id) return;
@@ -2953,6 +2955,62 @@ async function toPayment(){
 /* 20 Oct 2026 (Jonathan): once the invoice exists, link straight to the audit app's
    page where the Deal Owner reviews the email and sends the invoice to the client. */
 const AUDIT_APP='https://audit.thetrademarkhelpline.com';
+/* 23 Oct 2026 (Jonathan): an audit PROPOSAL instead of an invoice. The server prices the
+   order (same rules as an invoice), the staff member edits the email, and it is sent from
+   their own mailbox with the fixed price table and an "accept online" button. The client
+   accepts the terms and pays by card or asks for an invoice; the order then runs as normal. */
+let PROPOSAL=null;
+async function toProposal(){
+  await saveNow(true);
+  const id=state.sessionId; if(!id) return;
+  const box=document.getElementById('f-payresult');
+  showSection('readback');
+  box.innerHTML='<div class="sf-hint" style="margin-top:16px">Pricing the proposal…</div>';
+  let d=null;
+  try{const r=await fetch('/staff-proposal',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({k:CONFIG.TOKEN,session_id:id})});d=await r.json();}catch(e){}
+  if(!d||!d.ok){
+    const unmet=(d&&d.unmet)?(' Unmet: '+d.unmet.join(', ')):'';
+    box.innerHTML='<div class="sf-guide sf-never" style="margin-top:16px"><div class="gh">Could not prepare the proposal</div><ul><li>'
+      +esc((d&&d.error)||'Something went wrong.')+unmet+'</li></ul></div>';return;}
+  PROPOSAL=d;
+  const g=p=>'£'+((Number(p)||0)/100).toFixed(2);
+  const rows=d.lines.map(l=>`<tr><td style="padding:4px 8px">${esc(l.label)}</td><td style="padding:4px 8px;text-align:right">${g(l.p)}</td></tr>`).join('');
+  const e=d.email||{};
+  box.innerHTML=`<div class="sf-guide" style="margin-top:16px">
+    <div class="gh">Proposal: ${g(d.total_pence)}${d.vat_exempt?' (no VAT)':' inc VAT'}</div>
+    <table style="width:100%;font-size:13.5px;margin:6px 0 10px">${rows}
+      <tr><td style="padding:4px 8px;font-weight:700">Total before VAT</td><td style="padding:4px 8px;text-align:right;font-weight:700">${g(d.net_pence)}</td></tr></table>
+    <div class="sf-hint" style="margin:0 0 10px">The price table and the "View and accept your proposal" button are added below your text automatically, and can't be edited here. Valid until ${esc(pretty(d.expires))}.</div>
+    <label class="fld">To</label><input type="text" id="pr-to" value="${esc(e.to||'')}">
+    <label class="fld">Cc (optional)</label><input type="text" id="pr-cc" value="">
+    <label class="fld">Subject</label><input type="text" id="pr-subject" value="${esc(e.subject||'')}">
+    <label class="fld">Message</label><textarea id="pr-body" rows="12" style="width:100%">${esc(e.body||'')}</textarea>
+    <div class="sf-hint" style="margin:6px 0 10px">Sent from ${esc(e.from||'your mailbox')}. A copy files to Zoho automatically.</div>
+    <button class="btn primary" id="pr-send" style="margin:0">Send proposal</button>
+    <button class="btn ghost" id="pr-copy" style="margin:0 0 0 8px">Copy the client's link</button>
+    <div id="pr-result"></div></div>`;
+  document.getElementById('pr-copy').onclick=function(){navigator.clipboard.writeText(d.link).then(()=>this.textContent='Link copied');};
+  document.getElementById('pr-send').onclick=sendProposal;
+}
+async function sendProposal(){
+  const btn=document.getElementById('pr-send'),out=document.getElementById('pr-result');
+  btn.disabled=true;out.innerHTML='<div class="sf-hint" style="margin-top:10px">Sending…</div>';
+  const v=id=>document.getElementById(id).value;
+  let d=null;
+  try{const r=await fetch('/staff-proposal-send',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({k:CONFIG.TOKEN,session_id:state.sessionId,to:v('pr-to'),cc:v('pr-cc'),
+      subject:v('pr-subject'),body:v('pr-body')})});d=await r.json();}catch(e){}
+  if(d&&d.ok){
+    out.innerHTML='<div class="sf-hint" style="margin-top:10px;color:#1F8A5B"><b>Proposal sent</b> from '+esc(d.from)
+      +(d.fallback?' (your mailbox could not send, so it went from support@)':'')
+      +'. The Deal is now at <b>Quoted</b>. When the client accepts, the order goes through as normal.</div>';
+    btn.textContent='Send again';btn.disabled=false;
+  }else{
+    out.innerHTML='<div class="sf-hint" style="margin-top:10px;color:#b00020">'+esc((d&&d.error)||'Not sent.')+'</div>';
+    btn.disabled=false;
+  }
+}
 function showOrderLink(id,name,paid){
   const box=document.getElementById('f-payresult'); if(!box) return;
   let panel=document.getElementById('f-orderlink');
