@@ -79,9 +79,6 @@ tr.sub td{color:var(--quiet)}
         <div style="font-weight:700;color:var(--navy)">Are you buying for a business?</div>
         <label><input type="radio" name="biz" value="yes"> Yes, for a business</label>
         <label><input type="radio" name="biz" value="no"> No, for myself</label>
-        <label id="consumer-wrap" class="hidden"><input type="checkbox" id="consumer">
-          <span>Please start my audit within the 14 day cancellation period. I understand that if I
-          cancel once work has started I may have to pay for the work done (clause 9.3).</span></label>
         <label><input type="checkbox" id="accept">
           <span>I accept the Clearance Audit Terms of Service above.</span></label>
       </div>
@@ -131,21 +128,17 @@ async function load(){
   if(d.expired){document.getElementById('b-card').disabled=true;document.getElementById('b-inv').disabled=true;}
   show('main');
 }
-document.querySelectorAll('input[name=biz]').forEach(r=>r.addEventListener('change',()=>{
-  document.getElementById('consumer-wrap').classList.toggle('hidden',r.value!=='no'||!r.checked);
-}));
 async function accept(method){
   const biz=(document.querySelector('input[name=biz]:checked')||{}).value||'';
   const box=document.getElementById('p-msg');
   const say=(t,cls)=>{box.innerHTML='<div class="msg '+(cls||'bad')+'">'+esc(t)+'</div>';};
   if(!biz){say('Please tell us whether you are buying for a business.');return;}
-  if(biz==='no'&&!document.getElementById('consumer').checked){say('Please ask us to start within the cancellation period, or call us to talk it through.');return;}
   if(!document.getElementById('accept').checked){say('Please tick to accept the terms.');return;}
   const bc=document.getElementById('b-card'),bi=document.getElementById('b-inv');bc.disabled=bi.disabled=true;
   say(method==='card'?'Taking you to secure payment…':'Sending your invoice…','ok');
   let d=null;
   try{const r=await fetch('/proposal-accept',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({s:S,e:E,t:T,method,business:biz,accepted:true,consumerStart:biz==='no'})});d=await r.json();}catch(e){}
+    body:JSON.stringify({s:S,e:E,t:T,method,business:biz,accepted:true})});d=await r.json();}catch(e){}
   if(d&&d.ok&&d.pay_url){location.href=d.pay_url;return;}
   if(d&&d.ok&&d.invoice){finish('<p class="eyebrow">Thank you</p><h2>Your audit is ordered</h2><p class="lead">Your invoice is on its way'+(d.email?' to '+esc(d.email):'')+'. It is payable within 7 days, and we start as soon as your order is approved.</p><p class="lead" style="margin-top:12px">Questions? Call <a href="tel:01618335400">0161 833 5400</a>.</p>');return;}
   bc.disabled=bi.disabled=false;
