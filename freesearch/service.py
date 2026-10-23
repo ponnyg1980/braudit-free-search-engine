@@ -133,10 +133,12 @@ def _candidate_records(client, request: FreeSearchRequest) -> tuple[list[MarkRec
             return None
 
     seen: dict[str, MarkRecord] = {}
+    failed = 0
     with ThreadPoolExecutor(max_workers=POOL_WORKERS) as pool:
         for items in pool.map(_search, stems):
             if items is None:
                 truncated = True
+                failed += 1
                 continue
             for item in items:
                 rec = from_temmy_item(item)
@@ -280,6 +282,9 @@ def run_free_search(client, request: FreeSearchRequest,
 
     # --- REST fallback path (search + hydrate) -------------------------------
     records, truncated = _candidate_records(client, request)
+    # 23 Oct 2026: nothing came back AND a call failed = the register was not read. That is a
+    # failed search, never "no conflicts" (Temmy, 4 classes, 21:15 showed a clean result).
+    result.search_failed = (not records) and truncated
     result.truncated = truncated
 
     matched = [rec for rec in records
