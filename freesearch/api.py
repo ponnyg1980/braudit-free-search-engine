@@ -921,9 +921,6 @@ def _proposal_accept(p: dict) -> dict:
     if p.get('accepted') is not True or not business:
         return {'ok': False, 'status': 200, 'error': 'Please say whether you are buying for a '
                 'business and tick to accept the terms.'}
-    if business == 'no' and p.get('consumerStart') is not True:
-        return {'ok': False, 'status': 200, 'error': 'Please ask us to start within the 14 day '
-                'cancellation period, or call us to talk it through.'}
     st = _journey_post('/proposal/get', {'session_id': sid})
     pr = st.get('proposal') or {}
     # The price is re-derived from the STORED order; it must still match what we proposed.
@@ -936,8 +933,9 @@ def _proposal_accept(p: dict) -> dict:
     lr = sess.get('last_result') or {}
     enq = dict(lr.get('staff_enquiry') or {})
     now = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat()
+    # Jonathan, 23 Oct 2026: no 14-day early-start tick on an accepted proposal.
     enq['terms'] = {**(enq.get('terms') or {}), 'accepted': True, 'business': business,
-                    'consumerStart': business == 'no', 'consumerStartAt': now if business == 'no' else ''}
+                    'consumerStart': False, 'consumerStartAt': '', 'proposal': True}
     bill = dict(enq.get('billing') or {})
     bill['payWhen'] = method
     bill['agreed'] = True
@@ -1073,7 +1071,7 @@ def _terms_accept(session_id: str, *, staff: bool, enq: dict | None,
         unmet.append('G-15')
     if business not in ('yes', 'no'):
         unmet.append('G-15')
-    if business == 'no' and not consent:
+    if business == 'no' and not consent and not (staff and tb.get('proposal') is True):
         unmet.append('G-16')
     try:
         r = T.render(worldwide=worldwide, turnaround_days=n_raw,
