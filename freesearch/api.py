@@ -137,6 +137,7 @@ _PAGES = {
     # the path. One file, one Deal shape, so a change to the shape changes
     # both staff forms. Token-gated like /staff-enquiry.
     '/quick-audit': 'staff-enquiry.html',
+    '/proposal': 'proposal.html',
     # Stripe Checkout lands here after payment — a branded "what happens
     # next" page (Jonathan, 8 Sep), never the bare WordPress homepage.
     '/audit-thanks': 'audit-thanks.html',
@@ -752,7 +753,11 @@ def _staff_gate(enq: dict) -> list:
                   and (not audit_d or pay_d <= audit_d))
               or (quick and pay_when == 'paid' and paid_d and paid_d <= today
                   and full(s('billing', 'paidRef'))))
-    if not (pay_ok and bool(s('billing', 'agreed'))):
+    # 23 Oct 2026: a PROPOSAL (payWhen 'quote') needs no agreed payment yet -- the client
+    # chooses card or invoice when they accept it online, and the gate runs again then.
+    if pay_when == 'quote':
+        pass
+    elif not (pay_ok and bool(s('billing', 'agreed'))):
         bad.append('G-09')
     # G-14 (16 Sep): the Applicant Account. Same as billing, or named. The
     # Deluge resolves it inside order_complete and its research gate refuses
@@ -777,6 +782,188 @@ def _staff_gate(enq: dict) -> list:
     if s('billing', 'location') not in ('uk', 'nonuk'):
         bad.append('G-12')
     return bad
+
+
+# ---------------------------------------------------------- proposals ----
+# 23 Oct 2026 (Jonathan): an audit PROPOSAL instead of an invoice. Staff price the
+# order as usual, send a proposal from their own mailbox, and the client accepts it
+# online (Terms of Service, then card or invoice). The link is signed, so it can't
+# be guessed or edited; the price is re-derived from the stored order on acceptance.
+PROPOSAL_DAYS = 30
+_SITE = 'https://braudit-free-search.onrender.com'
+
+
+def _proposal_sig(sid: str, exp: str) -> str:
+    import hashlib
+    import hmac
+    key = (os.environ.get('XERO_PROCESS_KEY') or '').encode()
+    return hmac.new(key, f'proposal|{sid}|{exp}'.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def _proposal_ok(sid: str, exp: str, sig: str) -> bool:
+    import hmac
+    if not (sid and exp and sig) or not (os.environ.get('XERO_PROCESS_KEY') or '').strip():
+        return False
+    return hmac.compare_digest(_proposal_sig(sid, exp), str(sig))
+
+
+def _journey_post(path: str, body: dict, timeout: int = 30) -> dict:
+    import urllib.request
+    req = urllib.request.Request(
+        _JOURNEY_URL.rstrip('/') + path,
+        data=json.dumps({'key': os.environ.get('XERO_PROCESS_KEY', ''), **body}).encode(),
+        headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode())
+    except Exception as ex:
+        return {'ok': False, 'error': str(ex)[:200]}
+
+
+def _proposal_prepare(sid: str, k: str) -> dict:
+    import datetime as _dt
+    su = _staff_user(k)
+    if not su:
+        return {'ok': False, 'error': 'forbidden', 'status': 403}
+    q = _audit_pay({'staff': 1, 'session_id': sid, 'k': k, '_quote': 1})
+    if not q.get('ok'):
+        return q
+    st = _journey_post('/proposal/get', {'session_id': sid})
+    if st.get('ordered'):
+        return {'ok': False, 'error': 'this audit has already been ordered', 'status': 200}
+    sess = _journey_session(sid) or {}
+    enq = ((sess.get('last_result') or {}).get('staff_enquiry')) or {}
+    exp = (_dt.date.today() + _dt.timedelta(days=PROPOSAL_DAYS)).isoformat()
+    link = f'{_SITE}/proposal?s={sid}&e={exp}&t={_proposal_sig(sid, exp)}'
+    lines = [{'l': x['l'], 'p': x['p'], 'label': _clearance_label(x['l'])} for x in q['lines']]
+    c = enq.get('contact') or {}
+    marks = [str(m.get('text')).strip() for m in (enq.get('marks') or [])
+             if isinstance(m, dict) and str(m.get('text') or '').strip()]
+    payload = {'lines': lines, 'net_pence': q['net_pence'], 'total_pence': q['total_pence'],
+               'vat_exempt': q['vat_exempt'], 'tier_meta': q.get('tier_meta'),
+               'staff_email': su.get('email', ''), 'staff_name': su.get('name', ''),
+               'expires': exp, 'link': link, 'marks': marks}
+    _journey_event(sid, 'proposal_prepared', payload)
+    first = str(c.get('first') or '').strip() or 'there'
+    mk = ', '.join(f'“{m}”' for m in marks) or 'your brand'
+    ww = bool((q.get('tier_meta') or {}).get('worldwide'))
+    name = str(su.get('name') or '').strip() or 'The Trademark Helpline'
+    body = (f'Dear {first},\n\n'
+            f'Thank you for your time today. As promised, here is our proposal for a Trademark '
+            f'Clearance Audit of {mk}.\n\n'
+            + ('The audit checks the UK register and the countries we discussed '
+               if ww else 'The audit checks the UK register ')
+            + 'for marks that could conflict with yours, and we talk you through what we find, so '
+            'you know where you stand before you apply.\n\n'
+            'You can view the proposal, accept our terms and choose to pay by card or by invoice '
+            'using the button below.\n\n'
+            f'Kind regards,\n{name}\nThe Trademark Helpline')
+    to = str(((enq.get('billing') or {}).get('email')) or c.get('email') or '')
+    return {'ok': True, 'status': 200, **payload, 'email': {
+        'to': to, 'cc': '', 'from': su.get('email', ''),
+        'subject': 'Your Trademark Clearance Audit proposal' + (f' for {marks[0]}' if marks else ''),
+        'body': body}}
+
+
+def _proposal_view(sid: str, exp: str, sig: str) -> dict:
+    import datetime as _dt
+    if not _proposal_ok(sid, exp, sig):
+        return {'ok': False, 'error': 'This link is not valid.', 'status': 200}
+    st = _journey_post('/proposal/get', {'session_id': sid})
+    pr = st.get('proposal') or {}
+    if not pr or pr.get('expires') != exp:
+        return {'ok': False, 'error': 'This proposal has been replaced. Please use the most recent '
+                'email from us, or call 0161 833 5400.', 'status': 200}
+    sess = _journey_session(sid) or {}
+    enq = ((sess.get('last_result') or {}).get('staff_enquiry')) or {}
+    c, b = enq.get('contact') or {}, enq.get('billing') or {}
+    disc, rec = enq.get('discovery') or {}, enq.get('recommend') or {}
+    expired = exp < _dt.date.today().isoformat()
+    ww = bool((pr.get('tier_meta') or {}).get('worldwide'))
+    terms_html = ''
+    try:
+        try:
+            from . import terms as T
+        except ImportError:
+            import terms as T                     # type: ignore
+        terms_html = T.render(worldwide=ww, turnaround_days=rec.get('turnaroundDays'),
+                              current=disc.get('terrNow') or [],
+                              planning=disc.get('terrPlan') or [])['html']
+    except Exception:
+        terms_html = ''
+    classes = [x for x in str(enq.get('classes') or '').replace(',', ' ').split() if x.isdigit()]
+    return {'ok': True, 'status': 200,
+            'name': ' '.join(x for x in (c.get('first'), c.get('last')) if x),
+            'entity': b.get('entity') or c.get('org') or '',
+            'marks': pr.get('marks') or [], 'classes': classes,
+            'scope_resp': enq.get('scopeResp') or 'client', 'worldwide': ww,
+            'lines': [{'label': x.get('label'), 'p': x.get('p')} for x in pr.get('lines') or []],
+            'net_pence': pr.get('net_pence'), 'total_pence': pr.get('total_pence'),
+            'vat_exempt': pr.get('vat_exempt'), 'expires': exp, 'expired': expired,
+            'from_name': pr.get('staff_name') or '', 'accepted': bool(st.get('accepted')),
+            'ordered': bool(st.get('ordered')), 'paid': bool(st.get('paid')),
+            'terms_html': terms_html}
+
+
+def _proposal_accept(p: dict) -> dict:
+    import datetime as _dt
+    sid, exp, sig = str(p.get('s') or '')[:60], str(p.get('e') or '')[:10], str(p.get('t') or '')[:64]
+    v = _proposal_view(sid, exp, sig)
+    if not v.get('ok'):
+        return v
+    if v['expired']:
+        return {'ok': False, 'status': 200, 'error': 'This proposal has expired. Please call us on '
+                '0161 833 5400 and we will refresh it.'}
+    if v['ordered']:
+        return {'ok': False, 'status': 200, 'error': 'This proposal has already been accepted.'}
+    method = 'now' if p.get('method') == 'card' else 'date'
+    business = p.get('business') if p.get('business') in ('yes', 'no') else ''
+    if p.get('accepted') is not True or not business:
+        return {'ok': False, 'status': 200, 'error': 'Please say whether you are buying for a '
+                'business and tick to accept the terms.'}
+    if business == 'no' and p.get('consumerStart') is not True:
+        return {'ok': False, 'status': 200, 'error': 'Please ask us to start within the 14 day '
+                'cancellation period, or call us to talk it through.'}
+    st = _journey_post('/proposal/get', {'session_id': sid})
+    pr = st.get('proposal') or {}
+    # The price is re-derived from the STORED order; it must still match what we proposed.
+    q = _audit_pay({'staff': 1, 'session_id': sid, '_quote': 1,
+                    '_proposal_staff': pr.get('staff_email', '')})
+    if not q.get('ok') or q.get('total_pence') != pr.get('total_pence'):
+        return {'ok': False, 'status': 200, 'error': 'This proposal has changed since it was sent. '
+                'Please call us on 0161 833 5400.'}
+    sess = _journey_session(sid) or {}
+    lr = sess.get('last_result') or {}
+    enq = dict(lr.get('staff_enquiry') or {})
+    now = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat()
+    enq['terms'] = {**(enq.get('terms') or {}), 'accepted': True, 'business': business,
+                    'consumerStart': business == 'no', 'consumerStartAt': now if business == 'no' else ''}
+    bill = dict(enq.get('billing') or {})
+    bill['payWhen'] = method
+    bill['agreed'] = True
+    if method == 'date':
+        bill['payDate'] = (_dt.date.today() + _dt.timedelta(days=7)).isoformat()
+    enq['billing'] = bill
+    lr['staff_enquiry'] = enq
+    import urllib.request
+    body = json.dumps({'session_id': sid, 'event_type': 'proposal_accepted',
+                       'payload': {'method': method, 'business': business, 'at': now},
+                       'snapshot': {'last_result': lr}}).encode()
+    try:
+        urllib.request.urlopen(urllib.request.Request(
+            _JOURNEY_URL.rstrip('/') + '/session/event', data=body,
+            headers={'Content-Type': 'application/json'}), timeout=15).read()
+    except Exception:
+        return {'ok': False, 'status': 200, 'error': 'We could not record your acceptance. '
+                'Please try again.'}
+    out = _audit_pay({'staff': 1, 'session_id': sid, '_proposal_staff': pr.get('staff_email', ''),
+                      '_terms_by': 'client (accepted online proposal) '
+                                   + str(bill.get('email') or '')[:120]})
+    if out.get('ok') and out.get('url'):
+        return {'ok': True, 'status': 200, 'pay_url': out['url']}
+    if out.get('ok'):
+        return {'ok': True, 'status': 200, 'invoice': True, 'email': bill.get('email', '')}
+    return {'ok': False, 'status': 200, 'error': out.get('error') or 'Something went wrong.'}
 
 
 def _clearance_label(label: str) -> str:
@@ -978,7 +1165,8 @@ def _audit_pay(payload: dict) -> dict:
     # payment request and resolves server-side — the browser only ever sends
     # the token, never a name it chose for itself.
     su = _staff_user(str(payload.get('k') or '')) if staff else None
-    staff_email = (su or {}).get('email', '')
+    staff_email = (su or {}).get('email', '') or str(payload.get('_proposal_staff') or '')[:120]
+    quote_only = bool(payload.get('_quote'))
     qty, enq = 1, None
     entity = ''
 
@@ -1018,8 +1206,9 @@ def _audit_pay(payload: dict) -> dict:
         ww = bool(tr.get('worldwide'))
         # Terms of Service (28 Sep 2026): staff tick on the client's
         # instruction; no order without it, and the copy is recorded first.
-        ta = _terms_accept(session_id, staff=True, enq=enq, sess=sess,
-                           staff_email=staff_email, worldwide=ww)
+        ta = ({'ok': True} if quote_only else
+              _terms_accept(session_id, staff=True, enq=enq, sess=sess,
+                            staff_email=str(payload.get('_terms_by') or staff_email), worldwide=ww))
         if not ta.get('ok'):
             return {'ok': False, 'unmet': ta.get('unmet', []),
                     'error': ta.get('error', 'terms not accepted'), 'status': 200}
@@ -1095,6 +1284,15 @@ def _audit_pay(payload: dict) -> dict:
         # and consultation from whether an appointment was actually booked.
         vat_exempt = billing.get('location') == 'nonuk'
         consult = (not quick) and not bool((enq.get('consult') or {}).get('declined'))
+
+        # 23 Oct 2026: PROPOSAL -- the priced order, nothing taken and nothing raised.
+        if quote_only:
+            net_p = sum(x['p'] for x in lines)
+            tot_p = net_p if vat_exempt else int(round(net_p * 1.20))
+            return {'ok': True, 'quote': True, 'lines': lines, 'marks': qty,
+                    'net_pence': net_p, 'total_pence': tot_p, 'vat_exempt': vat_exempt,
+                    'billing_email': email, 'billing_entity': entity,
+                    'staff_email': staff_email, 'tier_meta': tier_meta, 'status': 200}
 
         # Scenario 3 -- Quick Audit, payment ALREADY taken (16 Sep 2026): a
         # bank transfer, a phone payment, a partner remittance. No Stripe
@@ -1788,6 +1986,11 @@ class _Handler(BaseHTTPRequestHandler):
             from .nuggets import payload as _nug
             self._send({'ok': True, 'nuggets': _nug()})
             return
+        if path == '/proposal-view':
+            q = parse_qs(urlparse(self.path).query)
+            g = lambda n: (q.get(n) or [''])[0]
+            self._send(_proposal_view(g('s')[:60], g('e')[:10], g('t')[:64]), 200)
+            return
         if path == '/class-search':
             # Keyword -> classes for the public finder on the Goods and
             # Services Classes page (Jonathan, 17 Sep). GET, because it is a
@@ -1984,6 +2187,35 @@ class _Handler(BaseHTTPRequestHandler):
                     self._send(json.loads(r.read().decode()))
             except Exception:
                 self._send({'ok': False, 'error': 'could not read the order'}, 200)
+            return
+        if path in ('/staff-proposal', '/staff-proposal-send', '/proposal-accept'):
+            # 23 Oct 2026: audit proposals (prepare + send are staff-token gated; accept is
+            # the client's, authorised by the signed link).
+            try:
+                length = int(self.headers.get('Content-Length', 0) or 0)
+                payload = json.loads(self.rfile.read(length) or b'{}')
+            except (ValueError, json.JSONDecodeError):
+                self._send({'ok': False, 'error': 'invalid JSON'}, 400)
+                return
+            if path == '/proposal-accept':
+                out = _proposal_accept(payload)
+                self._send(out, 200)
+                return
+            k = str(payload.get('k') or '')
+            su = _staff_user(k)
+            if not su:
+                self._send({'ok': False, 'error': 'forbidden'}, 403)
+                return
+            sid = str(payload.get('session_id') or '')[:60]
+            if path == '/staff-proposal':
+                out = _proposal_prepare(sid, k)
+            else:
+                out = _journey_post('/proposal/send', {
+                    'session_id': sid, 'from': su.get('email', ''),
+                    'to': str(payload.get('to') or '')[:500], 'cc': str(payload.get('cc') or '')[:500],
+                    'subject': str(payload.get('subject') or '')[:200],
+                    'body': str(payload.get('body') or '')[:8000]}, timeout=60)
+            self._send(out, 200)
             return
         if path == '/staff-sessions':
             # 22 Oct 2026: unfinished staff audits for a Contact / Lead, so the
