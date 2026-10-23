@@ -152,7 +152,10 @@ class QueryRunsRetriever:
     """Thin wrapper: build SQL, run it, collect all rows as MarkRecords."""
 
     def __init__(self, query_runs_key: str, *, base_url: str | None = None):
-        kwargs = {'query_runs_key': query_runs_key.strip()}
+        # 23 Oct 2026: the D17 trigram query takes 8s+ for common words (TEMMY) and more under load.
+        # The client's 15s default timed out, the engine fell back to the lossy REST path and showed
+        # a clean result. 45s gives the register time to answer.
+        kwargs = {'query_runs_key': query_runs_key.strip(), 'timeout_sec': 45}
         if base_url:
             kwargs['base_url'] = base_url.strip()
         self._qr = TemmyQueryRunsClient(**kwargs)
