@@ -251,14 +251,24 @@ def run_free_search(client, request: FreeSearchRequest,
             for s in _stems(phrase):
                 if s not in stems:
                     stems.append(s)
+        heads = [re.split(r'\s+', p.strip())[0] for p in (*request.word_marks, request.tagline) if p and p.strip()]
         try:
-            heads = [re.split(r'\s+', p.strip())[0] for p in (*request.word_marks, request.tagline) if p and p.strip()]
             records, truncated = qr_retriever.search(stems, heads=heads)
         except Exception:
-            log.warning('query-runs retrieval failed; falling back to REST',
-                        exc_info=True)
-            records, truncated = _candidate_records(client, request)
-            qr_retriever = None
+            log.warning('query-runs retrieval failed; retrying once', exc_info=True)
+            try:
+                records, truncated = qr_retriever.search(stems, heads=heads)
+            except Exception:
+                # 23 Oct 2026: the REST path cannot see classes on the search results, so its
+                # answer is NOT a substitute (it reported TEMMY as clear). Say the search failed.
+                log.warning('query-runs retrieval failed twice; reporting a failed search',
+                            exc_info=True)
+                result.search_failed = True
+                result.truncated = True
+                result.conflicts = []
+                result.total_conflicts = 0
+                _finalise_notes(result, request)
+                return result
         result.truncated = truncated
 
     if qr_retriever is not None:
