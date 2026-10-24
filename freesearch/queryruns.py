@@ -66,12 +66,14 @@ def build_search_sql(stems: list[str], *, limit: int = MAX_ROWS, heads: list[str
         return ''
     hs = [sanitise_stem(h).upper() for h in (heads or []) if sanitise_stem(h)]
     conds = [f"m.verbal_element_text ILIKE '{s}%'" for s in clean]
-    conds += [f"upper(m.verbal_element_text) LIKE '%{h}%'" for h in hs]
+    # 24 Oct 2026: no upper() -- pg_trgm is case-insensitive, and a bare column lets a trigram index on
+    # marks.verbal_element_text serve all three nets (requested from TemmyDB; identical results tested).
+    conds += [f"m.verbal_element_text ILIKE '%{h}%'" for h in hs]
     trg = [h for h in hs if len(h.replace(' ', '')) >= TRGM_MIN_LEN]
-    conds += [f"upper(m.verbal_element_text) % '{h}'" for h in trg]
-    sim = (f"GREATEST({', '.join(f'similarity(upper(m.verbal_element_text), {chr(39)}{h}{chr(39)})' for h in hs)})"
-           if len(hs) > 1 else (f"similarity(upper(m.verbal_element_text), '{hs[0]}')" if hs else "0"))
-    sub = (' OR '.join(f"upper(m.verbal_element_text) LIKE '%{h}%'" for h in hs)) or 'false'
+    conds += [f"m.verbal_element_text % '{h}'" for h in trg]
+    sim = (f"GREATEST({', '.join(f'similarity(m.verbal_element_text, {chr(39)}{h}{chr(39)})' for h in hs)})"
+           if len(hs) > 1 else (f"similarity(m.verbal_element_text, '{hs[0]}')" if hs else "0"))
+    sub = (' OR '.join(f"m.verbal_element_text ILIKE '%{h}%'" for h in hs)) or 'false'
     lim = f"WITH lim AS MATERIALIZED (SELECT set_limit({TRGM_FLOOR}) AS l)\n" if trg else ''
     frm = "lim, marks m" if trg else "marks m"
     gate = "lim.l > 0 AND " if trg else ''
