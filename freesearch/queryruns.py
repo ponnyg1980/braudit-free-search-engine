@@ -33,6 +33,7 @@ from temmy import TemmyQueryRunsClient, TemmyError  # type: ignore  # noqa: E402
 log = logging.getLogger(__name__)
 
 MAX_ROWS = 1000          # candidate ceiling per search (text match narrows hard)
+MIRROR_URL = 'https://nwsttrpnoygthbgcadmr.supabase.co/functions/v1/temmy-candidates'
 UKIPO_CASE_URL = 'https://trademarks.ipo.gov.uk/ipo-tmcase/page/Results/1/{}'
 
 
@@ -164,7 +165,104 @@ class QueryRunsRetriever:
 
     def search(self, stems: list[str], *, limit: int = MAX_ROWS, heads: list[str] | None = None
                ) -> tuple[list[MarkRecord], bool]:
-        """Return (records, truncated)."""
+        """Return (records, truncated).
+
+        24 Oct 2026: the candidate list comes from our trigram-indexed copy of the mark names
+        (TMH Analytics, temmy_mirror.marks_text, ~1 s) and only the details come from Query Runs
+        (by mark id, indexed). TemmyDB has no trigram index and we cannot add one, so the full
+        query takes 8 s+. Marks newer than the copy are picked up by a small Query Runs check on
+        ids above the copy's high-water mark. Any failure falls back to the full query below."""
+        if not build_search_sql(stems, limit=limit, heads=heads):
+            return [], False
+        # Short words have no trigram net, so the full query is already fast (~2 s) -- use it.
+        if not any(len(re.sub(r'\s', '', h or '')) >= TRGM_MIN_LEN for h in (heads or [])):
+            return self._search_full(stems, limit=limit, heads=heads)
+        try:
+            fast = self._search_via_mirror(stems, heads or [], limit)
+            if fast is not None:
+                return fast
+        except Exception:
+            log.warning('mirror candidate search failed; using the full Query Runs query', exc_info=True)
+        return self._search_full(stems, limit=limit, heads=heads)
+
+    def _search_via_mirror(self, stems, heads, limit):
+        import json as _json
+        import os as _os
+        import urllib.request as _ur
+        key = (_os.environ.get('XERO_PROCESS_KEY') or '').strip()
+        if not key:
+            return None
+        req = _ur.Request(MIRROR_URL, data=_json.dumps({
+            'key': key, 'stems': [s.upper() for s in stems], 'heads': [h.upper() for h in heads],
+            'limit': limit}).encode(), headers={'Content-Type': 'application/json'})
+        with _ur.urlopen(req, timeout=20) as r:
+            d = _json.loads(r.read().decode())
+        if not d.get('ok'):
+            return None
+        groups = d.get('rows') or []
+        hi = int(d.get('max_mark_id') or 0)
+        if not hi:
+            return None
+        ids = []
+        for g in groups:
+            ids.extend(int(x) for x in (g.get('mark_ids') or []))
+        rows = self._detail_rows(ids) if ids else []
+        # Marks added to TemmyDB after the copy was taken: the same three nets, only over new ids.
+        new_sql = build_search_sql(stems, limit=limit, heads=heads).replace(
+            '\nWHERE ', f'\nWHERE m.id > {hi} AND ', 1)
+        fresh = self._run_rows(new_sql, limit)
+        seen = {str(r.get('application_number')) for r in rows}
+        rows += [r for r in fresh if str(r.get('application_number')) not in seen]
+        # Keep the mirror's order (substring first, then similarity), new marks after.
+        order = {}
+        for i, g in enumerate(groups):
+            order.setdefault(str(g.get('verbal_element_text') or '').upper(), i)
+        rows.sort(key=lambda r: order.get(str(r.get('verbal_element_text') or '').upper(), 10**9))
+        records = [r for r in (record_from_row(x) for x in rows) if r]
+        return records, len(groups) >= limit
+
+    def _detail_rows(self, mark_ids):
+        out = []
+        for i in range(0, len(mark_ids), 2000):
+            chunk = ','.join(str(x) for x in mark_ids[i:i + 2000])
+            out += self._run_rows(f"""
+SELECT t.application_number, t.status, m.verbal_element_text, m.feature AS mark_type,
+       array_agg(DISTINCT nc.number) FILTER (WHERE nc.number IS NOT NULL) AS classes,
+       (array_agg(DISTINCT a.name))[1] AS applicant_name,
+       (array_agg(DISTINCT a.company_number))[1] AS company_number
+FROM marks m
+JOIN trademarks t ON t.id = m.trademark_id
+LEFT JOIN nice_class_trademarks nct ON nct.trademark_id = t.id
+LEFT JOIN nice_classes nc ON nc.id = nct.nice_class_id
+LEFT JOIN applicant_trademarks apt ON apt.trademark_id = t.id
+LEFT JOIN applicants a ON a.id = apt.applicant_id
+WHERE m.id IN ({chunk})
+GROUP BY t.application_number, t.status, m.verbal_element_text, m.feature""".strip(), 5000)
+        return out
+
+    def _run_rows(self, sql, limit):
+        m = self._qr.submit(sql=sql, page_size=5000, preview_limit=100)
+        qid = m.get('query_id')
+        total = int((m.get('pagination') or {}).get('total', 0) or 0)
+        rows = list(m.get('preview') or [])
+        try:
+            if qid and total > len(rows):
+                rows, page = [], 1
+                while len(rows) < total:
+                    items = self._qr.get_page(qid, page).get('items') or []
+                    if not items:
+                        break
+                    rows += items
+                    page += 1
+        finally:
+            try:
+                self._qr.delete(qid)
+            except Exception:
+                pass
+        return rows
+
+    def _search_full(self, stems: list[str], *, limit: int = MAX_ROWS, heads: list[str] | None = None
+                     ) -> tuple[list[MarkRecord], bool]:
         sql = build_search_sql(stems, limit=limit, heads=heads)
         if not sql:
             return [], False
