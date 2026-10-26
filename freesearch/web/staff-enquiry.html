@@ -1203,11 +1203,9 @@ function gateRules(){
         :'Delivery on or before the appointment day — same day is fine.'},
     {id:'G-09',sec:'billing',label:'Payment agreed',
      ok:b.payWhen==='quote'||((b.payWhen==='now'||(b.payWhen==='date'&&nonEmpty(b.payDate)&&payDateWorks())
-         ||(CONFIG.QUICK&&b.payWhen==='paid'&&nonEmpty(b.paidDate)&&b.paidDate<=todayIso()
+         ||(b.payWhen==='paid'&&nonEmpty(b.paidDate)&&b.paidDate<=todayIso()
             &&nonEmpty(b.paidRef)))&&b.agreed),
-     why:CONFIG.QUICK
-        ?'Paying now, an exact agreed date, or a payment already taken with its date and reference.'
-        :'Either they are paying now, or there is an exact agreed date, no later than delivery.'},
+     why:'Paying now, an exact agreed date (no later than delivery), or a payment already taken with its date and reference.'},
     {id:'G-14',sec:'billing',label:'Applicant identified',
      ok:state.applicant.sameAsBilling!==false||nonEmpty(state.applicant.name),
      why:'Who owns the mark? Same as the billing entity, or name the applicant '
@@ -2585,10 +2583,10 @@ function finishLoad(){
   set('f-icfirst',b.icFirst);set('f-iclast',b.icLast);
   set('f-icemail',b.icEmail);set('f-icphone',b.icPhone);
   renderLinkUI();
-  /* 'paid' is a Quick Audit option only -- Fact Find takes payment live. */
+  /* 'paid' (payment already taken) is offered on BOTH forms (26 Oct 2026, Jonathan:
+     a Fact Find client may already have paid a Xero invoice). */
   const paidOpt=document.getElementById('f-paywhen-paid');
-  if(paidOpt){if(CONFIG.QUICK) paidOpt.classList.remove('hidden'); else paidOpt.remove();}
-  if(!CONFIG.QUICK&&b.payWhen==='paid') b.payWhen='';
+  if(paidOpt) paidOpt.classList.remove('hidden');
   set('f-paywhen',b.payWhen);set('f-paydate',b.payDate);chk('p-agreed',b.agreed);
   set('f-paiddate',b.paidDate||'');set('f-paidref',b.paidRef||'');
   tog('f-paidwrap','hidden',b.payWhen!=='paid');
@@ -2927,7 +2925,7 @@ async function toPayment(){
           <ul>
             <li>£${(d.total_pence/100).toFixed(2)} — ${d.marks} audit${d.marks>1?'s':''}, paid
               ${esc(pretty(state.billing.paidDate))}, reference ${esc(state.billing.paidRef)}.</li>
-            <li>The Xero invoice is raised and marked paid. The Deal is now
+            <li>${d.adopted?('Existing Xero invoice <b>'+esc(d.invoice_number||'')+'</b> used: no new invoice raised.'):('Xero invoice '+(d.invoice_number?'<b>'+esc(d.invoice_number)+'</b> ':'')+'raised and marked paid.')} The Deal is now
               <b>Delivery Approved</b> with Payment Status <b>Paid</b>; it goes to
               Send for Research, or to Set Up Order if anything is missing.</li>
           </ul>
