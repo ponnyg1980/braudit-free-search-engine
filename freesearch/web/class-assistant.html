@@ -402,7 +402,7 @@ function renderTaxonomy(title,r){
         <span class="band ${c.tier||''}">${c.band}</span></div>
       <div class="heading" style="color:${rec==='core'?'var(--navy)':'var(--muted)'};font-weight:${rec==='core'?600:400}">${c.recommendation_label}</div>
       ${c.heading?`<details class="heading"><summary style="cursor:pointer">What this class covers</summary><div style="margin-top:4px">${c.heading}</div></details>`:''}
-      ${(c.terms&&c.terms.length)?`<div class="terms">${c.terms.slice(0,8).map(t=>`<span class="term" data-term="${t.text}">${t.text} <b>${(t.label||'')[0]||''}</b></span>`).join('')}</div>`:''}
+      ${(c.terms&&c.terms.length)?`<div class="terms">${c.terms.map(t=>`<span class="term" data-term="${t.text}">${t.text} <b>${(t.label||'')[0]||''}</b></span>`).join('')}</div>`:''}
     </div>`;}).join('');
 }
 
@@ -493,7 +493,7 @@ function renderBanding(title,r){last.classes=(r.classes||[]).filter(c=>c.band===
   outHead(title,BASIS.portfolio(r.n_marks));document.getElementById('out-body').innerHTML=(r.classes||[]).map(c=>
     `<div class="cls"><div class="h"><span>Class ${c.nice_class} <span style="color:var(--muted);font-weight:400">· ${c.count}/${r.n_marks}</span></span><span class="band ${c.band}">${c.label}</span></div>
      <div class="heading">${c.heading||''}</div>
-     <div class="terms">${(c.terms||[]).slice(0,6).map(t=>`<span class="term" data-term="${t.text}">${t.text} <b>${t.label[0]}</b></span>`).join('')}</div></div>`).join('');}
+     <div class="terms">${(c.terms||[]).map(t=>`<span class="term" data-term="${t.text}">${t.text} <b>${t.label[0]}</b></span>`).join('')}</div></div>`).join('');}
 function renderSic(title,r){
   // Inconclusive SIC (point 8): the code doesn't describe the goods/services,
   // so we don't guess classes — we explain why and route to a tool that reads
@@ -516,7 +516,7 @@ function renderSic(title,r){
   document.getElementById('out-body').innerHTML=(r.classes||[]).map(c=>
     `<div class="cls"><div class="h"><span>Class ${c.nice_class}${c.class_label?' · '+c.class_label:''}</span><span class="band ${c.tier||''}">${c.band}${c.frequency?' · '+c.frequency:''}</span></div>
      ${c.heading?`<details class="heading"><summary style="cursor:pointer">What this class covers</summary><div style="margin-top:4px">${c.heading}</div></details>`:''}
-     ${(c.terms&&c.terms.length)?`<div class="terms">${c.terms.slice(0,10).map(t=>`<span class="term" data-term="${t.text}">${t.text} <b>${(t.label||'')[0]||''}</b></span>`).join('')}</div>`:''}</div>`).join('');}
+     ${(c.terms&&c.terms.length)?`<div class="terms">${c.terms.map(t=>`<span class="term" data-term="${t.text}">${t.text} <b>${(t.label||'')[0]||''}</b></span>`).join('')}</div>`:''}</div>`).join('');}
 function outHead(title,basis){document.getElementById('out').style.display='';document.getElementById('out-title').textContent=title;
   const b=document.getElementById('out-basis');
   if(b){ b.textContent=basis||BASIS.sector; b.style.display=''; }
@@ -570,7 +570,7 @@ async function pdFind(){
   document.getElementById('out-body').innerHTML=r.classes.map(c=>
     `<div class="cls"><div class="h"><span>Class ${c.n} · ${esc(c.label)}</span>` +
     `<span style="color:var(--muted);font-weight:400;font-size:12.5px">${c.matched} matching term${c.matched===1?'':'s'}</span></div>
-     <div class="terms">${(c.terms||[]).slice(0,10).map(t=>
+     <div class="terms">${(c.terms||[]).map(t=>
        `<span class="term" data-term="${esc(t.term)}">${esc(t.term)}
           <b style="font-weight:600;color:var(--muted)">${Number(t.marks).toLocaleString('en-GB')} marks</b></span>`).join('')}</div></div>`).join('');
 }
