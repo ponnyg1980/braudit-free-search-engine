@@ -483,7 +483,12 @@ async function sicGo(){const q=(document.getElementById('sic-q').value||'').trim
 function renderBasket(title,b){last.classes=b.classes||[];
   outHead(title,BASIS.mark);document.getElementById('out-body').innerHTML=(b.entries||[]).map(e=>
     `<div class="cls"><div class="h"><span>Class ${e.nice_class}</span></div><div class="heading">${e.heading||''}</div>
-     <div class="terms">${(e.terms||[]).slice(0,12).map(t=>`<span class="term" data-term="${t.text}">${t.text}</span>`).join('')}</div></div>`).join('');}
+     <div class="terms">${(e.terms||[]).map(t=>`<span class="term" data-term="${escAttr(t.text)}">${escAttr(t.text)}</span>`).join('')}</div></div>`).join('');}
+/* 26 Oct 2026: a competitor MARK's specification is shown and sent in FULL. It was
+   sliced to 12, and the captured terms are read from the DOM, so UK00004439100
+   (68 terms in class 25) reached the order with 12. Rows are collapsed behind
+   "Show N registered terms", so length costs nothing. */
+function escAttr(v){return String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function renderBanding(title,r){last.classes=(r.classes||[]).filter(c=>c.band==='a'||c.band==='b').map(c=>c.nice_class);
   outHead(title,BASIS.portfolio(r.n_marks));document.getElementById('out-body').innerHTML=(r.classes||[]).map(c=>
     `<div class="cls"><div class="h"><span>Class ${c.nice_class} <span style="color:var(--muted);font-weight:400">· ${c.count}/${r.n_marks}</span></span><span class="band ${c.band}">${c.label}</span></div>
