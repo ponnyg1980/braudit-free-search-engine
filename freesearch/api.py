@@ -751,7 +751,7 @@ def _staff_gate(enq: dict) -> list:
     pay_ok = (pay_when == 'now'
               or (pay_when == 'date' and pay_d
                   and (not audit_d or pay_d <= audit_d))
-              or (quick and pay_when == 'paid' and paid_d and paid_d <= today
+              or (pay_when == 'paid' and paid_d and paid_d <= today
                   and full(s('billing', 'paidRef'))))
     # 23 Oct 2026: a PROPOSAL (payWhen 'quote') needs no agreed payment yet -- the client
     # chooses card or invoice when they accept it online, and the gate runs again then.
@@ -1300,7 +1300,7 @@ def _audit_pay(payload: dict) -> dict:
         # drives the Deal through the same order_complete kind=paid the
         # Stripe webhook uses -- so the Deal, the gate and the research
         # tasks behave identically whichever way the money arrived.
-        if quick and billing.get('payWhen') == 'paid':
+        if billing.get('payWhen') == 'paid':
             net_p = sum(x['p'] for x in lines)
             tot_p = net_p if vat_exempt else int(round(net_p * 1.20))
             _journey_event(session_id, 'audit_paid', {
@@ -1314,8 +1314,15 @@ def _audit_pay(payload: dict) -> dict:
                 'billing_email': email, 'invoice_ref': ref,
                 'staff_email': staff_email, **tier_meta,
             })
-            _xero_process(session_id, 'paid')
+            xr = _xero_process(session_id, 'paid', timeout=60)
+            # 26 Oct 2026: the journey refuses (409) when the reference names a
+            # Xero invoice it cannot find. Surface that, never report success.
+            if isinstance(xr, dict) and xr.get('ok') is False:
+                return {'ok': False, 'error': str(xr.get('error') or 'Xero could not record this payment'),
+                        'status': 409}
             return {'ok': True, 'paid': 'recorded', 'marks': qty,
+                    'invoice_number': (xr or {}).get('invoice_number') if isinstance(xr, dict) else None,
+                    'adopted': bool((xr or {}).get('adopted')) if isinstance(xr, dict) else False,
                     'total_pence': tot_p, 'status': 200}
 
         # Scenario 2 — invoice with an agreed payment date. No money moves
@@ -1555,22 +1562,30 @@ def _stripe_webhook(raw: bytes, sig_header: str) -> dict:
     return {'ok': True, 'status': 200}
 
 
-def _xero_process(session_id: str, kind: str) -> None:
+def _xero_process(session_id: str, kind: str, timeout: int = 20):
     """Ask the journey function to raise the Xero invoice for a session.
     No-op until XERO_PROCESS_KEY is configured on both sides."""
+    import urllib.error
     import urllib.request
     key = (os.environ.get('XERO_PROCESS_KEY') or '').strip()
     if not key or not session_id:
-        return
+        return None
     body = json.dumps({'key': key, 'session_id': session_id,
                        'kind': kind}).encode()
     req = urllib.request.Request(_JOURNEY_URL.rstrip('/') + '/xero/process',
                                  data=body,
                                  headers={'Content-Type': 'application/json'})
+    # Returns the journey's JSON reply (or None) so callers CAN check it;
+    # existing callers ignore it, as before.
     try:
-        urllib.request.urlopen(req, timeout=20).read()
+        return json.loads(urllib.request.urlopen(req, timeout=timeout).read() or b'null')
+    except urllib.error.HTTPError as e:
+        try:
+            return json.loads(e.read() or b'null')
+        except Exception:
+            return {'ok': False, 'error': f'Xero step failed (HTTP {e.code})'}
     except Exception:
-        pass
+        return None
 
 
 def _xero_callback(params: dict) -> str:
