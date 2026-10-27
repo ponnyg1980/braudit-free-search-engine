@@ -638,7 +638,7 @@ def _pricing_tier(session_id: str, staff: bool) -> dict:
             'worldwide': False, 'fallback': True}
 
 
-def _staff_gate(enq: dict) -> list:
+def _staff_gate(enq: dict, early: bool = False) -> list:
     """Server-side mirror of the eleven gate rules in staff-enquiry.html.
 
     The browser copy drives the UI; THIS one decides whether money may be
@@ -781,6 +781,18 @@ def _staff_gate(enq: dict) -> list:
     # billing address, which may be a UK agent.
     if s('billing', 'location') not in ('uk', 'nonuk'):
         bad.append('G-12')
+    if early:
+        # TAKE PAYMENT EARLY (Jonathan, 27 Oct 2026): "all that is required is
+        # the Contact Details, the Billing Account, the marks being audited, the
+        # pricing tier and what they are charging" -- so staff can take the money
+        # while the client is on the phone, then finish the form to progress the
+        # Deal. Contact (no position), marks, billing + VAT. Prices (G-13) are
+        # still enforced line by line in _audit_pay; Terms (G-15..G-17, incl. the
+        # countries a Worldwide price needs) in _terms_accept -- Jonathan kept both.
+        c_ok = (full(s('contact', 'first')) and full(s('contact', 'last'))
+                and email_ok(s('contact', 'email')) and full(s('contact', 'phone')))
+        return (([] if c_ok else ['G-00'])
+                + [x for x in bad if x in ('G-02', 'G-10', 'G-12')])
     return bad
 
 
@@ -818,6 +830,37 @@ def _journey_post(path: str, body: dict, timeout: int = 30) -> dict:
             return json.loads(r.read().decode())
     except Exception as ex:
         return {'ok': False, 'error': str(ex)[:200]}
+
+
+def _staff_complete(sid: str) -> dict:
+    """Finish an order whose payment was taken early (see /staff-complete)."""
+    sess = _journey_session(sid) or {}
+    enq = ((sess.get('last_result') or {}).get('staff_enquiry')) or {}
+    if not isinstance(enq, dict) or not enq:
+        return {'ok': False, 'error': 'enquiry not found'}
+    try:
+        ost = _journey_post('/staff/order-status', {'session_id': sid}, timeout=15)
+    except Exception:
+        ost = {}
+    if not (ost.get('invoiced') or ost.get('paid')):
+        return {'ok': False, 'error': 'no payment or invoice on this order yet -- take payment first'}
+    # Payment is done, so G-09 (how they will pay) no longer applies; every
+    # other rule of the full form must pass, as for any order.
+    unmet = [x for x in _staff_gate(enq) if x != 'G-09']
+    if unmet:
+        _journey_event(sid, 'staff_complete_refused', {'unmet': unmet})
+        return {'ok': False, 'error': 'the form is not complete yet', 'unmet': unmet}
+    _journey_event(sid, 'staff_complete_requested', {'paid': bool(ost.get('paid'))})
+    try:
+        out = _journey_post('/xero/process', {'session_id': sid, 'complete': True,
+                                              'kind': 'paid' if ost.get('paid') else 'invoice'},
+                            timeout=90)
+    except Exception as ex:
+        return {'ok': False, 'error': f'could not reach the order service: {ex}'[:200]}
+    if not out.get('ok'):
+        return {'ok': False, 'error': str(out.get('error') or 'the order could not be completed')}
+    return {'ok': True, 'completed': True, 'invoice_number': out.get('invoice_number') or ost.get('invoice_number'),
+            'paid': bool(ost.get('paid'))}
 
 
 def _proposal_prepare(sid: str, k: str) -> dict:
@@ -1165,6 +1208,9 @@ def _audit_pay(payload: dict) -> dict:
     su = _staff_user(str(payload.get('k') or '')) if staff else None
     staff_email = (su or {}).get('email', '') or str(payload.get('_proposal_staff') or '')[:120]
     quote_only = bool(payload.get('_quote'))
+    # 27 Oct 2026: staff "Take payment now" from any point in the form -- a
+    # reduced gate, always a Stripe link, whatever payWhen says.
+    early = staff and bool(payload.get('early')) and not quote_only
     qty, enq = 1, None
     entity = ''
 
@@ -1187,9 +1233,18 @@ def _audit_pay(payload: dict) -> dict:
         enq = lr.get('staff_enquiry') if isinstance(lr, dict) else None
         if not isinstance(enq, dict):
             return {'ok': False, 'error': 'enquiry not found', 'status': 200}
-        unmet = _staff_gate(enq)
+        if early:
+            try:
+                ost = _journey_post('/staff/order-status', {'session_id': session_id}, timeout=15)
+            except Exception:
+                ost = {}
+            if ost.get('invoiced') or ost.get('paid'):
+                return {'ok': False, 'error': 'this order already has an invoice'
+                        + (' and is paid' if ost.get('paid') else '')
+                        + ' -- finish the form and use Complete the order', 'status': 200}
+        unmet = _staff_gate(enq, early=early)
         if unmet:
-            _journey_event(session_id, 'audit_pay_refused', {'unmet': unmet})
+            _journey_event(session_id, 'audit_pay_refused', {'unmet': unmet, 'early': early})
             return {'ok': False, 'error': 'enquiry is not ready for payment',
                     'unmet': unmet, 'status': 200}
         # Staff line items (handoff §9, 24 Sep 2026): each mark row is a line
@@ -1300,7 +1355,7 @@ def _audit_pay(payload: dict) -> dict:
         # drives the Deal through the same order_complete kind=paid the
         # Stripe webhook uses -- so the Deal, the gate and the research
         # tasks behave identically whichever way the money arrived.
-        if billing.get('payWhen') == 'paid':
+        if not early and billing.get('payWhen') == 'paid':
             net_p = sum(x['p'] for x in lines)
             tot_p = net_p if vat_exempt else int(round(net_p * 1.20))
             _journey_event(session_id, 'audit_paid', {
@@ -1329,7 +1384,7 @@ def _audit_pay(payload: dict) -> dict:
         # now, so no Stripe session: the request is recorded (having already
         # passed the full gate above) and the Xero invoice is raised from
         # this event. Decided by the stored payWhen, never a browser flag.
-        if billing.get('payWhen') == 'date':
+        if not early and billing.get('payWhen') == 'date':
             net_p = sum(x['p'] for x in lines)
             tot_p = net_p if vat_exempt else int(round(net_p * 1.20))
             _journey_event(session_id, 'audit_invoice_requested', {
@@ -1429,6 +1484,7 @@ def _audit_pay(payload: dict) -> dict:
         'metadata[tier]': tier_meta.get('tier', ''),
         'metadata[web_exception]': '1' if tier_meta.get('web_exception') else '0',
         'metadata[worldwide]': '1' if tier_meta.get('worldwide') else '0',
+        'metadata[early]': '1' if early else '0',
     })
     # The client promotion is a real Stripe discount, so the checkout page
     # itself shows the £149 lines and the promotion taking it to £99.
@@ -1478,6 +1534,7 @@ def _audit_pay(payload: dict) -> dict:
                        {'marks': qty, 'lines': lines,
                         'discount_pence': discount_p,
                         'net_pence': net_total, 'total_pence': gross_total,
+                        'early': early,
                         'stripe_session': str(data.get('id') or '')})
         return {'ok': True, 'url': data.get('url'),
                 'marks': qty, 'total_pence': gross_total, 'status': 200}
@@ -2200,6 +2257,24 @@ class _Handler(BaseHTTPRequestHandler):
                     self._send(json.loads(r.read().decode()))
             except Exception:
                 self._send({'ok': False, 'error': 'could not read the order'}, 200)
+            return
+        if path == '/staff-complete':
+            # 27 Oct 2026: the order was paid (or invoiced) BEFORE the form was
+            # finished ("Take payment now"). Once the rest is complete, this
+            # re-runs the Zoho order step against the SAME invoice -- no new
+            # invoice, no new charge -- so the Deal gets the classes, words and
+            # notes and goes to Send for Research (or Set Up Order, listing
+            # what is still missing).
+            try:
+                length = int(self.headers.get('Content-Length', 0) or 0)
+                payload = json.loads(self.rfile.read(length) or b'{}')
+            except (ValueError, json.JSONDecodeError):
+                self._send({'ok': False, 'error': 'invalid JSON'}, 400)
+                return
+            if not _staff_user(str(payload.get('k') or '')):
+                self._send({'ok': False, 'error': 'forbidden'}, 403)
+                return
+            self._send(_staff_complete(str(payload.get('session_id') or '')[:60]), 200)
             return
         if path in ('/staff-proposal', '/staff-proposal-send', '/proposal-accept'):
             # 23 Oct 2026: audit proposals (prepare + send are staff-token gated; accept is
