@@ -920,6 +920,7 @@
 <div class="sf-act">
   <div class="msg" id="act-msg">Take the contact details to begin.</div>
   <button class="btn ghost" onclick="saveNow(true)">Save draft</button>
+  <button class="btn ghost" id="act-early" onclick="openEarlyPay()" title="Take the payment now, while the client is on the phone, and finish the form afterwards">Take payment now</button>
   <button class="btn primary" id="act-pay" disabled onclick="toPayment()">Continue to payment</button>
 </div>
 
@@ -1201,8 +1202,8 @@ function gateRules(){
      why:cn.declined
         ?'With no appointment, the delivery date is the promise — it must be set.'
         :'Delivery on or before the appointment day — same day is fine.'},
-    {id:'G-09',sec:'billing',label:'Payment agreed',
-     ok:b.payWhen==='quote'||((b.payWhen==='now'||(b.payWhen==='date'&&nonEmpty(b.payDate)&&payDateWorks())
+    {id:'G-09',sec:'billing',label:ORDER_INVOICED?(ORDER_PAID?'Payment taken':'Invoice raised'):'Payment agreed',
+     ok:ORDER_INVOICED||b.payWhen==='quote'||((b.payWhen==='now'||(b.payWhen==='date'&&nonEmpty(b.payDate)&&payDateWorks())
          ||(b.payWhen==='paid'&&nonEmpty(b.paidDate)&&b.paidDate<=todayIso()
             &&nonEmpty(b.paidRef)))&&b.agreed),
      why:'Paying now, an exact agreed date (no later than delivery), or a payment already taken with its date and reference.'},
@@ -1315,12 +1316,14 @@ function renderGate(){
   }else if(outstanding.length===0){
     msg.innerHTML='<b>Ready.</b> '+markCount()+' line'+(markCount()===1?'':'s')+
       ' = £'+total().toFixed(2)+(vatExempt()?' (no VAT — outside the UK).':' inc VAT.');
-    pay.textContent=state.billing.payWhen==='quote'?'Prepare proposal':state.billing.payWhen==='date'?'Request invoice'
+    pay.textContent=ORDER_INVOICED?'Complete the order':state.billing.payWhen==='quote'?'Prepare proposal':state.billing.payWhen==='date'?'Request invoice'
       :(state.billing.payWhen==='paid'?'Record payment & create order':'Take payment now');
   }else{
     msg.innerHTML='<b>'+outstanding.length+' outstanding.</b> Next: '+esc(outstanding[0].why);
   }
   pay.disabled=outstanding.length>0;
+  const eb=document.getElementById('act-early');
+  if(eb) eb.classList.toggle('hidden',ORDER_INVOICED||!!state.deal.frozen||state.billing.payWhen==='paid');
   /* Edit mode, frozen scope: the criteria are immutable once the search
      contract is stamped (Braudit_Frozen_At). A change would need a new
      search context, so this form refuses rather than editing silently. */
@@ -2286,17 +2289,22 @@ async function load(){
 /* 22 Oct 2026 (Jonathan): an audit with an invoice belongs to that client. The person
    can't be swapped (the server refuses it too); a different client starts a new audit. */
 let CLIENT_LOCKED=false;
+/* 27 Oct 2026: the order already has its invoice (paid early, or invoiced). The last
+   button then COMPLETES the order (no second charge); see completeOrder(). */
+var ORDER_INVOICED=false,ORDER_PAID=false;
 async function checkClientLock(){
   if(!state.sessionId||!CONFIG.TOKEN) return;
   try{
     const r=await fetch('/staff-order',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({k:CONFIG.TOKEN,session_id:state.sessionId})});
     const d=await r.json();
-    if(d&&d.ok&&d.invoiced) lockClient(d.invoice_number);
+    if(d&&d.ok&&d.invoiced) lockClient(d.invoice_number,d.paid);
   }catch(e){}
 }
-function lockClient(inv){
+function lockClient(inv,paid){
   CLIENT_LOCKED=true;
+  ORDER_INVOICED=true; if(paid) ORDER_PAID=true;
+  setTimeout(()=>{try{renderGate();}catch(e){}},0);
   ['f-first','f-last','f-email','f-clienttype','f-linkq'].forEach(id=>{
     const el=document.getElementById(id); if(el){el.readOnly=true;el.disabled=(el.tagName==='SELECT'||id==='f-linkq');}
   });
@@ -2890,6 +2898,7 @@ function openTools(){
    stored enquiry — this button carries nothing the server trusts. */
 async function toPayment(){
   if(!gatePasses()){renderGate();return;}
+  if(ORDER_INVOICED) return completeOrder();
   if(state.billing.payWhen==='quote') return toProposal();
   await saveNow(true);
   const id=state.sessionId;
@@ -2949,6 +2958,141 @@ async function toPayment(){
     if(d&&d.ok) watchOrder(box);
   }catch(e){
     box.innerHTML='<div class="sf-guide sf-never" style="margin-top:16px"><div class="gh">Network problem</div><ul><li>Nothing was charged. Try again.</li></ul></div>';
+  }
+  btn.disabled=!gatePasses();
+}
+/* =====================================================================
+   TAKE PAYMENT NOW (27 Oct 2026, Jonathan): "the ability to go to Stripe ... at any
+   stage ... all that is required is the Contact Details, the Billing Account, the
+   marks being audited, the pricing tier and what they are charging. They can take
+   payment, but still need to complete the audit form to progress the deal fully."
+   He kept the Terms of Service tick, and UK/Worldwide + VAT (they set the price).
+   Mirrors _staff_gate(early=True) + _terms_accept in api.py, which decide.
+   ===================================================================== */
+function earlyRules(){
+  const c=state.contact,b=state.billing,t=state.terms||{};
+  return [
+    {sec:'contact',label:'Contact: first and last name, email, phone',
+     ok:nonEmpty(c.first)&&nonEmpty(c.last)&&validEmail(c.email)&&nonEmpty(c.phone)},
+    {sec:'contact',label:'How the enquiry reached us (lead source)',ok:nonEmpty(state.leadSource)},
+    {sec:'marks',label:'The marks being audited',ok:liveLines().length>0},
+    {sec:CONFIG.QUICK?'marks':'recommend',label:'Pricing: tier and what you are charging (not below the floor)',
+     ok:liveLines().length>0&&priceFloorOk()},
+    {sec:CONFIG.QUICK?'marks':'discovery',label:'Worldwide audit: at least one country',
+     ok:!isWorldwideOrder()||((state.discovery.terrNow||[]).length+(state.discovery.terrPlan||[]).length)>0},
+    {sec:'billing',label:'Billing account: entity, invoice email, address line 1, postcode',
+     ok:nonEmpty(b.entity)&&validEmail(b.email)&&nonEmpty(b.addr1)&&nonEmpty(b.postcode)},
+    {sec:'billing',label:'VAT: is the client UK-based?',ok:b.location==='uk'||b.location==='nonuk'},
+    {sec:'',label:'Terms of Service accepted (below)',
+     ok:t.accepted===true&&(t.business==='yes'||t.business==='no')&&(t.business!=='no'||t.consumerStart===true)}
+  ];
+}
+function earlyClose(){const o=document.getElementById('ep-ov');if(o)o.remove();}
+function earlyGo(sec){earlyClose();if(sec)showSection(sec!=='contact'&&!contactDone()?'contact':sec);}
+function openEarlyPay(){
+  if(ORDER_INVOICED){alert('This order already has its invoice. Finish the form and use Complete the order.');return;}
+  if(!contactDone()&&!nonEmpty(state.contact.email)){showSection('contact');}
+  earlyClose();
+  const ov=document.createElement('div');ov.id='ep-ov';
+  ov.style.cssText='position:fixed;inset:0;z-index:80;background:rgba(15,27,38,.45);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:40px 16px';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:620px;width:100%;padding:22px 24px;box-shadow:0 12px 40px rgba(0,0,0,.25)" id="ep-box"></div>';
+  ov.addEventListener('click',e=>{if(e.target===ov)earlyClose();});
+  document.body.appendChild(ov);
+  earlyRender();
+}
+function earlyRender(){
+  const box=document.getElementById('ep-box'); if(!box) return;
+  const rules=earlyRules(),ready=rules.every(r=>r.ok),t=state.terms||{};
+  const lines=liveLines();
+  box.innerHTML='<h2 style="margin:0 0 4px;color:var(--navy)">Take payment now</h2>'
+   +'<div class="sf-hint" style="margin:0 0 12px">For when the client wants to pay while you are on the phone. '
+   +'The rest of the form still has to be completed afterwards: the Deal stays at <b>Set Up Order</b> '
+   +'until you finish it and press <b>Complete the order</b>.</div>'
+   +'<ul style="list-style:none;padding:0;margin:0 0 14px">'+rules.map(r=>
+     '<li style="margin:5px 0;display:flex;gap:8px;align-items:baseline"><span style="font-weight:800;color:'
+     +(r.ok?'#1F8A5B':'#E51652')+'">'+(r.ok?'&#10003;':'&#9679;')+'</span><span>'+esc(r.label)
+     +(!r.ok&&r.sec?' &middot; <a href="#" onclick="earlyGo(\''+r.sec+'\');return false">fill in</a>':'')+'</span></li>').join('')+'</ul>'
+   +(lines.length?('<div style="background:#F7F8FA;border:1px solid #E6E9ED;border-radius:10px;padding:10px 12px;margin:0 0 14px;font-size:14px">'
+     +lines.map(m=>'<div style="display:flex;justify-content:space-between"><span>'+esc(m.text)+'</span><span>&pound;'+linePrice(m).toFixed(2)+'</span></div>').join('')
+     +'<div style="display:flex;justify-content:space-between;font-weight:800;color:var(--navy);margin-top:6px"><span>Total to pay'
+     +(vatExempt()?' (no VAT, outside the UK)':' inc VAT')+'</span><span>&pound;'+total().toFixed(2)+'</span></div></div>'):'')
+   +'<div style="border-top:1px solid #E6E9ED;padding-top:12px">'
+   +'<div style="font-weight:700;color:var(--navy);margin-bottom:6px">Terms of Service (read to the client)</div>'
+   +'<label class="fld">Buying for a business?</label><select id="ep-business">'
+   +'<option value="">Ask the client&hellip;</option><option value="yes"'+(t.business==='yes'?' selected':'')+'>Yes, for a business</option>'
+   +'<option value="no"'+(t.business==='no'?' selected':'')+'>No, as a consumer</option></select>'
+   +(t.business==='no'?'<label class="sf-check"><input type="checkbox" id="ep-consent"'+(t.consumerStart?' checked':'')+'><span>The client asks us to start within the 14-day cancellation period, and understands they will pay for work done if they cancel, and lose the right to cancel once the report is delivered.</span></label>':'')
+   +'<label class="sf-check"><input type="checkbox" id="ep-accept"'+(t.accepted?' checked':'')+'><span>On the client\'s instruction: they accept the Clearance Audit Terms of Service and the general Terms and Conditions of Service.</span></label>'
+   +'</div><div id="ep-result"></div>'
+   +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">'
+   +'<button class="btn ghost" style="margin:0" onclick="earlyClose()">Close</button>'
+   +'<button class="btn primary" style="margin:0" id="ep-go"'+(ready?'':' disabled')+' onclick="earlyPay()">Create payment link</button></div>';
+  const syncTerms=()=>{
+    ['f-business','f-consumerstart','f-termsok'].forEach(id=>{const el=document.getElementById(id);if(!el)return;
+      if(id==='f-business')el.value=state.terms.business||'';else if(id==='f-consumerstart')el.checked=!!state.terms.consumerStart;else el.checked=!!state.terms.accepted;});
+    try{renderTermsBlock();}catch(e){} renderAll(); touch(); earlyRender();
+  };
+  const bz=document.getElementById('ep-business');
+  if(bz) bz.onchange=()=>{state.terms.business=bz.value;
+    if(bz.value!=='no'){state.terms.consumerStart=false;state.terms.consumerStartAt='';} syncTerms();};
+  const cs=document.getElementById('ep-consent');
+  if(cs) cs.onchange=()=>{state.terms.consumerStart=cs.checked;state.terms.consumerStartAt=cs.checked?new Date().toISOString():'';syncTerms();};
+  const ac=document.getElementById('ep-accept');
+  if(ac) ac.onchange=()=>{state.terms.accepted=ac.checked;syncTerms();};
+}
+async function earlyPay(){
+  if(!earlyRules().every(r=>r.ok)){earlyRender();return;}
+  const go=document.getElementById('ep-go'),res=document.getElementById('ep-result');
+  go.disabled=true; res.innerHTML='<div class="sf-hint" style="margin-top:12px">Saving and creating the payment link&hellip;</div>';
+  await saveNow(true);
+  if(!state.sessionId){res.innerHTML='<div class="sf-hint" style="color:#E51652">Could not save. Try again.</div>';go.disabled=false;return;}
+  let d=null;
+  try{
+    const r=await fetch('/audit-pay',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({staff:1,early:1,session_id:state.sessionId,ref:state.ref,
+        k:CONFIG.TOKEN,consult:!state.consult.declined})});
+    d=await r.json();
+  }catch(e){}
+  if(d&&d.ok&&d.url){
+    res.innerHTML='<div class="sf-guide" style="margin-top:14px"><div class="gh">Payment link ready: &pound;'
+      +(d.total_pence/100).toFixed(2)+'</div><ul>'
+      +'<li><a class="btn primary" style="margin:6px 0" href="'+esc(d.url)+'" target="_blank" rel="noopener">Open the payment page</a></li>'
+      +'<li><button class="btn ghost" style="margin:0" onclick="navigator.clipboard.writeText(\''+esc(d.url)+'\').then(()=>this.textContent=\'Copied\')">Copy link to send to the client</button></li>'
+      +'<li>Stripe sends the receipt; the Xero invoice and the Deal follow once the payment lands. '
+      +'Then finish the form (classes, terms and the rest) and press <b>Complete the order</b>.</li></ul></div>';
+    const pr=document.getElementById('f-payresult');
+    if(pr){pr.innerHTML='<div class="sf-hint" style="margin-top:16px">Payment link created early ('
+      +'&pound;'+(d.total_pence/100).toFixed(2)+'). <a href="'+esc(d.url)+'" target="_blank" rel="noopener">Open it again</a>.</div>';
+      watchOrder(pr);}
+  }else{
+    const unmet=(d&&d.unmet&&d.unmet.length)?(' Still needed: '+d.unmet.join(', ')+'.'):'';
+    res.innerHTML='<div class="sf-guide sf-never" style="margin-top:14px"><div class="gh">Not created</div><ul><li>'
+      +esc((d&&d.error)||'Something went wrong. Nothing was charged.')+esc(unmet)+'</li></ul></div>';
+    go.disabled=false;
+  }
+}
+/* The order was paid (or invoiced) before the form was finished: send the finished
+   form to the Deal against the SAME invoice -- nothing new is charged or raised. */
+async function completeOrder(){
+  await saveNow(true);
+  const box=document.getElementById('f-payresult');
+  showSection('readback');
+  box.innerHTML='<div class="sf-hint" style="margin-top:16px">Completing the order&hellip;</div>';
+  const btn=document.getElementById('act-pay');btn.disabled=true;
+  let d=null;
+  try{
+    const r=await fetch('/staff-complete',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({k:CONFIG.TOKEN,session_id:state.sessionId})});
+    d=await r.json();
+  }catch(e){}
+  if(d&&d.ok){
+    box.innerHTML='<div class="sf-guide" style="margin-top:16px"><div class="gh">Order completed</div><ul>'
+      +'<li>The Deal now has the full audit details'+(d.invoice_number?' (invoice <b>'+esc(d.invoice_number)+'</b>, nothing new charged)':'')+'.</li>'
+      +'<li>It goes to <b>Send for Research</b>, or stays at <b>Set Up Order</b> with a task listing anything still missing.</li></ul></div>';
+  }else{
+    const unmet=(d&&d.unmet&&d.unmet.length)?(' Still needed: '+d.unmet.join(', ')+'.'):'';
+    box.innerHTML='<div class="sf-guide sf-never" style="margin-top:16px"><div class="gh">Not completed</div><ul><li>'
+      +esc((d&&d.error)||'Something went wrong.')+esc(unmet)+'</li></ul></div>';
   }
   btn.disabled=!gatePasses();
 }
@@ -3033,7 +3177,7 @@ function watchOrder(box){
       const r=await fetch('/staff-order',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({k:CONFIG.TOKEN,session_id:state.sessionId})});
       const d=await r.json();
-      if(d&&d.ok&&d.order_id){showOrderLink(d.order_id,d.invoice_number,d.paid);if(d.invoiced)lockClient(d.invoice_number);return;}
+      if(d&&d.ok&&d.order_id){showOrderLink(d.order_id,d.invoice_number,d.paid);if(d.invoiced)lockClient(d.invoice_number,d.paid);return;}
     }catch(e){}
     if(tries<36){setTimeout(tick,5000);return;}
     panel.innerHTML='<div class="sf-hint" style="margin-top:10px">The invoice is not raised yet (a payment link waits for payment first). <a href="#" onclick="watchOrder(document.getElementById(\'f-payresult\'));return false">Check again</a></div>';
