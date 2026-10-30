@@ -3026,7 +3026,8 @@ function earlyRender(){
    +'</div><div id="ep-result"></div>'
    +'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">'
    +'<button class="btn ghost" style="margin:0" onclick="earlyClose()">Close</button>'
-   +'<button class="btn primary" style="margin:0" id="ep-go"'+(ready?'':' disabled')+' onclick="earlyPay()">Create payment link</button></div>';
+   +'<button class="btn primary" style="margin:0" id="ep-go"'+(ready?'':' disabled')+' onclick="earlyPay(\'card\')">Card payment link</button>'
+   +'<button class="btn primary" style="margin:0" id="ep-go-bank"'+(ready?'':' disabled')+' onclick="earlyPay(\'bank\')">Pay by Bank link</button></div>';
   const syncTerms=()=>{
     ['f-business','f-consumerstart','f-termsok'].forEach(id=>{const el=document.getElementById(id);if(!el)return;
       if(id==='f-business')el.value=state.terms.business||'';else if(id==='f-consumerstart')el.checked=!!state.terms.consumerStart;else el.checked=!!state.terms.accepted;});
@@ -3040,9 +3041,10 @@ function earlyRender(){
   const ac=document.getElementById('ep-accept');
   if(ac) ac.onchange=()=>{state.terms.accepted=ac.checked;syncTerms();};
 }
-async function earlyPay(){
+async function earlyPay(how){
   if(!earlyRules().every(r=>r.ok)){earlyRender();return;}
-  const go=document.getElementById('ep-go'),res=document.getElementById('ep-result');
+  how=how==='bank'?'bank':'card';   /* 30 Oct 2026: Pay by Bank (GoCardless, one-off) or card (Stripe) */
+  const go=document.getElementById(how==='bank'?'ep-go-bank':'ep-go'),res=document.getElementById('ep-result');
   go.disabled=true; res.innerHTML='<div class="sf-hint" style="margin-top:12px">Saving and creating the payment link&hellip;</div>';
   await saveNow(true);
   if(!state.sessionId){res.innerHTML='<div class="sf-hint" style="color:#E51652">Could not save. Try again.</div>';go.disabled=false;return;}
@@ -3050,7 +3052,7 @@ async function earlyPay(){
   try{
     const r=await fetch('/audit-pay',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({staff:1,early:1,session_id:state.sessionId,ref:state.ref,
-        k:CONFIG.TOKEN,consult:!state.consult.declined})});
+        k:CONFIG.TOKEN,consult:!state.consult.declined,method:how==='bank'?'bank':undefined})});
     d=await r.json();
   }catch(e){}
   if(d&&d.ok&&d.url){
@@ -3058,7 +3060,8 @@ async function earlyPay(){
       +(d.total_pence/100).toFixed(2)+'</div><ul>'
       +'<li><a class="btn primary" style="margin:6px 0" href="'+esc(d.url)+'" target="_blank" rel="noopener">Open the payment page</a></li>'
       +'<li><button class="btn ghost" style="margin:0" onclick="navigator.clipboard.writeText(\''+esc(d.url)+'\').then(()=>this.textContent=\'Copied\')">Copy link to send to the client</button></li>'
-      +'<li>Stripe sends the receipt; the Xero invoice and the Deal follow once the payment lands. '
+      +(how==='bank'?'<li>The client approves it in their bank app (GoCardless). The Xero invoice and the Deal follow once GoCardless confirms the money, usually within minutes. '
+        :'<li>Stripe sends the receipt; the Xero invoice and the Deal follow once the payment lands. ')
       +'Then finish the form (classes, terms and the rest) and press <b>Complete the order</b>.</li></ul></div>';
     const pr=document.getElementById('f-payresult');
     if(pr){pr.innerHTML='<div class="sf-hint" style="margin-top:16px">Payment link created early ('

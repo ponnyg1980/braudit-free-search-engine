@@ -556,6 +556,14 @@
       </div>
     </div>
 
+    <div class="ac-choice" id="pay-bank" onclick="payChoice('bank')">
+      <div class="t">Pay by Bank now</div>
+      <div class="sub">Pay straight from your bank app, handled securely by GoCardless. No card needed, and no Direct Debit is set up.</div>
+      <div class="drawer hidden" id="pay-bank-body" onclick="event.stopPropagation()">
+        <div class="panel" id="pay-bank-info" style="display:block"></div>
+      </div>
+    </div>
+
     <div class="ac-choice" id="pay-phone" onclick="payChoice('phone_now')">
       <div class="t">Over the phone now</div>
       <div class="sub" id="pay-phone-sub">We&rsquo;ll call you to take card payment.</div>
@@ -1742,7 +1750,7 @@ function payChoice(m){
   if(tp){showErr('sum-err',tp);
     document.getElementById('terms-block').scrollIntoView({behavior:'smooth',block:'center'});return;}
   state.payment.method=m;
-  [['online','pay-online'],['phone_now','pay-phone'],['invoice','pay-inv']].forEach(([k,id])=>{
+  [['online','pay-online'],['bank','pay-bank'],['phone_now','pay-phone'],['invoice','pay-inv']].forEach(([k,id])=>{
     document.getElementById(id).classList.toggle('on',k===m);
     const body=document.getElementById(id+'-body');
     if(body)body.classList.toggle('hidden',k!==m);
@@ -1766,6 +1774,24 @@ function payChoice(m){
              online payment form is unavailable right now — choose one of the other options and
              we’ll sort it out with you.</p>`;
       }).catch(()=>{box.innerHTML='<span class="sub">Payment form unavailable — please choose another option.</span>';});
+  }
+  if(m==='bank'){
+    const pr=pricing(), box=document.getElementById('pay-bank-info');
+    box.innerHTML='<span class="sub">Preparing your secure Pay by Bank page…</span>';
+    saveTerms().then(()=>fetch(CONFIG.PAY_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({method:'bank',ref:invoiceRef(),consult:pr.consult,vat_exempt:pr.exempt,
+        email:state.contact.email,session_id:state.sessionId})}))
+      .then(r=>r.json()).then(d=>{
+        if(d&&!d.ok&&Array.isArray(d.unmet)&&d.unmet.some(u=>/^G-1[5-8]$/.test(u))){
+          box.innerHTML='<span class="sub">'+(d.error||'Please check your terms above.')+'</span>';return;}
+        state.payment.bankUrl=(d&&d.ok&&d.url)||'';
+        box.innerHTML=d&&d.ok&&d.url
+          ? `<b>Invoice reference ${invoiceRef()}</b>
+             <p class="sub" style="margin:6px 0 12px">You approve the payment in your bank app. GoCardless handles it securely.</p>
+             <a class="btn primary" href="${d.url}" target="_blank" rel="noopener"
+                onclick="paidOnline()">Pay ${money(pr.total)} from my bank &rarr;</a>`
+          : `<b>Invoice reference ${invoiceRef()}</b><p class="sub" style="margin-top:6px">${(d&&d.error)||'Pay by Bank is unavailable right now'} &mdash; choose card or one of the other options.</p>`;
+      }).catch(()=>{box.innerHTML='<span class="sub">Pay by Bank unavailable — please choose another option.</span>';});
   }
   if(m==='phone_now'){
     const pr=pricing();
@@ -1793,7 +1819,7 @@ function submitOrder(){
   /* Phone and invoice take no Stripe session, so the terms are recorded here
      first (the online route recorded them inside /audit-pay). No record, no
      order: the copy the client accepted must be kept. */
-  if(state.payment.method!=='online'){
+  if(state.payment.method!=='online'&&state.payment.method!=='bank'){
     saveTerms().then(()=>fetch('/terms-accept',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({session_id:state.sessionId})}))
@@ -1822,7 +1848,7 @@ function proceedOrder(){
     ['Word',state.hasLogo?'Logo':'',state.tagline?'Tagline':''].filter(Boolean).join(' / ')]
     .filter(Boolean).join(' - ');
   /* Summary reached -> Quoted. */
-  const payLabel={online:'Online (Stripe)',phone_now:'Phone',invoice:'Invoice'}[state.payment.method];
+  const payLabel={online:'Online (Stripe)',bank:'Pay by Bank (GoCardless)',phone_now:'Phone',invoice:'Invoice'}[state.payment.method];
   crm('summary',{order_ref:invoiceRef(),net_total:pr.net,vat:pr.vat,total:pr.total,
     deal_name:dealName,
     payment_method:payLabel,
@@ -1881,7 +1907,7 @@ function renderDone(){
       <b>${prettyDate(state.consult.auditDate)}</b>. Every audit is reviewed by a human trademark
       expert before it reaches you.</p>`);
   }
-  if(state.payment.method==='online'){
+  if(state.payment.method==='online'||state.payment.method==='bank'){
     head.push(`<p>Payment of <b>${money(pr.total)}</b> is being taken online &mdash; invoice
       reference <b>${invoiceRef()}</b>.</p>`);
   }else if(state.payment.method==='phone_now'){

@@ -1442,6 +1442,46 @@ def _audit_pay(payload: dict) -> dict:
                 'url': ('https://braudit-free-search.onrender.com/audit-thanks?s='
                         + session_id + '&paid=1&demo=1'),
                 'status': 200}
+    # 30 Oct 2026 (Jonathan): Pay by Bank - a one-off GoCardless payment, NO Direct Debit (an audit is one-off
+    # work). GoCardless lives on the audit engine, so the payment page is started there, with the same amount and
+    # the same order details the Stripe metadata carries; when GoCardless confirms the money the engine sends the
+    # journey the same audit_paid + /xero/process paid the Stripe webhook does (into the GoCardless clearing account).
+    if str(payload.get('method') or '') == 'bank':
+        import urllib.parse as _upb
+        back_b = ('https://braudit-free-search.onrender.com/audit-thanks?s=' + _upb.quote(session_id) + '&bank=1&paid=')
+        meta_b = {'marks': str(qty), 'invoice_ref': ref, 'source': 'staff_enquiry' if staff else 'client_checkout',
+                  'vat_exempt': vat_exempt, 'billing_entity': entity, 'staff_email': staff_email,
+                  'lines': json.dumps([{'l': x['l'][:38], 'p': x['p']} for x in lines])[:490],
+                  'discount_pence': str(discount_p), 'consult': bool(consult),
+                  'tier': tier_meta.get('tier') or None,
+                  'web_exception': bool(tier_meta.get('web_exception')) if tier_meta.get('tier') else None,
+                  'worldwide': bool(tier_meta.get('worldwide')) if tier_meta.get('tier') else None,
+                  'early': bool(early)}
+        body_b = json.dumps({'key': os.environ.get('XERO_PROCESS_KEY', ''), 'session_id': session_id,
+                             'amount_pence': gross_total, 'email': email, 'company': entity,
+                             'description': ('The Trademark Helpline - Clearance Audit ' + (ref or '')).strip(),
+                             'success_url': back_b + '1', 'cancel_url': back_b + '0', 'meta': meta_b,
+                             'by': staff_email or 'website checkout'}).encode()
+        rq_b = urllib.request.Request('https://audit.thetrademarkhelpline.com/api/journey/pay-by-bank', data=body_b,
+                                      headers={'Content-Type': 'application/json'})
+        try:
+            with urllib.request.urlopen(rq_b, timeout=40) as r:
+                data_b = json.loads(r.read() or b'{}')
+        except urllib.error.HTTPError as e:
+            try:
+                data_b = json.loads(e.read() or b'{}')
+            except Exception:
+                data_b = {}
+        except Exception:
+            data_b = {}
+        if data_b.get('ok') and data_b.get('url'):
+            _journey_event(session_id, 'audit_pay_started',
+                           {'marks': qty, 'lines': lines, 'discount_pence': discount_p, 'net_pence': net_total,
+                            'total_pence': gross_total, 'early': early, 'method': 'bank'})
+            return {'ok': True, 'url': data_b['url'], 'method': 'bank', 'marks': qty,
+                    'total_pence': gross_total, 'status': 200}
+        return {'ok': False, 'error': data_b.get('error') or 'Pay by Bank is unavailable just now - please pay by card',
+                'status': 200}
     name = ('Clearance Audit & Clearance Consultation' if consult else 'Clearance Audit')
     desc = ('Clearance Audit Promotion applied'
             + (' — VAT not applicable (outside UK)' if vat_exempt

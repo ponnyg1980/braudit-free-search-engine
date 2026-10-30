@@ -111,6 +111,12 @@
     return;
   }
 
+  /* 30 Oct 2026: Pay by Bank - the bank has sent it; GoCardless confirms it shortly (usually minutes). */
+  if(q.get('bank')==='1'){
+    document.getElementById('h-title').textContent='Thank you - your payment is on its way';
+    document.getElementById('h-lead').textContent='Your bank is sending it now. As soon as it lands we start your Clearance Audit '
+      +'and email your invoice as your receipt.';
+  }
   if(!sid) return;   /* generic copy stands on its own */
   /* Book the consultation the client chose in the form (15 Oct 2026). Staff orders and
      "just the audit" come back as skipped and show nothing extra. */

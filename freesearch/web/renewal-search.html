@@ -828,7 +828,10 @@ function drawEngine(){
       '<table class="fees">'+(Number(o.today_ex_vat)?'<tr><td>Before VAT</td><td class="r">'+gbp(o.today_ex_vat)+'</td></tr>':'')+
       (Number(o.today_vat)?'<tr><td>VAT</td><td class="r">'+gbp(o.today_vat)+'</td></tr>':'')+
       '<tr class="tot"><td>Due today</td><td class="r">'+gbp(o.today)+'</td></tr></table>'+
-      '<p class="hint">Includes the UKIPO renewal fees'+(Number(q.official_total)?' ('+gbp(q.official_total)+')':'')+'.'+(Number(o.monthly)?' Then '+gbp(o.monthly)+' a month.':'')+'</p>'+
+      '<p class="hint">Includes the UKIPO renewal fees'+(Number(q.official_total)?' ('+gbp(q.official_total)+')':'')
+        +(live.some(m=>m.action==='restore')?', with the UKIPO late renewal fee for '+(live.filter(m=>m.action==='restore').length===1?'the expired trademark':'the expired trademarks')
+          +(Number(o.late_fee||q.late_fee_total)?', and our late renewal fee of '+gbp(o.late_fee||q.late_fee_total)+' plus VAT':''):'')
+        +'.'+(Number(o.monthly)?' Then '+gbp(o.monthly)+' a month.':'')+'</p>'+
       '<div class="acts" style="margin-top:12px"><button type="button" class="btn pink" data-act="edetails">Continue: your details</button>'+
       '<span class="hint" style="align-self:center">Next: confirm who owns the trademark, then review and pay.</span></div></div></div>';
   } else {
