@@ -764,7 +764,18 @@ def _staff_gate(enq: dict, early: bool = False) -> list:
     # a Deal with no Deal_Applicant_Accounts row -- this just stops staff
     # sending an order that will certainly stall there.
     ap = enq.get('applicant') if isinstance(enq.get('applicant'), dict) else {}
-    if quick and ap.get('sameAsBilling') is False and not full(ap.get('name')):
+    # 30 Oct 2026 (Jonathan): "Who is the potential trademark applicant?" -- same | different | unsure.
+    # A different owner needs a type and a name per owner. Enquiries saved before the release carry only
+    # sameAsBilling/name and keep the old rule.
+    if ap.get('intent'):
+        if ap.get('intent') not in ('same', 'different', 'unsure'):
+            bad.append('G-14')
+        elif ap.get('intent') == 'different':
+            ow = ap.get('owners') if isinstance(ap.get('owners'), list) else []
+            if not ow or any(not isinstance(o, dict) or o.get('kind') not in ('individual', 'organisation')
+                             or not full(o.get('name')) for o in ow):
+                bad.append('G-14')
+    elif quick and ap.get('sameAsBilling') is False and not full(ap.get('name')):
         bad.append('G-14')
     # Structured Xero-format address (point 10, 9 Sep): line 1 + postcode are
     # the minimum an invoice needs. Legacy single-line `addr` still counts, so
@@ -2199,7 +2210,8 @@ class _Handler(BaseHTTPRequestHandler):
             # anchored on the Account still ends up attached to a person.
             # LeadById / ContactById (22 Oct 2026): the Lead and Contact buttons open the form on one
             # record; its id travels in account_id.
-            if module not in ('Contacts', 'Leads', 'Accounts', 'AccountContacts', 'LeadById', 'ContactById'):
+            if module not in ('Contacts', 'Leads', 'Accounts', 'AccountContacts', 'LeadById', 'ContactById',
+                              'AccountPartner'):   # 30 Oct 2026: is the billing account a partner?
                 self._send({'ok': False, 'error': 'bad module'}, 400)
                 return
             import urllib.request as _ur

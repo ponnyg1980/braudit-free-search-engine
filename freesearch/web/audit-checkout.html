@@ -497,7 +497,7 @@
       </div>
       <div class="cols">
         <div><label class="fld" id="app-name-lbl">Organisation Name</label>
-          <input type="text" id="a-name"></div>
+          <input type="text" id="a-name" oninput="ownLabels()"></div>
         <div id="app-id-wrap"><label class="fld">Organisation ID
           <span class="opt">&mdash; companies only</span></label>
           <input type="text" id="a-id"></div>
@@ -509,6 +509,22 @@
       <input type="text" id="a-addr3">
       <div class="cols"><div><label class="fld">Postcode</label>
         <input type="text" id="a-postcode"></div></div>
+
+      <!-- 30 Oct 2026 (Jonathan): the potential trademark applicant. No lookup here - that comes at drafting. -->
+      <label class="fld" style="margin-top:18px">Who is the potential trademark applicant?</label>
+      <div class="sub" style="margin:0 0 8px">The person or organisation who would own the trademark if you apply.</div>
+      <label class="radio-line" style="display:flex;gap:8px;align-items:baseline;margin:6px 0;cursor:pointer">
+        <input type="radio" name="own-intent" value="same" onchange="ownIntent('same')"> <span id="own-same-lbl">Same as the details above</span></label>
+      <label class="radio-line" style="display:flex;gap:8px;align-items:baseline;margin:6px 0;cursor:pointer">
+        <input type="radio" name="own-intent" value="different" onchange="ownIntent('different')"> <span>A different owner</span></label>
+      <label class="radio-line" style="display:flex;gap:8px;align-items:baseline;margin:6px 0;cursor:pointer">
+        <input type="radio" name="own-intent" value="unsure" onchange="ownIntent('unsure')"> <span id="own-unsure-lbl">Not sure &ndash; use the details above for now</span></label>
+      <div id="own-diff" class="hidden" style="margin-top:8px">
+        <label class="fld" style="margin-top:0">How many owners?</label>
+        <select id="own-count" onchange="ownCount(this.value)" style="max-width:120px">
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
+        <div id="own-lines"></div>
+      </div>
     </div>
 
     <div class="err hidden" id="a-err"></div>
@@ -741,6 +757,7 @@ const state={
   platforms:{ipos:{}, org:null, orgNone:false, domain:'', domainNone:false, soc:{}, shop:{}},
   consult:{taken:null, type:'', prefDate:'', prefTime:'', prefTod:'', auditDate:'', slotMode:'picker', slotType:''},
   applicant:{kind:'',name:'',id:'',addr1:'',addr2:'',addr3:'',postcode:''},
+  owner:{intent:'',owners:[{kind:'',name:''}]},   /* 30 Oct 2026: the potential trademark applicant */
   payment:{method:'',payDate:'',cc:''}
 };
 SOCIALS.forEach(([k])=>state.platforms.soc[k]={on:false,url:'',mode:'url'});
@@ -1438,6 +1455,7 @@ function appKind(k){
     ?'As you’re outside the UK, <b>no VAT applies</b> — your total is £99.'
     :'UK VAT at 20% applies — your total is £118.80 including VAT.';
   document.getElementById('app-form').classList.remove('hidden');
+  ownLabels();
   document.getElementById('app-ch').classList.toggle('hidden',k!=='uk_org');
   const org=k==='uk_org'||k==='nonuk_org';
   document.getElementById('app-name-lbl').textContent=org?'Organisation Name':'Full Name';
@@ -1489,6 +1507,32 @@ function appChPick(i){
   document.getElementById('app-ch-q').value=c.name||'';
   fillCompany(c);
 }
+/* 30 Oct 2026 (Jonathan): who is the potential trademark applicant? */
+function ownLabels(){
+  const n=(document.getElementById('a-name').value||'').trim();
+  document.getElementById('own-same-lbl').textContent=n?'Same as '+n:'Same as the details above';
+  document.getElementById('own-unsure-lbl').textContent=n?'Not sure \u2013 use '+n+' for now':'Not sure \u2013 use the details above for now';
+}
+function ownIntent(v){state.owner.intent=v;document.getElementById('own-diff').classList.toggle('hidden',v!=='different');
+  if(v==='different')ownCount(document.getElementById('own-count').value);}
+function ownCount(n){n=Math.max(1,Math.min(4,+n||1));const o=state.owner.owners;
+  while(o.length<n)o.push({kind:'',name:''});o.length=n;
+  document.getElementById('own-lines').innerHTML=o.map((x,i)=>
+    '<div class="cols" style="margin-top:8px"><div><label class="fld">Owner '+(i+1)+'</label>'
+    +'<select data-own-kind="'+i+'"><option value="">Individual or organisation?</option>'
+    +'<option value="individual"'+(x.kind==='individual'?' selected':'')+'>Individual</option>'
+    +'<option value="organisation"'+(x.kind==='organisation'?' selected':'')+'>Organisation</option></select></div>'
+    +'<div><label class="fld">Name</label><input type="text" data-own-name="'+i+'" value="'+esc(x.name||'')+'"></div></div>').join('');
+  document.querySelectorAll('[data-own-kind]').forEach(el=>el.onchange=()=>{o[+el.dataset.ownKind].kind=el.value;});
+  document.querySelectorAll('[data-own-name]').forEach(el=>el.oninput=()=>{o[+el.dataset.ownName].name=el.value;});
+}
+function ownProblem(){const w=state.owner;
+  if(!w.intent)return 'Tell us who the potential trademark applicant is.';
+  if(w.intent==='different'&&w.owners.some(x=>!x.kind||!String(x.name||'').trim()))
+    return 'For each owner, choose individual or organisation and give the name.';
+  return '';}
+function ownPayload(){const w=state.owner;return {intent:w.intent,
+  owners:w.intent==='different'?w.owners.map(x=>({kind:x.kind,name:String(x.name||'').trim()})):[]};}
 function submitApplicant(){
   const g=id=>document.getElementById(id).value.trim();
   if(!state.applicant.kind) return showErr('a-err','Tell us who the audit is for.');
@@ -1496,6 +1540,7 @@ function submitApplicant(){
     addr2:g('a-addr2'),addr3:g('a-addr3'),postcode:g('a-postcode')});
   if(!state.applicant.name||!state.applicant.addr1||!state.applicant.postcode)
     return showErr('a-err','Name, first address line and postcode are needed.');
+  {const op=ownProblem(); if(op) return showErr('a-err',op);}
   clearErr('a-err');
   logEvent('audit_checkout_applicant','audit_applicant',{applicant:state.applicant},
     {current_screen:'audit_applicant'});
@@ -1513,6 +1558,7 @@ function submitApplicant(){
         lr=gd.session.last_result;
     }catch(e){}
     lr.audit_billing={kind:state.applicant.kind,entity:state.applicant.name,
+      applicant:ownPayload(),   /* 30 Oct 2026 */
       at:new Date().toISOString()};
     await fetch(journeyBase()+'/session/event',{method:'POST',
       headers:{'Content-Type':'application/json'},

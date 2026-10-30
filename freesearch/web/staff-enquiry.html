@@ -791,27 +791,23 @@
     <div class="sf-hint">Ask, don't assume — the address above may be a UK agent for an
       overseas client. VAT is charged unless the client is outside the UK.</div>
 
-    <!-- Applicant Account (16 Sep). The Deal's Account is the BILLER; on a
-         reseller / representative / white-label order that is the partner,
-         not the mark's owner. Exclusions and the trademark scope to the
-         APPLICANT, so it must be named when it differs. -->
-    <label class="fld" style="margin-top:14px">Who owns the mark? <span class="req">*</span></label>
-    <label class="sf-check"><input type="checkbox" id="ap-same" checked>
-      <span>The <b>applicant is the billing entity</b> above.</span></label>
+    <!-- 30 Oct 2026 (Jonathan): the potential trademark applicant, on every audit order. The Deal's Account
+         is the BILLER; the Customer Account (Deals.Applicant_1) is who the work is for. For a partner biller
+         "Same as" is hidden and the end client is named later (Task to Laura). No lookup at this stage. -->
+    <label class="fld" style="margin-top:14px">Who is the potential trademark applicant? <span class="req">*</span></label>
+    <div id="ap-intent">
+      <label class="sf-check" id="ap-same-row"><input type="radio" name="ap-intent" value="same">
+        <span id="ap-same-lbl">Same as the billing entity</span></label>
+      <label class="sf-check"><input type="radio" name="ap-intent" value="different"><span>A different owner</span></label>
+      <label class="sf-check"><input type="radio" name="ap-intent" value="unsure">
+        <span id="ap-unsure-lbl">Not sure &ndash; use the billing entity for now</span></label>
+    </div>
+    <div id="ap-partner-note" class="sf-hint hidden">The billing account is a partner, so it cannot be the applicant.
+      Name the end client if you know it; otherwise choose Not sure and support will be asked to name them.</div>
     <div id="f-apwrap" class="hidden">
-      <div class="sf-hint" style="margin-bottom:8px">Reseller, representative or white-label
-        order: the biller is the partner. Name the client who owns the mark. A company
-        number links the Applicant Account automatically; a name alone is queued for
-        support to confirm before research.</div>
-      <div class="sf-row">
-        <div><label class="fld">Applicant name <span class="req">*</span></label>
-          <input type="text" id="f-apname" placeholder="Company or person who owns the mark"></div>
-        <div><label class="fld">Company number <span class="opt">(if a company)</span></label>
-          <input type="text" id="f-apnum" placeholder="e.g. 01234567" autocomplete="off"></div>
-      </div>
-      <label class="fld">Find on Companies House <span class="opt">(fills both)</span></label>
-      <input type="text" id="f-apchq" placeholder="Company name or number" autocomplete="off">
-      <div id="f-apchresults"></div>
+      <label class="fld">How many owners?</label>
+      <select id="f-apcount" style="max-width:120px"><option>1</option><option>2</option><option>3</option><option>4</option></select>
+      <div id="f-aplines"></div>
     </div>
 
     <div class="sf-row">
@@ -1208,9 +1204,9 @@ function gateRules(){
             &&nonEmpty(b.paidRef)))&&b.agreed),
      why:'Paying now, an exact agreed date (no later than delivery), or a payment already taken with its date and reference.'},
     {id:'G-14',sec:'billing',label:'Applicant identified',
-     ok:state.applicant.sameAsBilling!==false||nonEmpty(state.applicant.name),
-     why:'Who owns the mark? Same as the billing entity, or name the applicant '
-         +'(company number if it has one) so the right Applicant Account is linked.'},
+     ok:apIntentOk(),
+     why:'Who is the potential trademark applicant? Same as the billing entity, a different owner '
+         +'(type and name for each), or Not sure.'},
     {id:'G-10',sec:'billing',label:'Billing details complete',
      ok:nonEmpty(b.entity)&&validEmail(b.email)&&nonEmpty(b.addr1)&&nonEmpty(b.postcode),
      why:'Entity, invoice email, address line 1 and postcode — the invoice cannot exist without them.'},
@@ -1672,9 +1668,7 @@ function renderReadback(){
     row('Client',[c.first,c.last].filter(Boolean).join(' ')+(c.org?(', '+c.org):''))+
     row('Marks being audited',marks.join(', '))+
     row('Classes',parseClasses(state.classes).join(', '))+
-    row('Applicant (owns the mark)',ap.sameAsBilling===false
-      ?((ap.name||'')+(ap.companyNumber?(' ('+ap.companyNumber+')'):''))
-      :'Same as the billing entity')+
+    row('Applicant (owns the mark)',apReadback())+
     (full?row('Territories',
       ((state.discovery.terrNow||[]).map(jLabel).join(', ')||'—')
       +((state.discovery.terrPlan||[]).length
@@ -2490,7 +2484,10 @@ async function loadDeal(){
   if(aps.length&&!(aps.length===1&&String(aps[0].account_id)===String(z.account_id||''))){
     state.applicant.sameAsBilling=false;
     state.applicant.name=aps.map(a=>a.account_name).filter(Boolean).join(' / ');
+    if(!state.applicant.intent){state.applicant.intent='different';
+      state.applicant.owners=aps.map(a=>({kind:'organisation',name:a.account_name||''}));}
   }
+  if(z.account_partner!==undefined) state.billing.partnerType=z.account_partner||'';
   if(z.Audit_Payment_Method||z.Audit_Order_Ref){
     /* Already ordered: the payment step is a record, not a new charge. */
     /* SJ-3 (25 Sep 2026): Paid is no longer a Stage. Paid = Delivery Approved
@@ -2600,9 +2597,7 @@ function finishLoad(){
   tog('f-paidwrap','hidden',b.payWhen!=='paid');
   if(!state.applicant||typeof state.applicant!=='object')
     state.applicant={sameAsBilling:true,name:'',companyNumber:''};
-  chk('ap-same',state.applicant.sameAsBilling!==false);
-  set('f-apname',state.applicant.name||'');set('f-apnum',state.applicant.companyNumber||'');
-  tog('f-apwrap','hidden',state.applicant.sameAsBilling!==false);
+  apRender();
   chk('r-confirmed',state.readback.confirmed);
   if(!state.termsApproval) state.termsApproval={approved:false,at:''};
   chk('f-termsok2',state.termsApproval.approved);
@@ -2799,41 +2794,12 @@ function bindAll(){
   bind('f-paiddate',v=>state.billing.paidDate=v);
   bind('f-paidref',v=>state.billing.paidRef=v);
 
-  /* Applicant Account (16 Sep). */
-  const apSame=document.getElementById('ap-same');
-  apSame.addEventListener('change',()=>{
-    state.applicant.sameAsBilling=apSame.checked;
-    document.getElementById('f-apwrap').classList.toggle('hidden',apSame.checked);
-    touch();});
-  bind('f-apname',v=>state.applicant.name=v);
-  bind('f-apnum',v=>state.applicant.companyNumber=v.replace(/\s+/g,''));
-  let apT=null;
-  document.getElementById('f-apchq').addEventListener('input',function(){
-    clearTimeout(apT);const q=this.value.trim();
-    const out=document.getElementById('f-apchresults');
-    if(q.length<2){out.innerHTML='';return;}
-    apT=setTimeout(async()=>{
-      out.innerHTML='<div class="sf-hint">Searching Companies House…</div>';
-      try{
-        const r=await fetch('/lookup/company?q='+encodeURIComponent(q));
-        const d=await r.json();
-        const items=(d.results||d.companies||d.items||[]).slice(0,6);
-        out.innerHTML=items.length?items.map((c,i)=>`<div class="sf-hit" data-i="${i}"
-          style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin:4px 0;cursor:pointer">
-          <b>${esc(c.name||c.title||'')}</b>
-          <span style="color:var(--quiet)">${esc(c.number||c.company_number||'')}</span></div>`).join('')
-          :'<div class="sf-hint">No match on Companies House.</div>';
-        [...out.querySelectorAll('[data-i]')].forEach(el=>{
-          el.onclick=()=>{const c=items[+el.dataset.i];
-            state.applicant.name=c.name||c.title||'';
-            state.applicant.companyNumber=String(c.number||c.company_number||'');
-            document.getElementById('f-apname').value=state.applicant.name;
-            document.getElementById('f-apnum').value=state.applicant.companyNumber;
-            out.innerHTML='';touch();};
-        });
-      }catch(e){out.innerHTML='';}
-    },320);
-  });
+  /* 30 Oct 2026: the potential trademark applicant. */
+  document.querySelectorAll('input[name=ap-intent]').forEach(el=>el.addEventListener('change',()=>{
+    state.applicant.intent=el.value; apSync(); apRender(); touch();}));
+  document.getElementById('f-apcount').addEventListener('change',function(){
+    const n=Math.max(1,Math.min(4,+this.value||1)),o=apOwners();
+    while(o.length<n)o.push({kind:'',name:''}); o.length=n; apSync(); apRender(); touch();});
 
   const tk2=document.getElementById('f-termsok2');
   if(tk2) tk2.addEventListener('change',()=>{state.termsApproval={approved:tk2.checked,
@@ -3000,6 +2966,60 @@ function openEarlyPay(){
   document.body.appendChild(ov);
   earlyRender();
 }
+/* 30 Oct 2026 (Jonathan): "Who is the potential trademark applicant?" - same | different | unsure.
+   Kept in state.applicant {intent, owners:[{kind,name}]}; sameAsBilling/name mirror it for older readers. */
+function apOwners(){const a=state.applicant;if(!Array.isArray(a.owners)||!a.owners.length)a.owners=[{kind:'',name:''}];return a.owners;}
+function apIsPartner(){return !!(state.billing&&state.billing.partnerType);}
+function apIntentOk(){const a=state.applicant||{};
+  if(a.intent==='same')return !apIsPartner();
+  if(a.intent==='unsure')return true;
+  if(a.intent==='different')return apOwners().every(x=>x.kind&&String(x.name||'').trim());
+  return false;}
+function apSync(){const a=state.applicant;
+  if(a.intent==='same'&&apIsPartner())a.intent='';
+  a.sameAsBilling=a.intent!=='different';
+  a.name=a.intent==='different'?apOwners().map(x=>String(x.name||'').trim()).filter(Boolean).join(' / '):'';
+  a.companyNumber='';}
+function apReadback(){const a=state.applicant||{},biller=(state.billing&&state.billing.entity)||'the billing entity';
+  if(a.intent==='same')return 'Same as '+biller;
+  if(a.intent==='unsure')return apIsPartner()?'Not sure - end client to be named':'Not sure - using '+biller+' for now';
+  if(a.intent==='different'){const o=apOwners();return o.length+' owner'+(o.length>1?'s':'')+': '
+    +o.map((x,i)=>(i+1)+'. '+(x.kind==='individual'?'Individual':x.kind==='organisation'?'Organisation':'?')+': '+(x.name||'?')).join('; ');}
+  return '';}
+function apRender(){const a=state.applicant||(state.applicant={});
+  if(!a.intent&&a.sameAsBilling===false&&a.name){a.intent='different';
+    a.owners=String(a.name).split(' / ').map(n=>({kind:'organisation',name:n}));}
+  const biller=(state.billing&&state.billing.entity)||'';
+  const sl=document.getElementById('ap-same-lbl'),ul=document.getElementById('ap-unsure-lbl');
+  if(sl)sl.textContent=biller?'Same as '+biller:'Same as the billing entity';
+  if(ul)ul.textContent=biller?'Not sure \u2013 use '+biller+' for now':'Not sure \u2013 use the billing entity for now';
+  if(apIsPartner()&&ul)ul.textContent='Not sure \u2013 support will name the end client';
+  const sr=document.getElementById('ap-same-row');if(sr)sr.classList.toggle('hidden',apIsPartner());
+  const pn=document.getElementById('ap-partner-note');if(pn)pn.classList.toggle('hidden',!apIsPartner());
+  if(a.intent==='same'&&apIsPartner())a.intent='';
+  document.querySelectorAll('input[name=ap-intent]').forEach(el=>{el.checked=el.value===a.intent;});
+  const w=document.getElementById('f-apwrap');if(w)w.classList.toggle('hidden',a.intent!=='different');
+  const o=apOwners(),cnt=document.getElementById('f-apcount');if(cnt)cnt.value=String(o.length);
+  const box=document.getElementById('f-aplines');if(!box)return;
+  box.innerHTML=o.map((x,i)=>'<div class="sf-row"><div><label class="fld">Owner '+(i+1)+' <span class="req">*</span></label>'
+    +'<select data-apk="'+i+'"><option value="">Individual or organisation?</option>'
+    +'<option value="individual"'+(x.kind==='individual'?' selected':'')+'>Individual</option>'
+    +'<option value="organisation"'+(x.kind==='organisation'?' selected':'')+'>Organisation</option></select></div>'
+    +'<div><label class="fld">Name <span class="req">*</span></label><input type="text" data-apn="'+i+'" value="'+esc(x.name||'')+'"></div></div>').join('');
+  box.querySelectorAll('[data-apk]').forEach(el=>el.onchange=()=>{o[+el.dataset.apk].kind=el.value;apSync();touch();});
+  box.querySelectorAll('[data-apn]').forEach(el=>el.oninput=()=>{o[+el.dataset.apn].name=el.value;apSync();touch();});
+}
+/* The billing account's partner status (Partner_Type / partner Account Types), for hiding "Same as". */
+let AP_PT_FOR=null;
+async function apPartnerCheck(){const id=state.billing&&state.billing.account_id;
+  if(!id){if(state.billing.partnerType){state.billing.partnerType='';apRender();}return;}
+  if(AP_PT_FOR===id)return; AP_PT_FOR=id;
+  try{const r=await fetch('/staff-lookup',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({k:CONFIG.TOKEN,module:'AccountPartner',account_id:id,q:''})});
+    const d=await r.json();const h=(d&&d.ok&&Array.isArray(d.hits)&&d.hits[0])||null;
+    state.billing.partnerType=(h&&h.partner)||'';}catch(e){}
+  apRender(); try{renderAll();}catch(e){}}
+setInterval(apPartnerCheck,1500);
 function earlyRender(){
   const box=document.getElementById('ep-box'); if(!box) return;
   const rules=earlyRules(),ready=rules.every(r=>r.ok),t=state.terms||{};
